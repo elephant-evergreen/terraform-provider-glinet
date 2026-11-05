@@ -60,6 +60,7 @@ func (f *configurationWorld) run(script string) ([]byte, error) {
 	script = strings.ReplaceAll(script, "remaining=300", "remaining="+f.delay)
 	script = strings.ReplaceAll(script, "sleep 2\n", "sleep 0.1\n")
 	script = strings.ReplaceAll(script, "/proc/sys/kernel/random/boot_id", filepath.Join(root, "boot-id"))
+	script = strings.ReplaceAll(script, completionDir, filepath.Join(root, "completed"))
 	script = strings.ReplaceAll(script, transactionDir, filepath.Join(root, "transaction"))
 	script = strings.ReplaceAll(script, configurationLock, filepath.Join(root, "lock"))
 	script = strings.ReplaceAll(script, recoveryService, filepath.Join(root, "recovery"))
@@ -553,7 +554,7 @@ func TestConfigurationWorldConfirmationWaitsForCompletedCleanup(t *testing.T) {
 	if time.Since(start) < 2*time.Second {
 		t.Fatal("Confirmation returned before delayed cleanup finished")
 	}
-	for _, name := range []string{"transaction", "transaction-retired-token", "recovery", "lock", "lock-completed-token"} {
+	for _, name := range []string{"transaction", "transaction-retired-token", "recovery", "lock", "completed"} {
 		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
 			t.Fatalf("Successful confirmation left %s", name)
 		}
