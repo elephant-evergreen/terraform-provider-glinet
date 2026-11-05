@@ -151,7 +151,7 @@ func TestSSHRejectsUntrustedHostAndCancelsBlockedOperation(t *testing.T) {
 }
 
 func TestSSHBoundsRemoteOutput(t *testing.T) {
-	transport, _ := sshFixture(t, strings.Repeat("x", 5000), 0, false)
+	transport, _ := sshFixture(t, strings.Repeat("x", 262145), 0, false)
 	if _, err := transport.Run(context.Background(), "true\n"); err == nil {
 		t.Fatal("Oversized output was accepted")
 	}

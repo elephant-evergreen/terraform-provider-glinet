@@ -40,11 +40,13 @@ After an apply, confirm client connectivity independently. Do not edit the route
 
 Destroy releases Terraform management and does not restore earlier settings or delete the Wi-Fi interface. Import an existing section using the example in the [resource reference](resources/wireless_interface_settings.md).
 
+For coordinated network configuration, use the [configuration guide](configuration.md) and its synthetic example instead. Keep section ownership separate from the existing-AP resource.
+
 ## Scope and verification
 
-The provider checks for GL.iNet GL-MT6000, firmware 4.11.0, router mode, and an existing AP section before reads and writes. It uses existing `uci`, `ubus`, `jsonfilter`, `wifi`, and `start-stop-daemon` commands on the router and does not install packages.
+The provider checks for GL.iNet GL-MT6000, firmware 4.11.0 and router mode. The existing-AP resource additionally requires an existing named AP. Coordinated configuration validates each managed section and rejects ambiguous identities before mutation. It uses existing `uci`, `ubus`, `jsonfilter`, `wifi`, and `start-stop-daemon` commands on the router and does not install packages.
 
-Local tests cover Terraform protocol behavior, import, refresh, drift, forgetting management, SSH host-key rejection, cancellation, bounded output, quoting, and recovery with a local command fixture. A read-only import plan has also been exercised on the target firmware. These checks do not verify radio behavior, actual GL.iNet command implementations, compatibility with other firmware, or recovery across power loss and reboot. Hardware acceptance testing is required before publishing a usable release.
+Local tests cover Terraform protocol behavior, import, refresh, drift, forgetting management, SSH host-key rejection, cancellation, bounded output, quoting, and recovery with a local command fixture. A read-only import plan has also been exercised on the target firmware. An explicitly authorized native UCI fixture also checks isolated temporary configuration on the supported firmware, including ordering, identity repair, lists and key handling; ordinary CI skips that gated test. These checks do not establish live network activation, radio behavior, compatibility with other firmware, or physical power-loss/reboot recovery. Hardware acceptance testing is required before publishing a usable release.
 
 ## Releases and licenses
 
