@@ -1,0 +1,9 @@
+Terraform Provider for GL.iNet
+Copyright 2026 terraform-provider-glinet contributors
+
+Unless otherwise identified, the source code in this repository is subject
+to the Mozilla Public License, version 2.0. A copy of the license is in LICENSE.
+
+GL.iNet, OpenWrt, Terraform, and HashiCorp names identify the products with
+which this project is intended to interoperate. Their respective owners
+retain their rights. No affiliation or endorsement is claimed.
