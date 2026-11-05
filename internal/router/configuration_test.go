@@ -56,7 +56,7 @@ func (r *configurationReader) Run(_ context.Context, script string) ([]byte, err
 	if r.err != nil {
 		return nil, r.err
 	}
-	return json.Marshal(r.config)
+	return configurationTestResponse(r.config, script)
 }
 
 func TestConfigurationAdoptionDoesNotWriteAndCancellationDoesNotArm(t *testing.T) {
@@ -101,8 +101,8 @@ type configurationMutationRunner struct {
 }
 
 func (r *configurationMutationRunner) Run(_ context.Context, script string) ([]byte, error) {
-	if strings.Contains(script, "io.write(json.encode(result))") {
-		return json.Marshal(r.current)
+	if strings.Contains(script, "io.write(json.encode(result))") || strings.Contains(script, "keys_match") {
+		return configurationTestResponse(r.current, script)
 	}
 	if strings.Contains(script, "assert(uci:save") {
 		r.apply = script
@@ -120,4 +120,11 @@ func TestPortMappingOnlyChangeSynchronizesRuntime(t *testing.T) {
 	if !strings.Contains(remote.apply, "gl-vlan-port-map sync") || !strings.Contains(remote.apply, "reboot") {
 		t.Fatal("Port-only mutation skipped runtime synchronization")
 	}
+}
+
+func configurationTestResponse(config Configuration, script string) ([]byte, error) {
+	if strings.Contains(script, "keys_match") {
+		return json.Marshal(map[string]any{"configuration": config, "keys_match": true})
+	}
+	return json.Marshal(config)
 }

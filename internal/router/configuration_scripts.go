@@ -1,6 +1,9 @@
 package router
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 const transactionDir = "/root/.terraform-provider-glinet-configuration"
 const configurationLock = "/tmp/terraform-provider-glinet-wifi"
@@ -22,12 +25,16 @@ func configurationReload(reboot bool) string {
 }
 
 func configurationCleanup() string {
-	return "if [ -f " + quote(recoveryService) + " ]; then " + recoveryService + " disable; fi\nrm -f " + quote(recoveryService) + "\nrm -rf " + quote(transactionDir) + " " + quote(configurationLock) + "\n"
+	return "if [ -f " + quote(recoveryService) + " ]; then " + recoveryService + " disable; fi\nrm -f " + quote(recoveryService) + "\nrm -rf " + quote(transactionDir) + "\nrmdir " + quote(configurationLock+"/actor") + "\nrmdir " + quote(configurationLock) + "\n"
 }
 
-func configurationStableReadScript(config Configuration) string {
-	return preflight + "if [ -f " + quote(transactionDir+"/decision") + " ] && [ \"$(cat " + quote(transactionDir+"/decision") + ")\" = confirm ]; then\n" + configurationCleanup() + "fi\n" + "test ! -d " + quote(transactionDir) + " || exit 73\ntest ! -e " + quote(recoveryService) + " && test ! -L " + quote(recoveryService) + " || exit 73\n" +
-		"test ! -d /tmp/home-network-iac.lock || exit 73\nmkdir " + quote(configurationLock) + " 2>/dev/null || exit 73\ntrap 'rmdir " + quote(configurationLock) + "' EXIT\npending=$(uci changes)\ntest -z \"$pending\" || exit 74\n" + configurationLua(config, false, nil)
+func configurationStableReadScript(config Configuration, keys map[string]string) string {
+	data, _ := json.Marshal(keys)
+	check := "local keys=json.decode(" + luaQuote(string(data)) + ")\nlocal equal=true\nif type(keys)=='table' then for name,value in pairs(keys) do if uci:get('wireless',name,'key')~=value then equal=false end end end\nio.write(json.encode({configuration=result,keys_match=equal}))"
+	read := strings.Replace(configurationLua(config, false, nil), "io.write(json.encode(result))", check, 1)
+	return preflight +
+		"test ! -d " + quote(transactionDir) + " || exit 73\ntest ! -e " + quote(recoveryService) + " && test ! -L " + quote(recoveryService) + " || exit 73\n" +
+		"test ! -d /tmp/home-network-iac.lock || exit 73\nmkdir " + quote(configurationLock) + " 2>/dev/null || exit 73\ntrap 'rmdir " + quote(configurationLock) + "' EXIT\npending=$(uci changes)\ntest -z \"$pending\" || exit 74\n" + read
 }
 
 func configurationApplyScript(config Configuration, keys map[string]string, token string, reboot bool) string {
@@ -43,22 +50,22 @@ func configurationApplyScript(config Configuration, keys map[string]string, toke
 		restore += configurationCleanup()
 	}
 	watchdog := `#!/bin/sh
+trap '' HUP
 set -eu
 umask 077
+mkdir ` + quote(configurationLock+"/actor") + ` 2>/dev/null || exit 73
 exec >> ` + quote(dir+"/rollback.log") + ` 2>&1
 read current_boot < /proc/sys/kernel/random/boot_id
 read initial_boot < ` + quote(dir+"/boot") + `
 if [ "$current_boot" != "$initial_boot" ]; then touch ` + quote(dir+"/ready") + `; fi
-if [ ! -f ` + quote(dir+"/decision") + ` ]; then
- sleep 300 &
- child=$!
- trap 'kill "$child" 2>/dev/null || true; exit 0' TERM INT
- touch ` + quote(dir+"/armed") + `
- wait "$child" || exit 0
- ln ` + quote(dir+"/recover") + ` ` + quote(dir+"/decision") + ` 2>/dev/null || true
-else
- touch ` + quote(dir+"/armed") + `
-fi
+remaining=300
+touch ` + quote(dir+"/armed") + `
+while [ ! -f ` + quote(dir+"/decision") + ` ] && [ "$remaining" -gt 0 ]; do
+ sleep 1
+ remaining=$((remaining-1))
+done
+ln ` + quote(dir+"/recover") + ` ` + quote(dir+"/decision") + ` 2>/dev/null || true
+while [ "$current_boot" = "$initial_boot" ] && [ -f ` + quote(dir+"/reload_started") + ` ] && [ ! -f ` + quote(dir+"/reload_done") + ` ]; do sleep 1; done
 case "$(cat ` + quote(dir+"/decision") + `)" in
  confirm)
  ` + configurationCleanup() + ` ;;
@@ -68,10 +75,12 @@ case "$(cat ` + quote(dir+"/decision") + `)" in
  *) exit 75 ;;
 esac
 `
+
 	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nmkdir -p " + quote(configurationLock) + "\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
-	reload := "#!/bin/sh\nset -eu\nexec > " + quote(dir+"/reload.log") + " 2>&1\nsleep 2\n" + configurationReload(reboot)
+	guard := "test \"$(cat token)\" = " + quote(token) + " && { [ ! -f decision ] || [ \"$(cat decision)\" != rollback ]; }\n"
+	reload := "#!/bin/sh\ntrap '' HUP\nset -eu\nexec > " + quote(dir+"/reload.log") + " 2>&1\ncd " + quote(dir) + "\ntrap 'touch reload_done' EXIT\nsleep 2\nguard() {\n" + guard + "}\n" + guardedReload(reboot)
 	if reboot {
-		reload += "sync\nreboot\n"
+		reload += "guard\nsync\nreboot\n"
 	} else {
 		reload += "touch " + quote(dir+"/ready") + "\n"
 	}
@@ -107,12 +116,13 @@ test -f ` + quote(dir+"/armed") + ` || exit 76
 armed=1
 ` + configurationLua(config, true, keys) + `fw3 -q print >/dev/null
 for package in ` + configurationPackages + `; do uci commit "$package"; done
-start-stop-daemon -S -b -m -p ` + quote(dir+"/reload.pid") + ` -x /bin/sh -- ` + quote(dir+"/reload") + "\n"
+touch ` + quote(dir+"/reload_started") + `
+if ! start-stop-daemon -S -b -m -p ` + quote(dir+"/reload.pid") + ` -x /bin/sh -- ` + quote(dir+"/reload") + `; then touch ` + quote(dir+"/reload_done") + `; exit 76; fi` + "\n"
 	return script
 }
 
 func configurationConfirmScript(token string, config Configuration, keys map[string]string) string {
-	script := preflight + "test -d " + quote(configurationLock) + " || exit 75\ntest -f " + quote(transactionDir+"/ready") + " || exit 75\ntest \"$(cat " + quote(transactionDir+"/token") + ")\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
+	script := preflight + "cd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest -f " + quote(transactionDir+"/ready") + " || exit 75\ntest \"$(cat " + quote(transactionDir+"/token") + ")\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
 	for _, s := range config {
 		if s.Absent {
 			continue
@@ -136,7 +146,7 @@ func configurationConfirmScript(token string, config Configuration, keys map[str
 	for name, value := range keys {
 		script += "test \"$(uci -q get " + quote("wireless."+name+".key") + ")\" = " + quote(value) + " || exit 75\n"
 	}
-	return script + "ln " + quote(transactionDir+"/confirm") + " " + quote(transactionDir+"/decision") + " 2>/dev/null || test \"$(cat " + quote(transactionDir+"/decision") + ")\" = confirm || exit 75\nsync\nstart-stop-daemon -K -p " + quote(transactionDir+"/pid") + " || true\n" + configurationCleanup()
+	return script + "ln confirm decision 2>/dev/null || test \"$(cat decision)\" = confirm || exit 75\nsync\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n[ -f " + quote(transactionDir+"/token") + " ] || exit 0\n[ \"$(cat " + quote(transactionDir+"/token") + ")\" = " + quote(token) + " ] || exit 0\nsleep 1\ndone\nexit 75\n"
 }
 
 func configurationJSON(config Configuration) string {
@@ -169,3 +179,10 @@ end
 file:close()
 for endpoint in pairs(expected) do if not observed[endpoint] then os.exit(75) end end
 `
+
+func guardedReload(reboot bool) string {
+	commands := configurationReload(reboot)
+	commands = strings.ReplaceAll(commands, "/etc/init.d/", "guard\n/etc/init.d/")
+	commands = strings.Replace(commands, "dns_config=", "guard\ndns_config=", 1)
+	return commands
+}

@@ -36,7 +36,7 @@ resource "glinet_uci_configuration" "example" {
 
 ### Required
 
-- `configuration` (String) JSON array of ordered UCI sections, preferably constructed with jsonencode. Each has package, name, type, optional scalar options and string lists. Supported packages: network, wireless, dhcp, firewall, gl-dns-v2, eth_ports_config_map. Named sections are created if missing. Anonymous selectors require exactly one section of the specified type, or a unique match map. An explicit absent=true removes a named section; omitted sections and options remain untouched. Secret options are rejected. Configuration and network identifiers are stored in local Terraform state.
+- `configuration` (String) JSON array of ordered UCI sections, preferably constructed with jsonencode. Each has package, name, type, optional scalar options and string lists. Supported packages: network, wireless, dhcp, firewall, gl-dns-v2, eth_ports_config_map. Only the supported nonsecret option allowlist is accepted. Named sections are created if missing. Anonymous selectors require exactly one section of the specified type, or a unique match map. Match maps are restricted to anonymous selectors. An explicit absent=true removes a named section; omitted sections and options remain untouched. Secret options are rejected. Configuration and network identifiers are stored in local Terraform state.
 
 ### Optional
 

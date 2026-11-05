@@ -116,6 +116,7 @@ func configurationLua(config Configuration, write bool, keys map[string]string) 
 local rule_order={}
 local rule_slots={}
 local resolved={}
+local seen={}
 local rule_indices={}
 local next_index=0
 uci:foreach('firewall',nil,function(s) rule_indices[s['.name']]=next_index; next_index=next_index+1 end)
@@ -131,12 +132,19 @@ for i,s in ipairs(spec) do
   if #matches~=1 then os.exit(65) end
   name=matches[1]
  end
+ local identity=s.package..'.'..name
+ if seen[identity] then os.exit(65) end
+ seen[identity]=true
  resolved[i]=name
  local kind=uci:get(s.package,name)
  if kind and kind~=s.type then os.exit(65) end
  for k,want in pairs(s.match or {}) do
   if not kind or uci:get(s.package,name,k)~=want then os.exit(65) end
  end
+end
+for i,s in ipairs(spec) do
+ local name=resolved[i]
+ local kind=uci:get(s.package,name)
  local actual={package=s.package,name=s.name,type=s.type,match=s.match,absent=s.absent,options={},lists={}}
 `
 	if write {
@@ -230,24 +238,12 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	actual, err := c.stableConfiguration(ctx, config)
+	actual, keysMatch, err := c.stableConfiguration(ctx, config, keys)
 	if err != nil {
 		return err
 	}
-	if len(keys) > 0 {
-		check := preflight
-		for name, value := range keys {
-			check += "test \"$(uci -q get " + quote("wireless."+name+".key") + " || true)\" = " + quote(value) + " || exit 77\n"
-		}
-		_, keyErr := c.runner.Run(ctx, check)
-		if keyErr == nil {
-			keys = nil
-		} else {
-			var status *ExitError
-			if !errors.As(keyErr, &status) || status.Code != 77 {
-				return operationError(keyErr)
-			}
-		}
+	if keysMatch {
+		keys = nil
 	}
 	if SameConfiguration(actual, config) && len(keys) == 0 {
 		return nil
@@ -289,24 +285,27 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 	}
 }
 
-func (c *Client) stableConfiguration(ctx context.Context, config Configuration) (Configuration, error) {
-	output, err := c.runner.Run(ctx, configurationStableReadScript(config))
+func (c *Client) stableConfiguration(ctx context.Context, config Configuration, keys map[string]string) (Configuration, bool, error) {
+	output, err := c.runner.Run(ctx, configurationStableReadScript(config, keys))
 	if err != nil {
-		return nil, operationError(err)
+		return nil, false, operationError(err)
 	}
-	var actual Configuration
-	if json.Unmarshal(output, &actual) != nil || len(actual) != len(config) {
-		return nil, errors.New("The router returned invalid configuration data.")
+	var observed struct {
+		Configuration Configuration `json:"configuration"`
+		KeysMatch     bool          `json:"keys_match"`
 	}
-	for i := range actual {
-		if len(actual[i].Options) == 0 {
-			actual[i].Options = nil
+	if json.Unmarshal(output, &observed) != nil || len(observed.Configuration) != len(config) {
+		return nil, false, errors.New("The router returned invalid configuration data.")
+	}
+	for i := range observed.Configuration {
+		if len(observed.Configuration[i].Options) == 0 {
+			observed.Configuration[i].Options = nil
 		}
-		if len(actual[i].Lists) == 0 {
-			actual[i].Lists = nil
+		if len(observed.Configuration[i].Lists) == 0 {
+			observed.Configuration[i].Lists = nil
 		}
 	}
-	return actual, nil
+	return observed.Configuration, observed.KeysMatch, nil
 }
 
 var allowedOptions = func() map[string]map[string]bool {
@@ -332,3 +331,8 @@ var allowedOptions = func() map[string]map[string]bool {
 	}
 	return result
 }()
+
+func (c *Client) StableConfiguration(ctx context.Context, config Configuration) (Configuration, error) {
+	actual, _, err := c.stableConfiguration(ctx, config, nil)
+	return actual, err
+}

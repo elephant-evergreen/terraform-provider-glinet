@@ -29,7 +29,7 @@ func (r *configurationResource) Metadata(_ context.Context, req resource.Metadat
 }
 func (r *configurationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{MarkdownDescription: "Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Network or wireless changes reboot the router. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.", Attributes: map[string]schema.Attribute{
-		"configuration":         schema.StringAttribute{Required: true, MarkdownDescription: "JSON array of ordered UCI sections, preferably constructed with jsonencode. Each has package, name, type, optional scalar options and string lists. Supported packages: network, wireless, dhcp, firewall, gl-dns-v2, eth_ports_config_map. Named sections are created if missing. Anonymous selectors require exactly one section of the specified type, or a unique match map. An explicit absent=true removes a named section; omitted sections and options remain untouched. Secret options are rejected. Configuration and network identifiers are stored in local Terraform state."},
+		"configuration":         schema.StringAttribute{Required: true, MarkdownDescription: "JSON array of ordered UCI sections, preferably constructed with jsonencode. Each has package, name, type, optional scalar options and string lists. Supported packages: network, wireless, dhcp, firewall, gl-dns-v2, eth_ports_config_map. Only the supported nonsecret option allowlist is accepted. Named sections are created if missing. Anonymous selectors require exactly one section of the specified type, or a unique match map. Match maps are restricted to anonymous selectors. An explicit absent=true removes a named section; omitted sections and options remain untouched. Secret options are rejected. Configuration and network identifiers are stored in local Terraform state."},
 		"wireless_keys_wo":      schema.MapAttribute{Optional: true, WriteOnly: true, Sensitive: true, ElementType: types.StringType, MarkdownDescription: "Write-only map from managed named wireless wifi-iface sections to WPA passphrases. Values are never stored in plan or state. Set wireless_keys_version and increase it to rotate keys. Omit this map to preserve existing keys. Key drift cannot be detected by refresh."},
 		"wireless_keys_version": schema.Int64Attribute{Optional: true, MarkdownDescription: "Positive key rotation generation. Increase this value whenever wireless_keys_wo changes. Keys are applied only on creation or a generation change."},
 	}}
@@ -74,7 +74,7 @@ func (r *configurationResource) Read(ctx context.Context, req resource.ReadReque
 		resp.Diagnostics.AddError("Invalid stored configuration", err.Error())
 		return
 	}
-	actual, err := r.client.ReadConfiguration(ctx, config)
+	actual, err := r.client.StableConfiguration(ctx, config)
 	if err != nil {
 		resp.Diagnostics.AddError("Cannot read configuration", err.Error())
 		return

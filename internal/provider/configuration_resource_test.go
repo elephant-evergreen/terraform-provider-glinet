@@ -24,6 +24,9 @@ type configurationRunner struct {
 func (r *configurationRunner) Run(_ context.Context, script string) ([]byte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if strings.Contains(script, "keys_match") {
+		return json.Marshal(map[string]any{"configuration": r.actual, "keys_match": true})
+	}
 	if strings.Contains(script, "io.write(json.encode(result))") {
 		return json.Marshal(r.actual)
 	}
@@ -48,7 +51,6 @@ func TestConfigurationProtocolAdoptionUpdateDriftAndForget(t *testing.T) {
 	config := func(label string) string {
 		return `resource "glinet_uci_configuration" "test" {
  configuration=jsonencode([{package="firewall",name="example",type="rule",options={name="` + label + `",target="REJECT"}}])
- wireless_keys_wo={}
  wireless_keys_version=1
 }`
 	}

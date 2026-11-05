@@ -48,7 +48,7 @@ func newConfigurationWorld(t *testing.T) *configurationWorld {
 			data, _ := os.ReadFile(filepath.Join(f.root, "transaction", name))
 			pid, _ := strconv.Atoi(strings.TrimSpace(string(data)))
 			if pid > 1 {
-				_ = syscall.Kill(pid, syscall.SIGTERM)
+				_ = syscall.Kill(-pid, syscall.SIGTERM)
 			}
 		}
 	})
@@ -57,13 +57,15 @@ func newConfigurationWorld(t *testing.T) *configurationWorld {
 func (f *configurationWorld) run(script string) ([]byte, error) {
 	root := f.base.root
 	script = strings.ReplaceAll(script, preflight, "set -eu\n")
-	script = strings.ReplaceAll(script, "sleep 300 &", "sleep "+f.delay+" &")
+	script = strings.ReplaceAll(script, "remaining=300", "remaining="+f.delay)
 	script = strings.ReplaceAll(script, "sleep 2\n", "sleep 0.1\n")
 	script = strings.ReplaceAll(script, "/proc/sys/kernel/random/boot_id", filepath.Join(root, "boot-id"))
 	script = strings.ReplaceAll(script, transactionDir, filepath.Join(root, "transaction"))
 	script = strings.ReplaceAll(script, configurationLock, filepath.Join(root, "lock"))
 	script = strings.ReplaceAll(script, recoveryService, filepath.Join(root, "recovery"))
 	script = strings.ReplaceAll(script, "/etc/config/", root+"/")
+	script = strings.ReplaceAll(script, "/etc/init.d/network", filepath.Join(root, "service"))
+	script = strings.ReplaceAll(script, "/etc/init.d/gl-vlan-port-map", filepath.Join(root, "service"))
 	script = strings.ReplaceAll(script, "/etc/init.d/dnsmasq", filepath.Join(root, "service"))
 	script = strings.ReplaceAll(script, "/etc/init.d/firewall", filepath.Join(root, "service"))
 	script = strings.ReplaceAll(script, filepath.Join(root, "recovery")+" enable", "true")
@@ -162,8 +164,8 @@ func TestConfigurationWorldRebootRearmsAndCanConfirm(t *testing.T) {
 	if value < 2 {
 		t.Fatal("Watchdog did not start")
 	}
-	_ = syscall.Kill(value, syscall.SIGTERM)
-	_ = os.Remove(filepath.Join(root, "lock"))
+	_ = syscall.Kill(-value, syscall.SIGTERM)
+	_ = os.RemoveAll(filepath.Join(root, "lock"))
 	_ = os.Remove(filepath.Join(root, "transaction", "ready"))
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("rebooted\n"), 0600)
 	service, err := os.ReadFile(filepath.Join(root, "recovery"))
@@ -199,7 +201,7 @@ func TestConfigurationWorldRejectsAdoptionWhileRecoveryIsPending(t *testing.T) {
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Apply failed: %s %v", out, err)
 	}
-	if _, err := f.run(configurationStableReadScript(spec)); err == nil {
+	if _, err := f.run(configurationStableReadScript(spec, nil)); err == nil {
 		t.Fatal("Pending configuration was accepted as stable")
 	}
 	if _, err := os.Stat(filepath.Join(root, "transaction", "firewall")); err != nil {
@@ -207,7 +209,7 @@ func TestConfigurationWorldRejectsAdoptionWhileRecoveryIsPending(t *testing.T) {
 	}
 }
 
-func TestConfigurationWorldInterruptedConfirmationCanFinishOnRetry(t *testing.T) {
+func TestConfigurationWorldInterruptedConfirmationFinishesWithoutCallerCleanup(t *testing.T) {
 	f := newConfigurationWorld(t)
 	f.delay = "8"
 	root := f.base.root
@@ -217,31 +219,28 @@ func TestConfigurationWorldInterruptedConfirmationCanFinishOnRetry(t *testing.T)
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Apply failed: %s %v", out, err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	confirm := "ln " + quote(transactionDir+"/confirm") + " " + quote(transactionDir+"/decision") + "\n"
+	if out, err := f.run(confirm); err != nil {
+		t.Fatalf("Atomic confirmation failed: %s %v", out, err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(filepath.Join(root, "transaction", "ready")); err == nil {
+		if _, err := os.Stat(filepath.Join(root, "lock")); os.IsNotExist(err) {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	confirm := strings.Replace(configurationConfirmScript("token", spec, nil), configurationCleanup(), "exit 0\n", 1)
-	if out, err := f.run(confirm); err != nil {
-		t.Fatalf("Confirmation decision failed: %s %v", out, err)
-	}
-	if _, err := os.Stat(filepath.Join(root, "transaction", "decision")); err != nil {
-		t.Fatal("Confirmation decision did not persist")
-	}
-	if out, err := f.run(configurationStableReadScript(spec)); err != nil {
-		t.Fatalf("Retry did not finish confirmed cleanup: %s %v", out, err)
+	if out, err := f.run(configurationStableReadScript(spec, nil)); err != nil {
+		t.Fatalf("Owner did not finish confirmed cleanup: %s %v", out, err)
 	}
 	for _, name := range []string{"lock", "transaction", "recovery"} {
 		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
-			t.Fatalf("Confirmed retry left %s", name)
+			t.Fatalf("Confirmed owner left %s", name)
 		}
 	}
 	actual, _ := os.ReadFile(filepath.Join(root, "firewall"))
 	if string(actual) != "changed" {
-		t.Fatal("Confirmed cleanup restored old configuration")
+		t.Fatal("Confirmed owner restored old configuration")
 	}
 }
 
@@ -274,9 +273,9 @@ func TestConfigurationWorldInterruptedRestoreResumesAfterReboot(t *testing.T) {
 	if value < 2 {
 		t.Fatal("Watchdog did not start")
 	}
-	_ = syscall.Kill(value, syscall.SIGTERM)
+	_ = syscall.Kill(-value, syscall.SIGTERM)
 	_ = os.Remove(filepath.Join(root, "fail-copy"))
-	_ = os.Remove(filepath.Join(root, "lock"))
+	_ = os.RemoveAll(filepath.Join(root, "lock"))
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("rebooted\n"), 0600)
 	service, err := os.ReadFile(filepath.Join(root, "recovery"))
 	if err != nil {
@@ -302,5 +301,125 @@ func TestConfigurationWorldInterruptedRestoreResumesAfterReboot(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
 			t.Fatalf("Completed recovery left %s", name)
 		}
+	}
+}
+
+func TestConfigurationWorldFullRebootBranchConfirmsAndRecovers(t *testing.T) {
+	for _, confirm := range []bool{true, false} {
+		t.Run(map[bool]string{true: "confirm", false: "recover"}[confirm], func(t *testing.T) {
+			f := newConfigurationWorld(t)
+			f.delay = "2"
+			root := f.base.root
+			_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+			_ = os.WriteFile(filepath.Join(root, "bin", "reboot"), []byte("#!/bin/sh\nprintf reboot >> \"$GLINET_TEST_ROOT/reboots\"\n"), 0700)
+			spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
+			script := strings.Replace(configurationApplyScript(spec, nil, "token", true), configurationLua(spec, true, nil), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+			if out, err := f.run(script); err != nil {
+				t.Fatalf("Apply failed: %s %v", out, err)
+			}
+			deadline := time.Now().Add(2 * time.Second)
+			for time.Now().Before(deadline) {
+				if _, err := os.Stat(filepath.Join(root, "reboots")); err == nil {
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			reboot := func(id string) {
+				pid, _ := os.ReadFile(filepath.Join(root, "transaction", "pid"))
+				value, _ := strconv.Atoi(strings.TrimSpace(string(pid)))
+				if value > 1 {
+					_ = syscall.Kill(-value, syscall.SIGTERM)
+				}
+				_ = os.RemoveAll(filepath.Join(root, "lock"))
+				_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte(id+"\n"), 0600)
+				service, err := os.ReadFile(filepath.Join(root, "recovery"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if out, err := f.run(string(service) + "\nstart\n"); err != nil {
+					t.Fatalf("Boot service failed: %s %v", out, err)
+				}
+			}
+			reboot("first-reboot")
+			deadline = time.Now().Add(2 * time.Second)
+			for time.Now().Before(deadline) {
+				if _, err := os.Stat(filepath.Join(root, "transaction", "ready")); err == nil {
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			if confirm {
+				if out, err := f.run(configurationConfirmScript("token", spec, nil)); err != nil {
+					t.Fatalf("Confirmation failed: %s %v", out, err)
+				}
+			} else {
+				deadline = time.Now().Add(5 * time.Second)
+				for time.Now().Before(deadline) {
+					if _, err := os.Stat(filepath.Join(root, "transaction", "restored_boot")); err == nil {
+						break
+					}
+					time.Sleep(20 * time.Millisecond)
+				}
+				reboot("restored-reboot")
+			}
+			deadline = time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) {
+				if _, err := os.Stat(filepath.Join(root, "lock")); os.IsNotExist(err) {
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			actual, _ := os.ReadFile(filepath.Join(root, "firewall"))
+			want := "original-firewall"
+			if confirm {
+				want = "changed"
+			}
+			if string(actual) != want {
+				t.Fatalf("Unexpected reboot result: %q", actual)
+			}
+			for _, name := range []string{"lock", "transaction", "recovery"} {
+				if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+					t.Fatalf("Reboot cleanup left %s", name)
+				}
+			}
+		})
+	}
+}
+
+func TestConfigurationWorldWaitsForReloadBeforeRestoring(t *testing.T) {
+	f := newConfigurationWorld(t)
+	f.delay = "2"
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	service := "#!/bin/sh\nif [ ! -f \"$GLINET_TEST_ROOT/service-started\" ]; then touch \"$GLINET_TEST_ROOT/service-started\"; sleep 4; touch \"$GLINET_TEST_ROOT/service-finished\"; fi\n"
+	_ = os.WriteFile(filepath.Join(root, "service"), []byte(service), 0700)
+	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
+	script := strings.Replace(configurationApplyScript(spec, nil, "token", false), configurationLua(spec, true, nil), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	if out, err := f.run(script); err != nil {
+		t.Fatalf("Apply failed: %s %v", out, err)
+	}
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(filepath.Join(root, "transaction", "decision")); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := os.Stat(filepath.Join(root, "service-finished")); os.IsNotExist(err) {
+		actual, _ := os.ReadFile(filepath.Join(root, "firewall"))
+		if string(actual) != "changed" {
+			t.Fatal("Recovery raced the unfinished reload worker")
+		}
+	}
+	deadline = time.Now().Add(7 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(filepath.Join(root, "lock")); os.IsNotExist(err) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	actual, _ := os.ReadFile(filepath.Join(root, "firewall"))
+	if string(actual) != "original-firewall" {
+		t.Fatal("Recovery did not run after reload quiesced")
 	}
 }
