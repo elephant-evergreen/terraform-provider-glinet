@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -16,14 +17,15 @@ import (
 )
 
 type Section struct {
-	Package string              `json:"package"`
-	Name    string              `json:"name"`
-	Type    string              `json:"type"`
-	Match   map[string]string   `json:"match,omitempty"`
-	Options map[string]string   `json:"options,omitempty"`
-	Lists   map[string][]string `json:"lists,omitempty"`
-	Absent  bool                `json:"absent,omitempty"`
-	Missing bool                `json:"missing,omitempty"`
+	Package  string              `json:"package"`
+	Name     string              `json:"name"`
+	Type     string              `json:"type"`
+	Match    map[string]string   `json:"match,omitempty"`
+	Options  map[string]string   `json:"options,omitempty"`
+	Lists    map[string][]string `json:"lists,omitempty"`
+	Absent   bool                `json:"absent,omitempty"`
+	Missing  bool                `json:"missing,omitempty"`
+	Position *int                `json:"position,omitempty"`
 }
 
 type Configuration []Section
@@ -53,6 +55,8 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 		return nil, errors.New("Configure between 1 and 256 UCI sections.")
 	}
 	seen := map[string]bool{}
+	positions := map[int]bool{}
+	rules, positioned := 0, 0
 	for index, s := range config {
 		if s.Missing && !observed {
 			return nil, errors.New("missing is reserved for observed drift.")
@@ -82,11 +86,29 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 		if anonymous != nil && (anonymous[1] != s.Type || s.Absent) {
 			return nil, errors.New("Anonymous selectors must match the section type and cannot be deleted.")
 		}
-		if s.Absent && (len(s.Options)+len(s.Lists)+len(s.Match) > 0) {
+		if s.Position != nil {
+			if s.Package != "firewall" || s.Type != "rule" || (!observed && (*s.Position < 0 || *s.Position > 4095)) {
+				return nil, errors.New("position must be a firewall rule index between 0 and 4095.")
+			}
+			if !observed && positions[*s.Position] {
+				return nil, errors.New("Firewall rule positions must be unique.")
+			}
+			positions[*s.Position] = true
+		}
+		if s.Package == "firewall" && s.Type == "rule" && !s.Absent {
+			rules++
+			if s.Position != nil {
+				positioned++
+			}
+		}
+		if s.Absent && (len(s.Options)+len(s.Lists)+len(s.Match) > 0 || s.Position != nil) {
 			return nil, errors.New("Absent sections cannot include options, lists or matches.")
 		}
 		for k, v := range s.Options {
-			if !validOption(s.Package, s.Type, k, v) {
+			if !observed && s.Package == "wireless" && ((k == "ssid" && !ValidSSID(v)) || ((k == "disabled" || k == "hidden" || k == "isolate") && v != "0" && v != "1")) {
+				return nil, errors.New("Wi-Fi SSIDs must contain 1–32 UTF-8 bytes and flags must be 0 or 1.")
+			}
+			if !allowedOptions[s.Package+"."+s.Type][k] || (!observed && !validOption(s.Package, s.Type, k, v)) {
 				return nil, errors.New("Invalid or secret UCI option. Use wireless_keys_wo for Wi-Fi keys.")
 			}
 			if _, ok := s.Lists[k]; ok {
@@ -94,20 +116,32 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 			}
 		}
 		for k, v := range s.Match {
+			if value, ok := s.Options[k]; ok && value != v {
+				return nil, errors.New("Managed identity options must equal their match values.")
+			}
+			if _, ok := s.Lists[k]; ok {
+				return nil, errors.New("Identity match options cannot be lists.")
+			}
 			if !validOption(s.Package, s.Type, k, v) {
 				return nil, errors.New("Invalid UCI identity match.")
 			}
 		}
 		for k, vs := range s.Lists {
+			if !allowedOptions[s.Package+"."+s.Type][k] {
+				return nil, errors.New("Unsupported UCI list option.")
+			}
 			if len(vs) == 0 && !observed {
 				return nil, errors.New("UCI lists must contain at least one item.")
 			}
 			for _, v := range vs {
-				if !validOption(s.Package, s.Type, k, v) {
+				if !allowedOptions[s.Package+"."+s.Type][k] || (!observed && !validOption(s.Package, s.Type, k, v)) {
 					return nil, errors.New("Invalid or secret UCI list option.")
 				}
 			}
 		}
+	}
+	if positioned > 0 && positioned != rules {
+		return nil, errors.New("Set positions for all managed firewall rules or leave all positions unspecified.")
 	}
 	return config, nil
 }
@@ -121,8 +155,21 @@ func luaQuote(value string) string {
 }
 
 func configurationLua(config Configuration, write bool, keys map[string]string) string {
-	data, _ := json.Marshal(config)
-	source := "local json=require('cjson')\nlocal uci=require('uci').cursor()\nlocal spec=json.decode(" + luaQuote(string(data)) + ")\n" + `local result={}
+	type wireSection struct {
+		Section
+		CreateName string `json:"create_name,omitempty"`
+	}
+	wire := make([]wireSection, len(config))
+	for i, section := range config {
+		wire[i].Section = section
+		if strings.HasPrefix(section.Name, "@") {
+			identity, _ := json.Marshal([]any{section.Package, section.Type, section.Match})
+			sum := sha256.Sum256(identity)
+			wire[i].CreateName = fmt.Sprintf("tf_glinet_%x", sum[:8])
+		}
+	}
+	data, _ := json.Marshal(wire)
+	source := "local json=require('cjson')\nlocal uci=require('uci').cursor()\nlocal writing=" + fmt.Sprint(write) + "\nlocal spec=json.decode(" + luaQuote(string(data)) + ")\n" + `local result={}
 local rule_order={}
 local rule_slots={}
 local resolved={}
@@ -139,29 +186,32 @@ for i,s in ipairs(spec) do
    for k,want in pairs(s.match or {}) do if v[k]~=want then ok=false end end
    if ok then matches[#matches+1]=v['.name'] end
   end)
-  if #matches~=1 then os.exit(65) end
-  name=matches[1]
+  if #matches>1 then os.exit(65) end
+  if #matches==1 then name=matches[1] else name=s.create_name; if uci:get(s.package,name) then os.exit(65) end end
  end
  local identity=s.package..'.'..name
  if seen[identity] then os.exit(65) end
  seen[identity]=true
  resolved[i]=name
  local kind=uci:get(s.package,name)
+ if s.package=='firewall' then if s.absent and kind then next_index=next_index-1 elseif not s.absent and not kind then next_index=next_index+1 end end
  if kind and kind~=s.type then os.exit(65) end
  for k,want in pairs(s.match or {}) do
-  if not kind or uci:get(s.package,name,k)~=want then os.exit(65) end
+  if kind and uci:get(s.package,name,k)~=want then os.exit(65) end
  end
 end
+if writing then for _,s in ipairs(spec) do if s.position~=nil and s.position>=next_index then os.exit(65) end end end
 for i,s in ipairs(spec) do
  local name=resolved[i]
  local kind=uci:get(s.package,name)
  local actual={package=s.package,name=s.name,type=s.type,match=s.match,absent=s.absent,options={},lists={}}
+ if s.position~=nil then actual.position=rule_indices[name] or -1 end
 `
 	if write {
 		source += ` if s.absent then
   if kind then assert(uci:delete(s.package,name)) end
  else
-  if not kind then assert(uci:set(s.package,name,s.type)) end
+  if not kind then assert(uci:set(s.package,name,s.type)); for k,v in pairs(s.match or {}) do assert(uci:set(s.package,name,k,v)) end end
   for k,v in pairs(s.options or {}) do assert(uci:set(s.package,name,k,v)) end
   for k,v in pairs(s.lists or {}) do assert(uci:set(s.package,name,k,v)) end
  end
@@ -173,7 +223,7 @@ for i,s in ipairs(spec) do
   if not kind then actual.missing=true end
   for k,v in pairs(s.options or {}) do
    local value=uci:get(s.package,name,k)
-   if type(value)~='string' then value='' end
+   if type(value)~='string' then if s.package=='wireless' and (k=='disabled' or k=='hidden' or k=='isolate') then value='0' else value='' end end
    actual.options[k]=value
   end
   for k,v in pairs(s.lists or {}) do
@@ -183,7 +233,7 @@ for i,s in ipairs(spec) do
   end
  end
  result[i]=actual
- if s.package=='firewall' and s.type=='rule' and not s.absent then
+ if s.package=='firewall' and s.type=='rule' and not s.absent and s.position==nil then
   rule_order[#rule_order+1]={value=actual,index=rule_indices[name] or 2147483647}
   rule_slots[#rule_slots+1]=i
  end
@@ -194,8 +244,8 @@ for i,s in ipairs(spec) do
 		for name, value := range keys {
 			source += "assert(uci:get('wireless'," + luaQuote(name) + ")=='wifi-iface')\nassert(uci:set('wireless'," + luaQuote(name) + ",'key'," + luaQuote(value) + "))\n"
 		}
-		source += "local count=0\nuci:foreach('firewall',nil,function() count=count+1 end)\nfor i,s in ipairs(spec) do if s.package=='firewall' and s.type=='rule' and not s.absent then assert(uci:reorder(s.package,resolved[i],count-1)) end end\n"
-		source += "for _,p in ipairs({'network','wireless','dhcp','firewall','gl-dns-v2','eth_ports_config_map'}) do assert(uci:save(p)) end\n"
+		source += "local ordered={}\nlocal count=0\nuci:foreach('firewall',nil,function() count=count+1 end)\nfor i,s in ipairs(spec) do if s.position~=nil and not s.absent then if s.position>=count then os.exit(65) end; ordered[#ordered+1]={name=resolved[i],position=s.position} end end\ntable.sort(ordered,function(a,b) return a.position<b.position end)\nfor _,s in ipairs(ordered) do assert(uci:reorder('firewall',s.name,count-1)) end\nfor _,s in ipairs(ordered) do assert(uci:reorder('firewall',s.name,s.position)) end\n"
+		source += "local touched={}\nfor _,s in ipairs(spec) do touched[s.package]=true end\nfor p in pairs(touched) do assert(uci:save(p)) end\n"
 	} else {
 		source += "table.sort(rule_order,function(a,b) return a.index<b.index end)\nfor i,slot in ipairs(rule_slots) do result[slot]=rule_order[i].value end\nio.write(json.encode(result))\n"
 	}
@@ -255,6 +305,11 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 	if keysMatch {
 		keys = nil
 	}
+	for i, s := range config {
+		if s.Package == "firewall" && s.Type == "rule" && s.Position == nil && s.Name != actual[i].Name {
+			return errors.New("Changing managed firewall rule order requires explicit positions for all managed rules.")
+		}
+	}
 	if SameConfiguration(actual, config) && len(keys) == 0 {
 		return nil
 	}
@@ -263,16 +318,36 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 		return errors.New("Cannot initialize a configuration transaction.")
 	}
 	token := hex.EncodeToString(tokenBytes)
-	reboot := false
+	plan := reloadPlan{}
 	for i, s := range config {
-		if !reflect.DeepEqual(s, actual[i]) && (s.Package == "network" || s.Package == "wireless" || s.Package == "eth_ports_config_map") {
-			reboot = true
+		if reflect.DeepEqual(s, actual[i]) {
+			continue
+		}
+		switch s.Package {
+		case "network", "eth_ports_config_map":
+			plan.Reboot = true
+		case "wireless":
+			plan.Wireless = true
+			if s.Absent || actual[i].Missing {
+				plan.Reboot = true
+			}
+			for _, key := range []string{"device", "network", "ifname", "mode"} {
+				if s.Options[key] != actual[i].Options[key] {
+					plan.Reboot = true
+				}
+			}
+		case "gl-dns-v2":
+			plan.DNS = true
+		case "dhcp":
+			plan.DHCP = true
+		case "firewall":
+			plan.Firewall = true
 		}
 	}
 	if len(keys) > 0 {
-		reboot = true
+		plan.Wireless = true
 	}
-	_, err = c.runner.Run(ctx, configurationApplyScript(config, keys, token, reboot))
+	_, err = c.runner.Run(ctx, configurationApplyScript(config, keys, token, plan))
 	var exit *ExitError
 	if errors.As(err, &exit) {
 		return operationError(err)

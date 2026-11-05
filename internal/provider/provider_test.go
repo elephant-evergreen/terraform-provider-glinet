@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"sync"
@@ -32,17 +33,18 @@ func (f *fixtureRunner) Run(_ context.Context, script string) ([]byte, error) {
 	if !f.exists {
 		return nil, &router.ExitError{Code: 44}
 	}
-	if strings.Contains(script, "uci set ") {
-		for _, match := range regexp.MustCompile(`uci set 'wireless\.wifi2g\.([a-z]+)=([^']*)'`).FindAllStringSubmatch(script, -1) {
-			switch match[1] {
+	if strings.Contains(script, "assert(uci:save") {
+		config := fixtureConfiguration(script)
+		for key, value := range config[0].Options {
+			switch key {
 			case "ssid":
-				f.settings.SSID = match[2]
+				f.settings.SSID = value
 			case "disabled":
-				f.settings.Disabled = match[2] == "1"
+				f.settings.Disabled = value == "1"
 			case "hidden":
-				f.settings.Hidden = match[2] == "1"
+				f.settings.Hidden = value == "1"
 			case "isolate":
-				f.settings.Isolate = match[2] == "1"
+				f.settings.Isolate = value == "1"
 			}
 		}
 		f.writes++
@@ -52,6 +54,17 @@ func (f *fixtureRunner) Run(_ context.Context, script string) ([]byte, error) {
 			return "1"
 		}
 		return "0"
+	}
+	if strings.Contains(script, "keys_match") || strings.Contains(script, "io.write(json.encode(result))") {
+		config := fixtureConfiguration(script)
+		values := map[string]string{"ssid": f.settings.SSID, "disabled": flag(f.settings.Disabled), "hidden": flag(f.settings.Hidden), "isolate": flag(f.settings.Isolate), "mode": "ap"}
+		for key := range config[0].Options {
+			config[0].Options[key] = values[key]
+		}
+		if strings.Contains(script, "keys_match") {
+			return json.Marshal(map[string]any{"configuration": config, "keys_match": true})
+		}
+		return json.Marshal(config)
 	}
 	if strings.Contains(script, "printf '%s\\000'") {
 		return []byte(f.settings.SSID + "\x00" + flag(f.settings.Disabled) + "\x00" + flag(f.settings.Hidden) + "\x00" + flag(f.settings.Isolate) + "\x00"), nil
@@ -150,4 +163,17 @@ func TestConfigureGuardsUnknownAndExplicitEmptySettings(t *testing.T) {
 			}
 		})
 	}
+}
+
+func fixtureConfiguration(script string) router.Configuration {
+	match := regexp.MustCompile(`local spec=json.decode\('((?:\\.|[^'])*)'\)`).FindStringSubmatch(script)
+	if len(match) != 2 {
+		panic("Missing fixture configuration")
+	}
+	data := strings.NewReplacer(`\\`, `\`, `\'`, `'`).Replace(match[1])
+	var config router.Configuration
+	if json.Unmarshal([]byte(data), &config) != nil {
+		panic("Invalid fixture configuration")
+	}
+	return config
 }

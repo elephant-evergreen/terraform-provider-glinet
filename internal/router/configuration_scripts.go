@@ -16,12 +16,31 @@ dns_result=$(ubus call gl-session call "{\"module\":\"dns\",\"func\":\"set_confi
 printf '%s' "$dns_result" | lua -e 'local v=require("cjson").decode(io.read("*a")); if type(v)~="table" or v.error or v.result==nil then os.exit(1) end'
 `
 
-func configurationReload(reboot bool) string {
+type reloadPlan struct {
+	Reboot   bool
+	Wireless bool
+	DNS      bool
+	DHCP     bool
+	Firewall bool
+}
+
+func configurationReload(plan reloadPlan) string {
 	script := ""
-	if reboot {
+	if plan.Reboot {
 		script += "/etc/init.d/network reload\n/etc/init.d/gl-vlan-port-map sync\n"
+	} else if plan.Wireless {
+		script += "wifi reload\n"
 	}
-	return script + dnsRefresh + "/etc/init.d/dnsmasq restart\n/etc/init.d/firewall restart\n"
+	if plan.DNS {
+		script += dnsRefresh
+	}
+	if plan.Reboot || plan.DNS || plan.DHCP {
+		script += "/etc/init.d/dnsmasq restart\n"
+	}
+	if plan.Reboot || plan.Firewall {
+		script += "/etc/init.d/firewall restart\n"
+	}
+	return script
 }
 
 func configurationCleanup(token string) string {
@@ -34,17 +53,17 @@ func configurationStableReadScript(config Configuration, keys map[string]string)
 	read := strings.Replace(configurationLua(config, false, nil), "io.write(json.encode(result))", check, 1)
 	return preflight +
 		"test ! -d " + quote(transactionDir) + " || exit 73\ntest ! -e " + quote(recoveryService) + " && test ! -L " + quote(recoveryService) + " || exit 73\n" +
-		"test ! -d /tmp/home-network-iac.lock || exit 73\nmkdir " + quote(configurationLock) + " 2>/dev/null || exit 73\ntrap 'rmdir " + quote(configurationLock) + "' EXIT\npending=$(uci changes)\ntest -z \"$pending\" || exit 74\n" + read
+		"test ! -d /tmp/home-network-iac.lock || exit 73\n" + configurationDNSOwnership(config) + "mkdir " + quote(configurationLock) + " 2>/dev/null || exit 73\ntrap 'rmdir " + quote(configurationLock) + "' EXIT\npending=$(uci changes)\ntest -z \"$pending\" || exit 74\n" + read
 }
 
-func configurationApplyScript(config Configuration, keys map[string]string, token string, reboot bool) string {
+func configurationApplyScript(config Configuration, keys map[string]string, token string, plan reloadPlan) string {
 	dir := transactionDir
 	restore := "#!/bin/sh\nset -eu\nexec >> " + quote(dir+"/rollback.log") + " 2>&1\n"
-	if reboot {
+	if plan.Reboot {
 		restore += "if [ -f " + quote(dir+"/restored_boot") + " ] && [ \"$(cat /proc/sys/kernel/random/boot_id)\" != \"$(cat " + quote(dir+"/restored_boot") + ")\" ]; then\n" + configurationCleanup(token) + "exit 0\nfi\n"
 	}
-	restore += "for package in " + configurationPackages + "; do\ncp " + quote(dir) + "/\"$package\" /etc/config/\"$package\"\nuci -q revert \"$package\"\ndone\n" + configurationReload(reboot)
-	if reboot {
+	restore += "for package in " + configurationPackages + "; do\ncp " + quote(dir) + "/\"$package\" /etc/config/\"$package\"\nuci -q revert \"$package\"\ndone\n" + configurationReload(plan)
+	if plan.Reboot {
 		restore += "cat /proc/sys/kernel/random/boot_id > " + quote(dir+"/restored_boot") + "\nsync\nreboot\n"
 	} else {
 		restore += configurationCleanup(token)
@@ -85,8 +104,8 @@ esac
 `
 
 	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nmkdir -p " + quote(configurationLock) + "\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
-	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, keys) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + "; do uci commit \"$package\"; done\n" + configurationReload(reboot)
-	if reboot {
+	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, keys) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + "; do uci commit \"$package\"; done\n" + configurationReload(plan)
+	if plan.Reboot {
 		request += "touch awaiting_boot\nsync\nreboot\n"
 	} else {
 		request += "touch ready\n"
@@ -98,8 +117,7 @@ test -z "$pending" || exit 74
 command -v lua >/dev/null
 command -v start-stop-daemon >/dev/null
 command -v fw3 >/dev/null
-test "$(uci -q get adguardhome.config.enabled || true)$(uci -q get adguardhome.config.dns_enabled || true)" != '11' || exit 65
-test ! -e ` + quote(recoveryService) + ` && test ! -L ` + quote(recoveryService) + ` || exit 73
+` + configurationDNSOwnership(config) + `test ! -e ` + quote(recoveryService) + ` && test ! -L ` + quote(recoveryService) + ` || exit 73
 umask 077
 mkdir ` + quote(configurationLock) + ` 2>/dev/null || exit 73
 transferred=0
@@ -188,3 +206,15 @@ end
 file:close()
 for endpoint in pairs(expected) do if not observed[endpoint] then os.exit(75) end end
 `
+
+const dnsOwnershipCheck = `test "$(uci -q get adguardhome.config.enabled || true)$(uci -q get adguardhome.config.dns_enabled || true)" != '11' || exit 65
+`
+
+func configurationDNSOwnership(config Configuration) string {
+	for _, s := range config {
+		if s.Package == "gl-dns-v2" || (s.Package == "dhcp" && s.Type == "dnsmasq") {
+			return dnsOwnershipCheck
+		}
+	}
+	return ""
+}

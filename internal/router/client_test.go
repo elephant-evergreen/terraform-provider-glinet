@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os/exec"
 	"strings"
@@ -63,7 +64,7 @@ func TestValidationAndShellQuoting(t *testing.T) {
 	if err != nil || string(actual) != value {
 		t.Fatalf("Shell interpolation changed the SSID: %q, %v", actual, err)
 	}
-	for _, script := range []string{applyScript(Settings{Section: "wifi2g", SSID: value}, strings.Repeat("a", 32)), confirmScript(strings.Repeat("a", 32))} {
+	for _, script := range []string{configurationApplyScript(settingsConfiguration(Settings{Section: "wifi2g", SSID: value}), nil, strings.Repeat("a", 32), reloadPlan{Wireless: true}), configurationConfirmScript(strings.Repeat("a", 32), settingsConfiguration(Settings{Section: "wifi2g", SSID: value}), nil)} {
 		cmd := exec.Command("/bin/sh", "-n")
 		cmd.Stdin = strings.NewReader(script)
 		if output, err := cmd.CombinedOutput(); err != nil {
@@ -74,11 +75,14 @@ func TestValidationAndShellQuoting(t *testing.T) {
 
 func TestWriteNoopAndPreflightFailure(t *testing.T) {
 	calls := 0
-	client := NewClient(runnerFunc(func(context.Context, string) ([]byte, error) {
+	client := NewClient(runnerFunc(func(_ context.Context, script string) ([]byte, error) {
 		calls++
+		if strings.Contains(script, "keys_match") {
+			return json.Marshal(map[string]any{"configuration": settingsConfiguration(Settings{Section: "wifi2g", SSID: "Example", Isolate: true}), "keys_match": true})
+		}
 		return []byte("Example\x000\x000\x001\x00"), nil
 	}))
-	if err := client.Write(context.Background(), Settings{Section: "wifi2g", SSID: "Example", Isolate: true}); err != nil || calls != 1 {
+	if err := client.Write(context.Background(), Settings{Section: "wifi2g", SSID: "Example", Isolate: true}); err != nil || calls != 2 {
 		t.Fatalf("Unchanged settings should not write: %v, calls=%d", err, calls)
 	}
 	calls = 0

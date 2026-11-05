@@ -81,7 +81,7 @@ func TestConfigurationAdoptionDoesNotWriteAndCancellationDoesNotArm(t *testing.T
 func TestConfigurationGeneratedScriptsAreShellSafe(t *testing.T) {
 	config := configurationFixture()
 	config[0].Options["ssid"] = "Example ' $(touch /tmp/glinet-should-not-exist)"
-	for _, script := range []string{configurationLua(config, false, nil), configurationApplyScript(config, map[string]string{"wifi2g": "example'password"}, "example-token", true), configurationApplyScript(config, nil, "example-token", false), configurationConfirmScript("example-token", config, nil)} {
+	for _, script := range []string{configurationLua(config, false, nil), configurationApplyScript(config, map[string]string{"wifi2g": "example'password"}, "example-token", reloadPlan{Reboot: true, DNS: true, DHCP: true, Firewall: true}), configurationApplyScript(config, nil, "example-token", reloadPlan{DNS: true, DHCP: true, Firewall: true}), configurationConfirmScript("example-token", config, nil)} {
 		cmd := exec.Command("/bin/sh", "-n")
 		cmd.Stdin = strings.NewReader(script)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -124,4 +124,30 @@ func configurationTestResponse(config Configuration, script string) ([]byte, err
 		return json.Marshal(map[string]any{"configuration": config, "keys_match": true})
 	}
 	return json.Marshal(config)
+}
+
+func TestObservedDriftCanBeReadAgainWithoutApplyingDesiredValidation(t *testing.T) {
+	config := configurationFixture()
+	config[0].Options["ssid"] = strings.Repeat("x", 1100) + "\n"
+	config[0].Missing = true
+	encoded := configurationJSON(config)
+	if _, err := DecodeConfiguration(encoded); err == nil {
+		t.Fatal("Invalid desired configuration was accepted")
+	}
+	observed, err := DecodeObservedConfiguration(encoded)
+	if err != nil || !SameConfiguration(observed, config) {
+		t.Fatalf("Observed drift became unreadable: %v", err)
+	}
+}
+
+func TestSSIDChangeReloadsOnlyWireless(t *testing.T) {
+	before := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Before"}}}
+	after := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "After"}}}
+	remote := &configurationMutationRunner{current: before, wanted: after}
+	if err := NewClient(remote).WriteConfiguration(context.Background(), after, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(remote.apply, "wifi reload") || strings.Contains(remote.apply, "/etc/init.d/network reload") || strings.Contains(remote.apply, "module\\\":\\\"dns") {
+		t.Fatal("A wireless setting change reloaded unrelated services")
+	}
 }

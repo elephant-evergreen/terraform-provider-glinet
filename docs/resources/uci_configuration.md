@@ -3,12 +3,12 @@
 page_title: "glinet_uci_configuration Resource - glinet"
 subcategory: ""
 description: |-
-  Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Network or wireless changes reboot the router. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.
+  Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Network and wireless topology changes reboot the router; existing AP settings reload Wi-Fi. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.
 ---
 
 # glinet_uci_configuration (Resource)
 
-Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Network or wireless changes reboot the router. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.
+Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Network and wireless topology changes reboot the router; existing AP settings reload Wi-Fi. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.
 
 ## Example Usage
 
@@ -36,7 +36,7 @@ resource "glinet_uci_configuration" "example" {
 
 ### Required
 
-- `configuration` (String) JSON array of ordered UCI sections, preferably constructed with jsonencode. Each has package, name, type, optional scalar options and string lists. Supported packages: network, wireless, dhcp, firewall, gl-dns-v2, eth_ports_config_map. Only the supported nonsecret option allowlist is accepted. Named sections are created if missing. Anonymous selectors require exactly one section of the specified type, or a unique match map. Match maps are restricted to anonymous selectors. An explicit absent=true removes a named section; omitted sections and options remain untouched. Secret options are rejected. Configuration and network identifiers are stored in local Terraform state.
+- `configuration` (String) JSON array of ordered UCI sections, preferably constructed with jsonencode. Each has package, name, type, optional scalar options and string lists. Supported packages: network, wireless, dhcp, firewall, gl-dns-v2, eth_ports_config_map. Only the supported nonsecret option allowlist is accepted. Named sections are created if missing. Anonymous selectors require exactly one section of the specified type, or a unique match map. Match maps are restricted to anonymous selectors. An explicit absent=true removes a named section; omitted sections and options remain untouched. Existing firewall placement is preserved unless position is configured for every managed rule. Missing anonymous matches are recreated with deterministic named sections. Secret options are rejected. Configuration and network identifiers are stored in local Terraform state.
 
 ### Optional
 

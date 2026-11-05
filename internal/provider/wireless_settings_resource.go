@@ -97,7 +97,7 @@ func (r *wirelessSettingsResource) Read(ctx context.Context, req resource.ReadRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	settings, err := r.client.Read(ctx, data.Section.ValueString())
+	settings, err := r.client.ReadSettingsStable(ctx, data.Section.ValueString())
 	if errors.Is(err, router.ErrNotFound) {
 		resp.State.RemoveResource(ctx)
 		return
