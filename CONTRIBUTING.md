@@ -1,6 +1,6 @@
 # Contributing
 
-Use English for documentation, examples, diagnostics, issues, pull requests, and commit messages.
+Contributions are welcome in any language. Maintainers write documentation, examples, diagnostics, issues, pull requests, and commit messages in English.
 
 Keep changes focused on the documented device and firmware scope. Model resources around OpenWrt objects and terminology. Propose additional device support with evidence for that device and firmware version.
 

@@ -18,7 +18,7 @@ Changes can disconnect clients. Coordinated network, Ethernet port-mapping, or w
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. Documentation, examples, diagnostics, issues, and pull requests use English.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. Contributions in any language are welcome.
 
 Never include router credentials, Wi-Fi passwords, private keys, Terraform state, or configuration exports in an issue or pull request.
 
