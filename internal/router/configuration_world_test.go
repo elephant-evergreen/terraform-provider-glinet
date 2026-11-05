@@ -527,3 +527,35 @@ func TestConfigurationWorldRetiredCleanupResumesAfterInterruption(t *testing.T) 
 		})
 	}
 }
+
+func TestConfigurationWorldConfirmationWaitsForCompletedCleanup(t *testing.T) {
+	f := newConfigurationWorld(t)
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
+	script := configurationApplyScript(spec, nil, "token", reloadPlan{Firewall: true})
+	script = strings.Replace(script, configurationLua(spec, true, nil), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	script = strings.ReplaceAll(script, "rm -rf "+quote(transactionDir+"-retired-token"), "sleep 2\nrm -rf "+quote(transactionDir+"-retired-token"))
+	if out, err := f.run(script); err != nil {
+		t.Fatalf("Apply failed: %s %v", out, err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(filepath.Join(root, "transaction", "ready")); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	start := time.Now()
+	if out, err := f.run(configurationConfirmScript("token", spec, nil)); err != nil {
+		t.Fatalf("Confirmation failed: %s %v", out, err)
+	}
+	if time.Since(start) < 2*time.Second {
+		t.Fatal("Confirmation returned before delayed cleanup finished")
+	}
+	for _, name := range []string{"transaction", "transaction-retired-token", "recovery", "lock", "lock-completed-token"} {
+		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+			t.Fatalf("Successful confirmation left %s", name)
+		}
+	}
+}

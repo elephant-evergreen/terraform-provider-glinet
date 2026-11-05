@@ -45,7 +45,7 @@ func configurationReload(plan reloadPlan) string {
 
 func configurationCleanup(token string) string {
 	retired := transactionDir + "-retired-" + token
-	return "if [ -d " + quote(transactionDir) + " ]; then mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\nrmdir " + quote(configurationLock) + "\n"
+	return "if [ -d " + quote(transactionDir) + " ]; then mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\nrmdir " + quote(configurationLock) + "\nmkdir " + quote(configurationLock+"-completed-"+token) + "\n"
 }
 
 func configurationStableReadScript(config Configuration, keys map[string]string) string {
@@ -99,6 +99,7 @@ fi
 remaining=300
 while [ ! -f decision ] && [ "$remaining" -gt 0 ]; do sleep 1; remaining=$((remaining-1)); done
 ln recover decision 2>/dev/null || true
+sync
 case "$(cat decision)" in
  confirm)
  ` + configurationCleanup(token) + ` ;;
@@ -156,7 +157,7 @@ touch activate
 }
 
 func configurationConfirmScript(token string, config Configuration, keys map[string]string) string {
-	script := preflight + "cd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest \"$(cat ready)\" = \"$(cat /proc/sys/kernel/random/boot_id)\" || exit 75\ntest \"$(cat token)\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
+	script := preflight + "if rmdir " + quote(configurationLock+"-completed-"+token) + " 2>/dev/null; then exit 0; fi\ncd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest \"$(cat ready)\" = \"$(cat /proc/sys/kernel/random/boot_id)\" || exit 75\ntest \"$(cat token)\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
 	for _, s := range config {
 		if s.Absent {
 			continue
@@ -180,7 +181,7 @@ func configurationConfirmScript(token string, config Configuration, keys map[str
 	for name, value := range keys {
 		script += "test \"$(uci -q get " + quote("wireless."+name+".key") + ")\" = " + quote(value) + " || exit 75\n"
 	}
-	return script + "ln confirm decision 2>/dev/null || test \"$(cat decision)\" = confirm || exit 75\nsync\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n[ -f " + quote(transactionDir+"/token") + " ] || exit 0\n[ \"$(cat " + quote(transactionDir+"/token") + ")\" = " + quote(token) + " ] || exit 0\nsleep 1\ndone\nexit 75\n"
+	return script + "ln confirm decision 2>/dev/null || test \"$(cat decision)\" = confirm || exit 75\nsync\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\nif rmdir " + quote(configurationLock+"-completed-"+token) + " 2>/dev/null; then exit 0; fi\nsleep 1\ndone\nexit 75\n"
 }
 
 func configurationJSON(config Configuration) string {

@@ -116,7 +116,7 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 			}
 		}
 		for k, v := range s.Match {
-			if value, ok := s.Options[k]; ok && value != v {
+			if value, ok := s.Options[k]; !observed && ok && value != v {
 				return nil, errors.New("Managed identity options must equal their match values.")
 			}
 			if _, ok := s.Lists[k]; ok {

@@ -166,3 +166,21 @@ func TestMissingWiFiRequiresExplicitCredentialRestoration(t *testing.T) {
 		t.Fatal("Recovery was not persisted before activation and mutation")
 	}
 }
+
+func TestMissingAnonymousIdentityObservationRemainsReadable(t *testing.T) {
+	config := Configuration{{Package: "firewall", Name: "@zone[0]", Type: "zone", Match: map[string]string{"name": "guest"}, Options: map[string]string{"name": ""}, Missing: true}}
+	for range 2 {
+		observed, err := DecodeObservedConfiguration(configurationJSON(config))
+		if err != nil || !SameConfiguration(observed, config) {
+			t.Fatalf("Missing anonymous observation could not be refreshed: %v", err)
+		}
+		config = observed
+	}
+	if _, err := DecodeConfiguration(configurationJSON(config)); err == nil {
+		t.Fatal("Invalid desired identity accepted")
+	}
+	script := configurationApplyScript(configurationFixture(), nil, "token", reloadPlan{})
+	if !strings.Contains(script, "ln recover decision 2>/dev/null || true\nsync\ncase") {
+		t.Fatal("Rollback can run before the winning decision is persisted")
+	}
+}
