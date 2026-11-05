@@ -66,15 +66,15 @@ func operationError(err error) error {
 		case 44:
 			return ErrNotFound
 		case 65:
-			return errors.New("Unsupported router configuration. Only Flint 2 (GL-MT6000), stock firmware 4.11.0, router mode, and existing AP sections are supported.")
+			return errors.New("Unsupported router configuration. Use Flint 2 (GL-MT6000), stock firmware 4.11.0 in router mode and the documented UCI section identities.")
 		case 73:
-			return errors.New("Another Wi-Fi change or recovery is pending. Wait for it to finish before applying again.")
+			return errors.New("Another change or recovery is pending. Wait for it to finish before applying again.")
 		case 74:
 			return errors.New("Uncommitted UCI changes exist. Commit or revert them outside Terraform before applying.")
 		case 75:
 			return errors.New("The change could not be confirmed before recovery started. Inspect the router before retrying.")
 		case 76:
-			return errors.New("Cannot arm automatic recovery. No Wi-Fi settings were changed.")
+			return errors.New("Cannot arm automatic recovery. No configuration was changed.")
 		}
 	}
 	return err

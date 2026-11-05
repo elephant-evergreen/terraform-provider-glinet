@@ -21,6 +21,8 @@ func TestConfigurationValidation(t *testing.T) {
 	for _, bad := range []string{
 		strings.Replace(valid, `"wireless"`, `"dropbear"`, 1),
 		strings.Replace(valid, `"ssid"`, `"key"`, 1),
+		strings.Replace(valid, `"ssid"`, `"key1"`, 1),
+		`[{"package":"network","name":"lan","type":"interface","match":{"device":"br-lan"}}]`,
 		strings.Replace(valid, `"ssid"`, `"api_token"`, 1),
 		strings.Replace(valid, `"wifi2g"`, `"wifi2g;reboot"`, 1),
 		strings.Replace(valid, `"options":`, `"unknown":`, 1),
@@ -89,5 +91,33 @@ func TestConfigurationGeneratedScriptsAreShellSafe(t *testing.T) {
 	script := configurationApplyScript(config, nil, "token", true)
 	if strings.Index(script, "armed=1") > strings.Index(script, "assert(uci:save") || !strings.Contains(script, "START=99") || !strings.Contains(script, "/decision") {
 		t.Fatal("Recovery is not armed before changes, persistent, or atomically decided")
+	}
+}
+
+type configurationMutationRunner struct {
+	current Configuration
+	wanted  Configuration
+	apply   string
+}
+
+func (r *configurationMutationRunner) Run(_ context.Context, script string) ([]byte, error) {
+	if strings.Contains(script, "io.write(json.encode(result))") {
+		return json.Marshal(r.current)
+	}
+	if strings.Contains(script, "assert(uci:save") {
+		r.apply = script
+		r.current = r.wanted
+	}
+	return nil, nil
+}
+func TestPortMappingOnlyChangeSynchronizesRuntime(t *testing.T) {
+	before := Configuration{{Package: "eth_ports_config_map", Name: "lan2", Type: "port", Options: map[string]string{"pvid": "1"}}}
+	after := Configuration{{Package: "eth_ports_config_map", Name: "lan2", Type: "port", Options: map[string]string{"pvid": "11"}}}
+	remote := &configurationMutationRunner{current: before, wanted: after}
+	if err := NewClient(remote).WriteConfiguration(context.Background(), after, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(remote.apply, "gl-vlan-port-map sync") || !strings.Contains(remote.apply, "reboot") {
+		t.Fatal("Port-only mutation skipped runtime synchronization")
 	}
 }

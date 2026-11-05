@@ -27,9 +27,7 @@ type Section struct {
 
 type Configuration []Section
 
-var packages = map[string]bool{"network": true, "wireless": true, "dhcp": true, "firewall": true, "gl-dns-v2": true, "eth_ports_config_map": true}
 var selector = regexp.MustCompile(`^@([A-Za-z0-9_-]+)\[[0-9]+\]$`)
-var optionName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func DecodeConfiguration(value string) (Configuration, error) {
 	if len(value) > 262144 {
@@ -50,7 +48,7 @@ func DecodeConfiguration(value string) (Configuration, error) {
 	seen := map[string]bool{}
 	for index, s := range config {
 		anonymous := selector.FindStringSubmatch(s.Name)
-		if !packages[s.Package] || (!ValidSection(s.Name) && anonymous == nil) || !sectionName.MatchString(s.Type) && !regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString(s.Type) {
+		if allowedOptions[s.Package+"."+s.Type] == nil || (!ValidSection(s.Name) && anonymous == nil) {
 			return nil, errors.New("Unsupported UCI package, section name or section type.")
 		}
 		if len(s.Options) == 0 {
@@ -68,6 +66,9 @@ func DecodeConfiguration(value string) (Configuration, error) {
 			return nil, errors.New("Each UCI section may appear only once.")
 		}
 		seen[key] = true
+		if anonymous == nil && len(s.Match) > 0 {
+			return nil, errors.New("Identity matches are supported only for anonymous sections.")
+		}
 		if anonymous != nil && (anonymous[1] != s.Type || s.Absent) {
 			return nil, errors.New("Anonymous selectors must match the section type and cannot be deleted.")
 		}
@@ -75,7 +76,7 @@ func DecodeConfiguration(value string) (Configuration, error) {
 			return nil, errors.New("Absent sections cannot include options, lists or matches.")
 		}
 		for k, v := range s.Options {
-			if !validOption(k, v) {
+			if !validOption(s.Package, s.Type, k, v) {
 				return nil, errors.New("Invalid or secret UCI option. Use wireless_keys_wo for Wi-Fi keys.")
 			}
 			if _, ok := s.Lists[k]; ok {
@@ -83,7 +84,7 @@ func DecodeConfiguration(value string) (Configuration, error) {
 			}
 		}
 		for k, v := range s.Match {
-			if !validOption(k, v) {
+			if !validOption(s.Package, s.Type, k, v) {
 				return nil, errors.New("Invalid UCI identity match.")
 			}
 		}
@@ -92,7 +93,7 @@ func DecodeConfiguration(value string) (Configuration, error) {
 				return nil, errors.New("UCI lists must contain at least one item.")
 			}
 			for _, v := range vs {
-				if !validOption(k, v) {
+				if !validOption(s.Package, s.Type, k, v) {
 					return nil, errors.New("Invalid or secret UCI list option.")
 				}
 			}
@@ -101,9 +102,8 @@ func DecodeConfiguration(value string) (Configuration, error) {
 	return config, nil
 }
 
-func validOption(key, value string) bool {
-	lower := strings.ToLower(key)
-	return optionName.MatchString(key) && lower != "key" && !strings.Contains(lower, "password") && !strings.Contains(lower, "secret") && !strings.Contains(lower, "token") && !strings.Contains(lower, "private_key") && len(value) <= 1024 && !strings.ContainsFunc(value, unicode.IsControl)
+func validOption(pkg, kind, key, value string) bool {
+	return allowedOptions[pkg+"."+kind][key] && len(value) <= 1024 && !strings.ContainsFunc(value, unicode.IsControl)
 }
 
 func luaQuote(value string) string {
@@ -115,6 +115,7 @@ func configurationLua(config Configuration, write bool, keys map[string]string) 
 	source := "local json=require('cjson')\nlocal uci=require('uci').cursor()\nlocal spec=json.decode(" + luaQuote(string(data)) + ")\n" + `local result={}
 local rule_order={}
 local rule_slots={}
+local resolved={}
 local rule_indices={}
 local next_index=0
 uci:foreach('firewall',nil,function(s) rule_indices[s['.name']]=next_index; next_index=next_index+1 end)
@@ -130,6 +131,7 @@ for i,s in ipairs(spec) do
   if #matches~=1 then os.exit(65) end
   name=matches[1]
  end
+ resolved[i]=name
  local kind=uci:get(s.package,name)
  if kind and kind~=s.type then os.exit(65) end
  for k,want in pairs(s.match or {}) do
@@ -174,7 +176,7 @@ for i,s in ipairs(spec) do
 		for name, value := range keys {
 			source += "assert(uci:get('wireless'," + luaQuote(name) + ")=='wifi-iface')\nassert(uci:set('wireless'," + luaQuote(name) + ",'key'," + luaQuote(value) + "))\n"
 		}
-		source += "local count=0\nuci:foreach('firewall',nil,function() count=count+1 end)\nfor _,s in ipairs(spec) do if s.package=='firewall' and s.type=='rule' and not s.absent then assert(uci:reorder(s.package,s.name,count-1)) end end\n"
+		source += "local count=0\nuci:foreach('firewall',nil,function() count=count+1 end)\nfor i,s in ipairs(spec) do if s.package=='firewall' and s.type=='rule' and not s.absent then assert(uci:reorder(s.package,resolved[i],count-1)) end end\n"
 		source += "for _,p in ipairs({'network','wireless','dhcp','firewall','gl-dns-v2','eth_ports_config_map'}) do assert(uci:save(p)) end\n"
 	} else {
 		source += "table.sort(rule_order,function(a,b) return a.index<b.index end)\nfor i,slot in ipairs(rule_slots) do result[slot]=rule_order[i].value end\nio.write(json.encode(result))\n"
@@ -215,7 +217,7 @@ func ValidWirelessKeys(config Configuration, keys map[string]string) bool {
 				found = true
 			}
 		}
-		if !found || len(key) < 8 || len(key) > 63 || strings.ContainsFunc(key, func(r rune) bool { return r < 32 || r > 126 }) {
+		if !ValidSection(name) || !found || len(key) < 8 || len(key) > 63 || strings.ContainsFunc(key, func(r rune) bool { return r < 32 || r > 126 }) {
 			return false
 		}
 	}
@@ -228,7 +230,7 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	actual, err := c.ReadConfiguration(ctx, config)
+	actual, err := c.stableConfiguration(ctx, config)
 	if err != nil {
 		return err
 	}
@@ -257,7 +259,7 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 	token := hex.EncodeToString(tokenBytes)
 	reboot := false
 	for i, s := range config {
-		if !reflect.DeepEqual(s, actual[i]) && (s.Package == "network" || s.Package == "wireless") {
+		if !reflect.DeepEqual(s, actual[i]) && (s.Package == "network" || s.Package == "wireless" || s.Package == "eth_ports_config_map") {
 			reboot = true
 		}
 	}
@@ -286,3 +288,47 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 		}
 	}
 }
+
+func (c *Client) stableConfiguration(ctx context.Context, config Configuration) (Configuration, error) {
+	output, err := c.runner.Run(ctx, configurationStableReadScript(config))
+	if err != nil {
+		return nil, operationError(err)
+	}
+	var actual Configuration
+	if json.Unmarshal(output, &actual) != nil || len(actual) != len(config) {
+		return nil, errors.New("The router returned invalid configuration data.")
+	}
+	for i := range actual {
+		if len(actual[i].Options) == 0 {
+			actual[i].Options = nil
+		}
+		if len(actual[i].Lists) == 0 {
+			actual[i].Lists = nil
+		}
+	}
+	return actual, nil
+}
+
+var allowedOptions = func() map[string]map[string]bool {
+	definitions := map[string]string{
+		"network.device":            "name type bridge_empty ports",
+		"network.interface":         "device proto disabled ipaddr netmask vlan_id display_name home_iac_owner force_link delegate",
+		"wireless.wifi-iface":       "disabled ssid encryption hidden isolate ifname device network mode",
+		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force",
+		"dhcp.host":                 "mac ip name",
+		"dhcp.dnsmasq":              "noresolv server",
+		"firewall.zone":             "name network input output forward",
+		"firewall.forwarding":       "src dest enabled",
+		"firewall.rule":             "name src dest src_ip dest_ip proto dest_port family target enabled",
+		"gl-dns-v2.dns":             "provider proto servers_list mode manual_enable manual_type manual_local_dns override_vpn force_dns",
+		"eth_ports_config_map.port": "mode vlan_mode pvid port",
+	}
+	result := map[string]map[string]bool{}
+	for scope, names := range definitions {
+		result[scope] = map[string]bool{}
+		for _, name := range strings.Fields(names) {
+			result[scope][name] = true
+		}
+	}
+	return result
+}()
