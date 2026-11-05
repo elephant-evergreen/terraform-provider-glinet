@@ -129,6 +129,15 @@ func TestNativeUCIFixture(t *testing.T) {
 	if !SameConfiguration(read(dns), dns) {
 		t.Fatal("Native list or missing singleton handling failed")
 	}
+	missingRules := Configuration{{Package: "firewall", Name: "new_a", Type: "rule", Options: map[string]string{"target": "REJECT"}}, {Package: "firewall", Name: "new_b", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
+	missing := read(missingRules)
+	if !missing[0].Missing || !missing[1].Missing || missing[0].Name != "new_a" || missing[1].Name != "new_b" {
+		t.Fatal("Missing rules lost their declared relative order")
+	}
+	write(missingRules, nil)
+	if !SameConfiguration(read(missingRules), missingRules) {
+		t.Fatal("Multiple missing rules did not converge")
+	}
 	wifi := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Example Updated"}}}
 	write(wifi, map[string]string{"wifi2g": "fixture-secret-updated"})
 	if !SameConfiguration(read(wifi), wifi) {

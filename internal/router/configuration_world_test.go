@@ -504,7 +504,7 @@ func TestConfigurationWorldRetiredCleanupResumesAfterInterruption(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			cleanup := configurationCleanup("token")
+			cleanup := configurationCleanup("token", false)
 			if stage == "rename" {
 				cleanup = strings.Replace(cleanup, "sync\n", "exit 0\n", 1)
 			} else {
@@ -558,5 +558,35 @@ func TestConfigurationWorldConfirmationWaitsForCompletedCleanup(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
 			t.Fatalf("Successful confirmation left %s", name)
 		}
+	}
+}
+
+func TestConfigurationWorldRolledBackKeyRotationNeverAcknowledgesSuccess(t *testing.T) {
+	f := newConfigurationWorld(t)
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	spec := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Example"}}}
+	keys := map[string]string{"wifi2g": "new-fixture-secret"}
+	script := configurationApplyScript(spec, keys, "token", reloadPlan{Wireless: true})
+	script = strings.Replace(script, configurationLua(spec, true, keys), "printf changed-key > "+quote(root+"/wireless")+"\nexit 1\n", 1)
+	if out, err := f.run(script); err != nil {
+		t.Fatalf("Preparation failed: %s %v", out, err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(filepath.Join(root, "lock")); os.IsNotExist(err) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	actual, _ := os.ReadFile(filepath.Join(root, "wireless"))
+	if string(actual) != "original-wireless" {
+		t.Fatal("Failed rotation did not restore the original key fixture")
+	}
+	if out, err := f.run(configurationConfirmScript("token", spec, keys)); err == nil {
+		t.Fatalf("Late confirmation accepted completed rollback: %s", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "completed", "token.confirmed")); !os.IsNotExist(err) {
+		t.Fatal("Recovery emitted a confirmed acknowledgment")
 	}
 }

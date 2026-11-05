@@ -44,9 +44,13 @@ func configurationReload(plan reloadPlan) string {
 	return script
 }
 
-func configurationCleanup(token string) string {
+func configurationCleanup(token string, confirmed bool) string {
 	retired := transactionDir + "-retired-" + token
-	return "if [ -d " + quote(transactionDir) + " ]; then mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\nrmdir " + quote(configurationLock) + "\nmkdir -p " + quote(completionDir) + "\nmkdir " + quote(completionDir+"/"+token) + "\n"
+	cleanup := "if [ -d " + quote(transactionDir) + " ]; then mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\nrmdir " + quote(configurationLock) + "\n"
+	if confirmed {
+		cleanup += "mkdir -p " + quote(completionDir) + "\nmkdir " + quote(completionDir+"/"+token+".confirmed") + "\n"
+	}
+	return cleanup
 }
 
 func configurationStableReadScript(config Configuration, keys map[string]string) string {
@@ -62,13 +66,13 @@ func configurationApplyScript(config Configuration, keys map[string]string, toke
 	dir := transactionDir
 	restore := "#!/bin/sh\nset -eu\nexec >> " + quote(dir+"/rollback.log") + " 2>&1\n"
 	if plan.Reboot {
-		restore += "if [ -f " + quote(dir+"/restored_boot") + " ] && [ \"$(cat /proc/sys/kernel/random/boot_id)\" != \"$(cat " + quote(dir+"/restored_boot") + ")\" ]; then\n" + configurationCleanup(token) + "exit 0\nfi\n"
+		restore += "if [ -f " + quote(dir+"/restored_boot") + " ] && [ \"$(cat /proc/sys/kernel/random/boot_id)\" != \"$(cat " + quote(dir+"/restored_boot") + ")\" ]; then\n" + configurationCleanup(token, false) + "exit 0\nfi\n"
 	}
 	restore += "for package in " + configurationPackages + "; do\ncp " + quote(dir) + "/\"$package\" /etc/config/\"$package\"\nuci -q revert \"$package\"\ndone\n" + configurationReload(plan)
 	if plan.Reboot {
 		restore += "cat /proc/sys/kernel/random/boot_id > " + quote(dir+"/restored_boot") + "\nsync\nreboot\n"
 	} else {
-		restore += configurationCleanup(token)
+		restore += configurationCleanup(token, false)
 	}
 	watchdog := `#!/bin/sh
 trap '' HUP
@@ -89,11 +93,11 @@ if [ "$current_boot" = "$initial_boot" ]; then
   sync
   if ! /bin/sh request; then ln recover decision 2>/dev/null || true; fi
  else
-  ` + configurationCleanup(token) + `exit 0
+  ` + configurationCleanup(token, false) + `exit 0
  fi
 else
  if [ ! -f started ]; then
-  ` + configurationCleanup(token) + `exit 0
+  ` + configurationCleanup(token, false) + `exit 0
  fi
  if [ -f awaiting_boot ]; then printf '%s' "$current_boot" > ready; else ln recover decision 2>/dev/null || true; fi
 fi
@@ -103,7 +107,7 @@ ln recover decision 2>/dev/null || true
 sync
 case "$(cat decision)" in
  confirm)
- ` + configurationCleanup(token) + ` ;;
+ ` + configurationCleanup(token, true) + ` ;;
  rollback)
  while ! /bin/sh restore; do sleep 5; done
  ;;
@@ -111,7 +115,7 @@ case "$(cat decision)" in
 esac
 `
 
-	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nset -eu\numask 077\nmkdir -p " + quote(configurationLock) + "\nif [ ! -d " + quote(dir) + " ]; then\nmkdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || return 73\n" + configurationCleanup(token) + "return 0\nfi\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
+	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nset -eu\numask 077\nmkdir -p " + quote(configurationLock) + "\nif [ ! -d " + quote(dir) + " ]; then\nmkdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || return 73\n" + configurationCleanup(token, false) + "return 0\nfi\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
 	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, keys) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + "; do uci commit \"$package\"; done\n" + configurationReload(plan)
 	if plan.Reboot {
 		request += "touch awaiting_boot\nsync\nreboot\n"
@@ -158,7 +162,7 @@ touch activate
 }
 
 func configurationConfirmScript(token string, config Configuration, keys map[string]string) string {
-	ack := "if rmdir " + quote(completionDir+"/"+token) + " 2>/dev/null; then rmdir " + quote(completionDir) + " 2>/dev/null || true; exit 0; fi\n"
+	ack := "if rmdir " + quote(completionDir+"/"+token+".confirmed") + " 2>/dev/null; then rmdir " + quote(completionDir) + " 2>/dev/null || true; exit 0; fi\n"
 	script := preflight + ack + "cd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest \"$(cat ready)\" = \"$(cat /proc/sys/kernel/random/boot_id)\" || exit 75\ntest \"$(cat token)\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
 	for _, s := range config {
 		if s.Absent {

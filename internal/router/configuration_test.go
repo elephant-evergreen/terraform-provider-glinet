@@ -27,6 +27,7 @@ func TestConfigurationValidation(t *testing.T) {
 		strings.Replace(valid, `"wifi2g"`, `"wifi2g;reboot"`, 1),
 		strings.Replace(valid, `"options":`, `"unknown":`, 1),
 		valid + ` {}`, `[]`,
+		`[{"package":"wireless","name":"wifi2g","type":"wifi-iface","lists":{"network":["lan"]}}]`,
 		`[{"package":"network","name":"@interface[0]","type":"device"}]`,
 		`[{"package":"network","name":"lan","type":"interface","lists":{"ports":[]}}]`,
 		`[{"package":"wireless","name":"wifi2g","type":"wifi-iface","absent":true,"options":{"ssid":"x"}}]`,

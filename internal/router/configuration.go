@@ -127,6 +127,9 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 			}
 		}
 		for k, vs := range s.Lists {
+			if s.Package == "wireless" && !observed {
+				return nil, errors.New("Wi-Fi attributes must use scalar options, not lists.")
+			}
 			if !allowedOptions[s.Package+"."+s.Type][k] {
 				return nil, errors.New("Unsupported UCI list option.")
 			}
@@ -240,7 +243,7 @@ for i,s in ipairs(spec) do
  end
  result[i]=actual
  if s.package=='firewall' and s.type=='rule' and not s.absent and s.position==nil then
-  rule_order[#rule_order+1]={value=actual,index=rule_indices[name] or 2147483647}
+  rule_order[#rule_order+1]={value=actual,index=rule_indices[name] or 2147483647,slot=i}
   rule_slots[#rule_slots+1]=i
  end
 `
@@ -253,7 +256,7 @@ for i,s in ipairs(spec) do
 		source += "local ordered={}\nlocal count=0\nuci:foreach('firewall',nil,function() count=count+1 end)\nfor i,s in ipairs(spec) do if s.position~=nil and not s.absent then if s.position>=count then os.exit(65) end; ordered[#ordered+1]={name=resolved[i],position=s.position} end end\ntable.sort(ordered,function(a,b) return a.position<b.position end)\nfor _,s in ipairs(ordered) do assert(uci:reorder('firewall',s.name,count-1)) end\nfor _,s in ipairs(ordered) do assert(uci:reorder('firewall',s.name,s.position)) end\n"
 		source += "local touched={}\nfor _,s in ipairs(spec) do touched[s.package]=true end\nfor p in pairs(touched) do assert(uci:save(p)) end\n"
 	} else {
-		source += "table.sort(rule_order,function(a,b) return a.index<b.index end)\nfor i,slot in ipairs(rule_slots) do result[slot]=rule_order[i].value end\nio.write(json.encode(result))\n"
+		source += "table.sort(rule_order,function(a,b) if a.index==b.index then return a.slot<b.slot end; return a.index<b.index end)\nfor i,slot in ipairs(rule_slots) do result[slot]=rule_order[i].value end\nio.write(json.encode(result))\n"
 	}
 	return "lua - <<'GLINET_CONFIGURATION_LUA'\n" + source + "GLINET_CONFIGURATION_LUA\n"
 }
