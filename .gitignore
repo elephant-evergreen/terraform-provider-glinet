@@ -1,0 +1,16 @@
+/.terraform/
+/terraform-provider-glinet
+/dist/
+/work/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+.env
+.env.*
+*.pem
+*.key
+*.age
