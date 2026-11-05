@@ -58,7 +58,6 @@ func (f *configurationWorld) run(script string) ([]byte, error) {
 	root := f.base.root
 	script = strings.ReplaceAll(script, preflight, "set -eu\n")
 	script = strings.ReplaceAll(script, "remaining=300", "remaining="+f.delay)
-	script = strings.ReplaceAll(script, "sleep 2\n", "sleep 0.1\n")
 	script = strings.ReplaceAll(script, "/proc/sys/kernel/random/boot_id", filepath.Join(root, "boot-id"))
 	script = strings.ReplaceAll(script, resultDir, filepath.Join(root, "results"))
 	script = strings.ReplaceAll(script, transactionDir, filepath.Join(root, "transaction"))
@@ -540,9 +539,13 @@ func TestConfigurationWorldConfirmationWaitsForCompletedCleanup(t *testing.T) {
 	root := f.base.root
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
 	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
+	releaseCleanup := filepath.Join(root, "release-cleanup")
+	t.Cleanup(func() {
+		_ = os.WriteFile(releaseCleanup, nil, 0600)
+	})
 	script := configurationApplyScript(spec, nil, "token", reloadPlan{Firewall: true})
 	script = strings.Replace(script, configurationLua(spec, true, nil), "printf changed > "+quote(root+"/firewall")+"\n", 1)
-	script = strings.ReplaceAll(script, "rm -rf "+quote(transactionDir+"-retired-token"), "sleep 2\nrm -rf "+quote(transactionDir+"-retired-token"))
+	script = strings.ReplaceAll(script, "rm -rf "+quote(transactionDir+"-retired-token"), "while [ ! -f "+quote(releaseCleanup)+" ]; do sleep 0.05; done\nrm -rf "+quote(transactionDir+"-retired-token"))
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Apply failed: %s %v", out, err)
 	}
@@ -553,12 +556,45 @@ func TestConfigurationWorldConfirmationWaitsForCompletedCleanup(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	start := time.Now()
-	if out, err := f.run(configurationConfirmScript("token", spec, nil)); err != nil {
-		t.Fatalf("Confirmation failed: %s %v", out, err)
+	if _, err := os.Stat(filepath.Join(root, "transaction", "ready")); err != nil {
+		t.Fatal("Apply never became ready")
 	}
-	if time.Since(start) < 2*time.Second {
-		t.Fatal("Confirmation returned before delayed cleanup finished")
+	confirmed := make(chan error, 1)
+	go func() {
+		_, err := f.run(configurationConfirmScript("token", spec, nil))
+		confirmed <- err
+	}()
+	deadline = time.Now().Add(5 * time.Second)
+	for {
+		data, err := os.ReadFile(filepath.Join(root, "results", "token"))
+		if err == nil && string(data) == "confirm" {
+			break
+		}
+		select {
+		case err := <-confirmed:
+			t.Fatalf("Confirmation returned before cleanup finished: %v", err)
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Cleanup did not start")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	select {
+	case err := <-confirmed:
+		t.Fatalf("Confirmation returned while cleanup was still blocked: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	if err := os.WriteFile(releaseCleanup, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-confirmed:
+		if err != nil {
+			t.Fatalf("Confirmation failed: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Confirmation did not finish after cleanup was released")
 	}
 	if out, err := f.run(configurationConfirmScript("token", spec, nil)); err != nil {
 		t.Fatalf("Lost SSH response could not be retried: %s %v", out, err)
