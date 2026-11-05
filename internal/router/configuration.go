@@ -169,7 +169,12 @@ func configurationLua(config Configuration, write bool, keys map[string]string) 
 		}
 	}
 	data, _ := json.Marshal(wire)
-	source := "local json=require('cjson')\nlocal uci=require('uci').cursor()\nlocal writing=" + fmt.Sprint(write) + "\nlocal spec=json.decode(" + luaQuote(string(data)) + ")\n" + `local result={}
+	keyNames := map[string]bool{}
+	for name := range keys {
+		keyNames[name] = true
+	}
+	available, _ := json.Marshal(keyNames)
+	source := "local json=require('cjson')\nlocal uci=require('uci').cursor()\nlocal writing=" + fmt.Sprint(write) + "\nlocal spec=json.decode(" + luaQuote(string(data)) + ")\nlocal key_names=json.decode(" + luaQuote(string(available)) + ")\n" + `local result={}
 local rule_order={}
 local rule_slots={}
 local resolved={}
@@ -194,6 +199,7 @@ for i,s in ipairs(spec) do
  seen[identity]=true
  resolved[i]=name
  local kind=uci:get(s.package,name)
+ if writing and s.package=='wireless' and not s.absent and not kind and not key_names[s.name] then os.exit(65) end
  if s.package=='firewall' then if s.absent and kind then next_index=next_index-1 elseif not s.absent and not kind then next_index=next_index+1 end end
  if kind and kind~=s.type then os.exit(65) end
  for k,want in pairs(s.match or {}) do
@@ -306,6 +312,9 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 		keys = nil
 	}
 	for i, s := range config {
+		if s.Package == "wireless" && !s.Absent && actual[i].Missing && keys[s.Name] == "" {
+			return errors.New("A missing Wi-Fi section requires its write-only key and a new key generation before it can be restored.")
+		}
 		if s.Package == "firewall" && s.Type == "rule" && s.Position == nil && s.Name != actual[i].Name {
 			return errors.New("Changing managed firewall rule order requires explicit positions for all managed rules.")
 		}

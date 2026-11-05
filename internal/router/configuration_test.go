@@ -151,3 +151,18 @@ func TestSSIDChangeReloadsOnlyWireless(t *testing.T) {
 		t.Fatal("A wireless setting change reloaded unrelated services")
 	}
 }
+
+func TestMissingWiFiRequiresExplicitCredentialRestoration(t *testing.T) {
+	desired := configurationFixture()
+	actual := configurationFixture()
+	actual[0].Missing = true
+	remote := &configurationReader{config: actual}
+	err := NewClient(remote).WriteConfiguration(context.Background(), desired, nil)
+	if err == nil || !strings.Contains(err.Error(), "write-only key") || remote.calls != 1 {
+		t.Fatalf("Missing Wi-Fi was recreated without a key: %v", err)
+	}
+	script := configurationApplyScript(desired, nil, "token", reloadPlan{})
+	if !strings.Contains(script, " enable\nsync\ntransferred=1") || !strings.Contains(script, "touch started\n  sync\n") {
+		t.Fatal("Recovery was not persisted before activation and mutation")
+	}
+}

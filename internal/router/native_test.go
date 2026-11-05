@@ -134,6 +134,15 @@ func TestNativeUCIFixture(t *testing.T) {
 	if !SameConfiguration(read(wifi), wifi) {
 		t.Fatal("Native AP setting handling failed")
 	}
+	missingWiFi := Configuration{{Package: "wireless", Name: "missing_ap", Type: "wifi-iface", Options: map[string]string{"mode": "ap", "encryption": "psk2", "ssid": "Example Restored"}}}
+	_, err = transport.Run(ctx, redirect(configurationLua(missingWiFi, true, nil)))
+	if !errors.As(err, &status) || status.Code != 65 || !read(missingWiFi)[0].Missing {
+		t.Fatal("Missing Wi-Fi was created without credential restoration")
+	}
+	write(missingWiFi, map[string]string{"missing_ap": "fixture-secret-restored"})
+	if !SameConfiguration(read(missingWiFi), missingWiFi) {
+		t.Fatal("Explicit Wi-Fi credential restoration did not converge")
+	}
 	check := "test \"$(uci -c " + quote(conf) + " -P " + quote(saved) + " get wireless.wifi2g.key)\" = 'fixture-secret-updated'\n"
 	if _, err := transport.Run(ctx, check); err != nil {
 		t.Fatal("Write-only fixture key was not stored")

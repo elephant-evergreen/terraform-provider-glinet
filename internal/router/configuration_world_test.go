@@ -64,6 +64,7 @@ func (f *configurationWorld) run(script string) ([]byte, error) {
 	script = strings.ReplaceAll(script, configurationLock, filepath.Join(root, "lock"))
 	script = strings.ReplaceAll(script, recoveryService, filepath.Join(root, "recovery"))
 	script = strings.ReplaceAll(script, "/etc/config/", root+"/")
+	script = strings.ReplaceAll(script, "/etc/rc.d/", root+"/rc/")
 	script = strings.ReplaceAll(script, "/etc/init.d/network", filepath.Join(root, "service"))
 	script = strings.ReplaceAll(script, "/etc/init.d/gl-vlan-port-map", filepath.Join(root, "service"))
 	script = strings.ReplaceAll(script, "/etc/init.d/dnsmasq", filepath.Join(root, "service"))
@@ -176,8 +177,10 @@ func TestConfigurationWorldUnexpectedRebootRestoresBeforeConfirmation(t *testing
 	_ = syscall.Kill(-value, syscall.SIGTERM)
 	_ = os.RemoveAll(filepath.Join(root, "lock"))
 	_ = os.RemoveAll(filepath.Join(root, "lock-actor-token"))
-	_ = os.Remove(filepath.Join(root, "transaction", "ready"))
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("rebooted\n"), 0600)
+	if _, err := f.run(configurationConfirmScript("token", spec, nil)); err == nil {
+		t.Fatal("Stale readiness from an earlier boot was accepted")
+	}
 	service, err := os.ReadFile(filepath.Join(root, "recovery"))
 	if err != nil {
 		t.Fatal(err)
@@ -446,9 +449,13 @@ func TestConfigurationWorldCancellationBeforeActivationNeverStartsMutation(t *te
 	f.delay = "2"
 	root := f.base.root
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	_ = os.WriteFile(filepath.Join(root, "service"), []byte("#!/bin/sh\ntouch \"$GLINET_TEST_ROOT/service-called\"\n"), 0700)
+	_ = os.WriteFile(filepath.Join(root, "bin", "reboot"), []byte("#!/bin/sh\ntouch \"$GLINET_TEST_ROOT/reboot-called\"\n"), 0700)
+	helper := "#!/bin/sh\nfor target; do :; done\nif [ \"$target\" = \"$GLINET_TEST_ROOT/firewall\" ]; then touch \"$GLINET_TEST_ROOT/restore-called\"; fi\nexec /bin/cp \"$@\"\n"
+	_ = os.WriteFile(filepath.Join(root, "bin", "cp"), []byte(helper), 0700)
 	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
 	mutation := "touch " + quote(root+"/request-executed") + "\nprintf changed > " + quote(root+"/firewall") + "\n"
-	script := strings.Replace(configurationApplyScript(spec, nil, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}), configurationLua(spec, true, nil), mutation, 1)
+	script := strings.Replace(configurationApplyScript(spec, nil, "token", reloadPlan{Reboot: true, DNS: true, DHCP: true, Firewall: true}), configurationLua(spec, true, nil), mutation, 1)
 	script = strings.Replace(script, "touch activate", "exit 0", 1)
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Preparation failed: %s %v", out, err)
@@ -463,8 +470,60 @@ func TestConfigurationWorldCancellationBeforeActivationNeverStartsMutation(t *te
 	if _, err := os.Stat(filepath.Join(root, "request-executed")); !os.IsNotExist(err) {
 		t.Fatal("Unactivated worker mutated configuration")
 	}
+	for _, name := range []string{"service-called", "reboot-called", "restore-called"} {
+		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+			t.Fatalf("Canceled preparation caused %s", name)
+		}
+	}
 	actual, _ := os.ReadFile(filepath.Join(root, "firewall"))
 	if string(actual) != "original-firewall" {
 		t.Fatal("Canceled preparation changed configuration")
+	}
+}
+
+func TestConfigurationWorldRetiredCleanupResumesAfterInterruption(t *testing.T) {
+	for _, stage := range []string{"rename", "retired-deletion"} {
+		t.Run(stage, func(t *testing.T) {
+			f := newConfigurationWorld(t)
+			root := f.base.root
+			_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+			spec := configurationFixture()
+			prepare := strings.Replace(configurationApplyScript(spec, nil, "token", reloadPlan{}), "touch activate", "exit 0", 1)
+			f.delay = "30"
+			if out, err := f.run(prepare); err != nil {
+				t.Fatalf("Preparation failed: %s %v", out, err)
+			}
+			pid, _ := os.ReadFile(filepath.Join(root, "transaction", "pid"))
+			value, _ := strconv.Atoi(strings.TrimSpace(string(pid)))
+			if value < 2 {
+				t.Fatal("Worker did not start")
+			}
+			_ = syscall.Kill(-value, syscall.SIGTERM)
+			service, err := os.ReadFile(filepath.Join(root, "recovery"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cleanup := configurationCleanup("token")
+			if stage == "rename" {
+				cleanup = strings.Replace(cleanup, "sync\n", "exit 0\n", 1)
+			} else {
+				marker := "rm -f " + quote(recoveryService)
+				cleanup = strings.Replace(cleanup, marker, "exit 0\n"+marker, 1)
+			}
+			if out, err := f.run(cleanup); err != nil {
+				t.Fatalf("Interrupted cleanup failed: %s %v", out, err)
+			}
+			_ = os.RemoveAll(filepath.Join(root, "lock"))
+			_ = os.RemoveAll(filepath.Join(root, "lock-actor-token"))
+			_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("rebooted\n"), 0600)
+			if out, err := f.run(string(service) + "\nstart\n"); err != nil {
+				t.Fatalf("Boot cleanup failed: %s %v", out, err)
+			}
+			for _, name := range []string{"transaction", "transaction-retired-token", "recovery", "lock", "lock-actor-token"} {
+				if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+					t.Fatalf("Interrupted cleanup stranded %s", name)
+				}
+			}
+		})
 	}
 }

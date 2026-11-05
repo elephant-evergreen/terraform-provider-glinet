@@ -44,7 +44,8 @@ func configurationReload(plan reloadPlan) string {
 }
 
 func configurationCleanup(token string) string {
-	return "if [ -f " + quote(recoveryService) + " ]; then " + recoveryService + " disable; fi\nrm -f " + quote(recoveryService) + "\nrm -rf " + quote(transactionDir) + "\nrmdir " + quote(configurationLock+"-actor-"+token) + "\nrmdir " + quote(configurationLock) + "\n"
+	retired := transactionDir + "-retired-" + token
+	return "if [ -d " + quote(transactionDir) + " ]; then mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\nrmdir " + quote(configurationLock) + "\n"
 }
 
 func configurationStableReadScript(config Configuration, keys map[string]string) string {
@@ -83,12 +84,17 @@ if [ "$current_boot" = "$initial_boot" ]; then
  remaining=300
  while [ ! -f activate ] && [ "$remaining" -gt 0 ]; do sleep 1; remaining=$((remaining-1)); done
  if [ -f activate ]; then
+  touch started
+  sync
   if ! /bin/sh request; then ln recover decision 2>/dev/null || true; fi
  else
-  ln recover decision 2>/dev/null || true
+  ` + configurationCleanup(token) + `exit 0
  fi
 else
- if [ -f awaiting_boot ]; then touch ready; else ln recover decision 2>/dev/null || true; fi
+ if [ ! -f started ]; then
+  ` + configurationCleanup(token) + `exit 0
+ fi
+ if [ -f awaiting_boot ]; then printf '%s' "$current_boot" > ready; else ln recover decision 2>/dev/null || true; fi
 fi
 remaining=300
 while [ ! -f decision ] && [ "$remaining" -gt 0 ]; do sleep 1; remaining=$((remaining-1)); done
@@ -103,12 +109,12 @@ case "$(cat decision)" in
 esac
 `
 
-	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nmkdir -p " + quote(configurationLock) + "\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
+	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nset -eu\nmkdir -p " + quote(configurationLock) + "\nif [ ! -d " + quote(dir) + " ]; then\nmkdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || return 73\n" + configurationCleanup(token) + "return 0\nfi\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
 	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, keys) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + "; do uci commit \"$package\"; done\n" + configurationReload(plan)
 	if plan.Reboot {
 		request += "touch awaiting_boot\nsync\nreboot\n"
 	} else {
-		request += "touch ready\n"
+		request += "cat /proc/sys/kernel/random/boot_id > ready\n"
 	}
 
 	script := preflight + `test ! -d /tmp/home-network-iac.lock || exit 73
@@ -138,6 +144,7 @@ cat > ` + quote(dir+"/request") + ` <<'GLINET_REQUEST'
 printf '%s' ` + quote(service) + ` > ` + quote(recoveryService) + `
 chmod 700 ` + quote(recoveryService) + `
 ` + recoveryService + ` enable
+sync
 transferred=1
 start-stop-daemon -S -b -m -p ` + quote(dir+"/pid") + ` -x /bin/sh -- ` + quote(dir+"/rollback") + `
 for attempt in 1 2 3 4 5; do test ! -f armed || break; sleep 1; done
@@ -149,7 +156,7 @@ touch activate
 }
 
 func configurationConfirmScript(token string, config Configuration, keys map[string]string) string {
-	script := preflight + "cd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest -f " + quote(transactionDir+"/ready") + " || exit 75\ntest \"$(cat " + quote(transactionDir+"/token") + ")\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
+	script := preflight + "cd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest \"$(cat ready)\" = \"$(cat /proc/sys/kernel/random/boot_id)\" || exit 75\ntest \"$(cat token)\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
 	for _, s := range config {
 		if s.Absent {
 			continue
