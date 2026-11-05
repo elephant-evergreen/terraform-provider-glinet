@@ -74,7 +74,18 @@ func (f *configurationWorld) run(script string) ([]byte, error) {
 	cmd := exec.Command("/bin/sh", "-s")
 	cmd.Stdin = strings.NewReader(script)
 	cmd.Env = []string{"PATH=" + filepath.Join(root, "bin") + ":/usr/bin:/bin", "GLINET_TEST_BINARY=" + binary, "GLINET_TEST_ROOT=" + root, "GORACE=atexit_sleep_ms=0"}
-	return cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
+	if err == nil && strings.Contains(script, "touch activate") {
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			data, _ := os.ReadFile(filepath.Join(root, "firewall"))
+			if string(data) == "changed" {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	return output, err
 }
 func TestConfigurationWorldConfirmationAndRecovery(t *testing.T) {
 	for _, confirm := range []bool{true, false} {
@@ -142,14 +153,12 @@ func TestConfigurationWorldFailedWatchdogNeverMutates(t *testing.T) {
 	if string(actual) != "original-firewall" {
 		t.Fatal("Failed watchdog changed configuration")
 	}
-	for _, name := range []string{"lock", "transaction", "recovery"} {
-		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
-			t.Fatalf("Failed preparation left %s", name)
-		}
+	if _, err := os.Stat(filepath.Join(root, "transaction", "firewall")); err != nil {
+		t.Fatal("Uncertain worker startup lost its recovery snapshot")
 	}
 }
 
-func TestConfigurationWorldRebootRearmsAndCanConfirm(t *testing.T) {
+func TestConfigurationWorldUnexpectedRebootRestoresBeforeConfirmation(t *testing.T) {
 	f := newConfigurationWorld(t)
 	f.delay = "8"
 	root := f.base.root
@@ -166,6 +175,7 @@ func TestConfigurationWorldRebootRearmsAndCanConfirm(t *testing.T) {
 	}
 	_ = syscall.Kill(-value, syscall.SIGTERM)
 	_ = os.RemoveAll(filepath.Join(root, "lock"))
+	_ = os.RemoveAll(filepath.Join(root, "lock-actor-token"))
 	_ = os.Remove(filepath.Join(root, "transaction", "ready"))
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("rebooted\n"), 0600)
 	service, err := os.ReadFile(filepath.Join(root, "recovery"))
@@ -182,13 +192,18 @@ func TestConfigurationWorldRebootRearmsAndCanConfirm(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if output, err := f.run(configurationConfirmScript("token", spec, nil)); err != nil {
-		t.Fatalf("Rebooted transaction could not confirm: %s %v", output, err)
+	deadline = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(filepath.Join(root, "lock")); os.IsNotExist(err) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	actual, _ := os.ReadFile(filepath.Join(root, "firewall"))
-	if string(actual) != "changed" {
-		t.Fatal("Confirmed reboot lost applied configuration")
+	if string(actual) != "original-firewall" {
+		t.Fatal("Unexpected reboot did not restore the original configuration")
 	}
+
 }
 
 func TestConfigurationWorldRejectsAdoptionWhileRecoveryIsPending(t *testing.T) {
@@ -276,6 +291,7 @@ func TestConfigurationWorldInterruptedRestoreResumesAfterReboot(t *testing.T) {
 	_ = syscall.Kill(-value, syscall.SIGTERM)
 	_ = os.Remove(filepath.Join(root, "fail-copy"))
 	_ = os.RemoveAll(filepath.Join(root, "lock"))
+	_ = os.RemoveAll(filepath.Join(root, "lock-actor-token"))
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("rebooted\n"), 0600)
 	service, err := os.ReadFile(filepath.Join(root, "recovery"))
 	if err != nil {
@@ -331,6 +347,7 @@ func TestConfigurationWorldFullRebootBranchConfirmsAndRecovers(t *testing.T) {
 					_ = syscall.Kill(-value, syscall.SIGTERM)
 				}
 				_ = os.RemoveAll(filepath.Join(root, "lock"))
+				_ = os.RemoveAll(filepath.Join(root, "lock-actor-token"))
 				_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte(id+"\n"), 0600)
 				service, err := os.ReadFile(filepath.Join(root, "recovery"))
 				if err != nil {
@@ -421,5 +438,33 @@ func TestConfigurationWorldWaitsForReloadBeforeRestoring(t *testing.T) {
 	actual, _ := os.ReadFile(filepath.Join(root, "firewall"))
 	if string(actual) != "original-firewall" {
 		t.Fatal("Recovery did not run after reload quiesced")
+	}
+}
+
+func TestConfigurationWorldCancellationBeforeActivationNeverStartsMutation(t *testing.T) {
+	f := newConfigurationWorld(t)
+	f.delay = "2"
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
+	mutation := "touch " + quote(root+"/request-executed") + "\nprintf changed > " + quote(root+"/firewall") + "\n"
+	script := strings.Replace(configurationApplyScript(spec, nil, "token", false), configurationLua(spec, true, nil), mutation, 1)
+	script = strings.Replace(script, "touch activate", "exit 0", 1)
+	if out, err := f.run(script); err != nil {
+		t.Fatalf("Preparation failed: %s %v", out, err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(filepath.Join(root, "lock")); os.IsNotExist(err) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := os.Stat(filepath.Join(root, "request-executed")); !os.IsNotExist(err) {
+		t.Fatal("Unactivated worker mutated configuration")
+	}
+	actual, _ := os.ReadFile(filepath.Join(root, "firewall"))
+	if string(actual) != "original-firewall" {
+		t.Fatal("Canceled preparation changed configuration")
 	}
 }

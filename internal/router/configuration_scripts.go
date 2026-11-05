@@ -24,8 +24,8 @@ func configurationReload(reboot bool) string {
 	return script + dnsRefresh + "/etc/init.d/dnsmasq restart\n/etc/init.d/firewall restart\n"
 }
 
-func configurationCleanup() string {
-	return "if [ -f " + quote(recoveryService) + " ]; then " + recoveryService + " disable; fi\nrm -f " + quote(recoveryService) + "\nrm -rf " + quote(transactionDir) + "\nrmdir " + quote(configurationLock+"/actor") + "\nrmdir " + quote(configurationLock) + "\n"
+func configurationCleanup(token string) string {
+	return "if [ -f " + quote(recoveryService) + " ]; then " + recoveryService + " disable; fi\nrm -f " + quote(recoveryService) + "\nrm -rf " + quote(transactionDir) + "\nrmdir " + quote(configurationLock+"-actor-"+token) + "\nrmdir " + quote(configurationLock) + "\n"
 }
 
 func configurationStableReadScript(config Configuration, keys map[string]string) string {
@@ -41,49 +41,57 @@ func configurationApplyScript(config Configuration, keys map[string]string, toke
 	dir := transactionDir
 	restore := "#!/bin/sh\nset -eu\nexec >> " + quote(dir+"/rollback.log") + " 2>&1\n"
 	if reboot {
-		restore += "if [ -f " + quote(dir+"/restored_boot") + " ] && [ \"$(cat /proc/sys/kernel/random/boot_id)\" != \"$(cat " + quote(dir+"/restored_boot") + ")\" ]; then\n" + configurationCleanup() + "exit 0\nfi\n"
+		restore += "if [ -f " + quote(dir+"/restored_boot") + " ] && [ \"$(cat /proc/sys/kernel/random/boot_id)\" != \"$(cat " + quote(dir+"/restored_boot") + ")\" ]; then\n" + configurationCleanup(token) + "exit 0\nfi\n"
 	}
 	restore += "for package in " + configurationPackages + "; do\ncp " + quote(dir) + "/\"$package\" /etc/config/\"$package\"\nuci -q revert \"$package\"\ndone\n" + configurationReload(reboot)
 	if reboot {
 		restore += "cat /proc/sys/kernel/random/boot_id > " + quote(dir+"/restored_boot") + "\nsync\nreboot\n"
 	} else {
-		restore += configurationCleanup()
+		restore += configurationCleanup(token)
 	}
 	watchdog := `#!/bin/sh
 trap '' HUP
 set -eu
 umask 077
-mkdir ` + quote(configurationLock+"/actor") + ` 2>/dev/null || exit 73
-exec >> ` + quote(dir+"/rollback.log") + ` 2>&1
+cd ` + quote(dir) + `
+test "$(cat token)" = ` + quote(token) + ` || exit 75
+mkdir ` + quote(configurationLock+"-actor-"+token) + ` 2>/dev/null || exit 73
+exec >> rollback.log 2>&1
 read current_boot < /proc/sys/kernel/random/boot_id
-read initial_boot < ` + quote(dir+"/boot") + `
-if [ "$current_boot" != "$initial_boot" ]; then touch ` + quote(dir+"/ready") + `; fi
+read initial_boot < boot
+touch armed
+if [ "$current_boot" = "$initial_boot" ]; then
+ remaining=300
+ while [ ! -f activate ] && [ "$remaining" -gt 0 ]; do sleep 1; remaining=$((remaining-1)); done
+ if [ -f activate ]; then
+  if ! /bin/sh request; then ln recover decision 2>/dev/null || true; fi
+ else
+  ln recover decision 2>/dev/null || true
+ fi
+else
+ if [ -f awaiting_boot ]; then touch ready; else ln recover decision 2>/dev/null || true; fi
+fi
 remaining=300
-touch ` + quote(dir+"/armed") + `
-while [ ! -f ` + quote(dir+"/decision") + ` ] && [ "$remaining" -gt 0 ]; do
- sleep 1
- remaining=$((remaining-1))
-done
-ln ` + quote(dir+"/recover") + ` ` + quote(dir+"/decision") + ` 2>/dev/null || true
-while [ "$current_boot" = "$initial_boot" ] && [ -f ` + quote(dir+"/reload_started") + ` ] && [ ! -f ` + quote(dir+"/reload_done") + ` ]; do sleep 1; done
-case "$(cat ` + quote(dir+"/decision") + `)" in
+while [ ! -f decision ] && [ "$remaining" -gt 0 ]; do sleep 1; remaining=$((remaining-1)); done
+ln recover decision 2>/dev/null || true
+case "$(cat decision)" in
  confirm)
- ` + configurationCleanup() + ` ;;
+ ` + configurationCleanup(token) + ` ;;
  rollback)
- while ! /bin/sh ` + quote(dir+"/restore") + `; do sleep 5; done
+ while ! /bin/sh restore; do sleep 5; done
  ;;
  *) exit 75 ;;
 esac
 `
 
 	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nmkdir -p " + quote(configurationLock) + "\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
-	guard := "test \"$(cat token)\" = " + quote(token) + " && { [ ! -f decision ] || [ \"$(cat decision)\" != rollback ]; }\n"
-	reload := "#!/bin/sh\ntrap '' HUP\nset -eu\nexec > " + quote(dir+"/reload.log") + " 2>&1\ncd " + quote(dir) + "\ntrap 'touch reload_done' EXIT\nsleep 2\nguard() {\n" + guard + "}\n" + guardedReload(reboot)
+	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, keys) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + "; do uci commit \"$package\"; done\n" + configurationReload(reboot)
 	if reboot {
-		reload += "guard\nsync\nreboot\n"
+		request += "touch awaiting_boot\nsync\nreboot\n"
 	} else {
-		reload += "touch " + quote(dir+"/ready") + "\n"
+		request += "touch ready\n"
 	}
+
 	script := preflight + `test ! -d /tmp/home-network-iac.lock || exit 73
 pending=$(uci changes)
 test -z "$pending" || exit 74
@@ -94,11 +102,12 @@ test "$(uci -q get adguardhome.config.enabled || true)$(uci -q get adguardhome.c
 test ! -e ` + quote(recoveryService) + ` && test ! -L ` + quote(recoveryService) + ` || exit 73
 umask 077
 mkdir ` + quote(configurationLock) + ` 2>/dev/null || exit 73
-armed=0
+transferred=0
 prepared=0
-trap 'if [ "$armed" = 0 ]; then if [ "$prepared" = 1 ]; then ` + recoveryService + ` disable 2>/dev/null || true; rm -f ` + quote(recoveryService) + `; rm -rf ` + quote(dir) + `; fi; rmdir ` + quote(configurationLock) + `; fi' EXIT
+trap 'if [ "$transferred" = 0 ]; then if [ "$prepared" = 1 ]; then ` + recoveryService + ` disable 2>/dev/null || true; rm -f ` + quote(recoveryService) + `; rm -rf ` + quote(dir) + `; fi; rmdir ` + quote(configurationLock) + `; fi' EXIT
 mkdir ` + quote(dir) + ` 2>/dev/null || exit 73
 prepared=1
+cd ` + quote(dir) + `
 printf '%s' ` + quote(token) + ` > ` + quote(dir+"/token") + `
 printf confirm > ` + quote(dir+"/confirm") + `
 printf rollback > ` + quote(dir+"/recover") + `
@@ -106,18 +115,18 @@ cat /proc/sys/kernel/random/boot_id > ` + quote(dir+"/boot") + `
 for package in ` + configurationPackages + `; do cp /etc/config/"$package" ` + quote(dir) + `/"$package"; done
 printf '%s' ` + quote(restore) + ` > ` + quote(dir+"/restore") + `
 printf '%s' ` + quote(watchdog) + ` > ` + quote(dir+"/rollback") + `
-printf '%s' ` + quote(reload) + ` > ` + quote(dir+"/reload") + `
+cat > ` + quote(dir+"/request") + ` <<'GLINET_REQUEST'
+` + request + `GLINET_REQUEST
 printf '%s' ` + quote(service) + ` > ` + quote(recoveryService) + `
 chmod 700 ` + quote(recoveryService) + `
 ` + recoveryService + ` enable
+transferred=1
 start-stop-daemon -S -b -m -p ` + quote(dir+"/pid") + ` -x /bin/sh -- ` + quote(dir+"/rollback") + `
-for attempt in 1 2 3 4 5; do test ! -f ` + quote(dir+"/armed") + ` || break; sleep 1; done
-test -f ` + quote(dir+"/armed") + ` || exit 76
-armed=1
-` + configurationLua(config, true, keys) + `fw3 -q print >/dev/null
-for package in ` + configurationPackages + `; do uci commit "$package"; done
-touch ` + quote(dir+"/reload_started") + `
-if ! start-stop-daemon -S -b -m -p ` + quote(dir+"/reload.pid") + ` -x /bin/sh -- ` + quote(dir+"/reload") + `; then touch ` + quote(dir+"/reload_done") + `; exit 76; fi` + "\n"
+for attempt in 1 2 3 4 5; do test ! -f armed || break; sleep 1; done
+test -f armed || exit 76
+touch activate
+`
+
 	return script
 }
 
@@ -179,10 +188,3 @@ end
 file:close()
 for endpoint in pairs(expected) do if not observed[endpoint] then os.exit(75) end end
 `
-
-func guardedReload(reboot bool) string {
-	commands := configurationReload(reboot)
-	commands = strings.ReplaceAll(commands, "/etc/init.d/", "guard\n/etc/init.d/")
-	commands = strings.Replace(commands, "dns_config=", "guard\ndns_config=", 1)
-	return commands
-}

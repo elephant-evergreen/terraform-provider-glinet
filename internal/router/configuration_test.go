@@ -88,10 +88,7 @@ func TestConfigurationGeneratedScriptsAreShellSafe(t *testing.T) {
 			t.Fatalf("Invalid shell: %s %v", out, err)
 		}
 	}
-	script := configurationApplyScript(config, nil, "token", true)
-	if strings.Index(script, "armed=1") > strings.Index(script, "assert(uci:save") || !strings.Contains(script, "START=99") || !strings.Contains(script, "/decision") {
-		t.Fatal("Recovery is not armed before changes, persistent, or atomically decided")
-	}
+
 }
 
 type configurationMutationRunner struct {

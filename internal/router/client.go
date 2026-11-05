@@ -74,7 +74,7 @@ func operationError(err error) error {
 		case 75:
 			return errors.New("The change could not be confirmed before recovery started. Inspect the router before retrying.")
 		case 76:
-			return errors.New("Cannot arm automatic recovery. No configuration was changed.")
+			return errors.New("Cannot arm automatic recovery. No configuration was changed. Inspect pending recovery before retrying.")
 		}
 	}
 	return err

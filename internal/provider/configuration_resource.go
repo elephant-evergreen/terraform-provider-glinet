@@ -69,7 +69,7 @@ func (r *configurationResource) Read(ctx context.Context, req resource.ReadReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	config, err := router.DecodeConfiguration(data.Configuration.ValueString())
+	config, err := router.DecodeObservedConfiguration(data.Configuration.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid stored configuration", err.Error())
 		return
@@ -78,18 +78,6 @@ func (r *configurationResource) Read(ctx context.Context, req resource.ReadReque
 	if err != nil {
 		resp.Diagnostics.AddError("Cannot read configuration", err.Error())
 		return
-	}
-	for _, section := range actual {
-		if section.Type == "" {
-			resp.State.RemoveResource(ctx)
-			return
-		}
-		for _, values := range section.Lists {
-			if len(values) == 0 {
-				resp.State.RemoveResource(ctx)
-				return
-			}
-		}
 	}
 	if !router.SameConfiguration(actual, config) {
 		encoded, _ := json.Marshal(actual)

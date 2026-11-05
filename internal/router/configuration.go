@@ -23,6 +23,7 @@ type Section struct {
 	Options map[string]string   `json:"options,omitempty"`
 	Lists   map[string][]string `json:"lists,omitempty"`
 	Absent  bool                `json:"absent,omitempty"`
+	Missing bool                `json:"missing,omitempty"`
 }
 
 type Configuration []Section
@@ -30,6 +31,12 @@ type Configuration []Section
 var selector = regexp.MustCompile(`^@([A-Za-z0-9_-]+)\[[0-9]+\]$`)
 
 func DecodeConfiguration(value string) (Configuration, error) {
+	return decodeConfiguration(value, false)
+}
+func DecodeObservedConfiguration(value string) (Configuration, error) {
+	return decodeConfiguration(value, true)
+}
+func decodeConfiguration(value string, observed bool) (Configuration, error) {
 	if len(value) > 262144 {
 		return nil, errors.New("Configuration exceeds 256 KiB.")
 	}
@@ -47,6 +54,9 @@ func DecodeConfiguration(value string) (Configuration, error) {
 	}
 	seen := map[string]bool{}
 	for index, s := range config {
+		if s.Missing && !observed {
+			return nil, errors.New("missing is reserved for observed drift.")
+		}
 		anonymous := selector.FindStringSubmatch(s.Name)
 		if allowedOptions[s.Package+"."+s.Type] == nil || (!ValidSection(s.Name) && anonymous == nil) {
 			return nil, errors.New("Unsupported UCI package, section name or section type.")
@@ -89,7 +99,7 @@ func DecodeConfiguration(value string) (Configuration, error) {
 			}
 		}
 		for k, vs := range s.Lists {
-			if len(vs) == 0 {
+			if len(vs) == 0 && !observed {
 				return nil, errors.New("UCI lists must contain at least one item.")
 			}
 			for _, v := range vs {
@@ -160,7 +170,7 @@ for i,s in ipairs(spec) do
 		source += ` if s.absent then
   actual.absent=not kind
  else
-  if not kind then actual.type='' end
+  if not kind then actual.missing=true end
   for k,v in pairs(s.options or {}) do
    local value=uci:get(s.package,name,k)
    if type(value)~='string' then value='' end
