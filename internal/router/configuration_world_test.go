@@ -60,7 +60,7 @@ func (f *configurationWorld) run(script string) ([]byte, error) {
 	script = strings.ReplaceAll(script, "remaining=300", "remaining="+f.delay)
 	script = strings.ReplaceAll(script, "sleep 2\n", "sleep 0.1\n")
 	script = strings.ReplaceAll(script, "/proc/sys/kernel/random/boot_id", filepath.Join(root, "boot-id"))
-	script = strings.ReplaceAll(script, completionDir, filepath.Join(root, "completed"))
+	script = strings.ReplaceAll(script, resultDir, filepath.Join(root, "results"))
 	script = strings.ReplaceAll(script, transactionDir, filepath.Join(root, "transaction"))
 	script = strings.ReplaceAll(script, configurationLock, filepath.Join(root, "lock"))
 	script = strings.ReplaceAll(script, recoveryService, filepath.Join(root, "recovery"))
@@ -504,7 +504,7 @@ func TestConfigurationWorldRetiredCleanupResumesAfterInterruption(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			cleanup := configurationCleanup("token", false)
+			cleanup := configurationCleanup("token", "confirm")
 			if stage == "rename" {
 				cleanup = strings.Replace(cleanup, "sync\n", "exit 0\n", 1)
 			} else {
@@ -520,6 +520,12 @@ func TestConfigurationWorldRetiredCleanupResumesAfterInterruption(t *testing.T) 
 			if out, err := f.run(string(service) + "\nstart\n"); err != nil {
 				t.Fatalf("Boot cleanup failed: %s %v", out, err)
 			}
+			for range 2 {
+				if out, err := f.run(configurationConfirmScript("token", spec, nil)); err != nil {
+					t.Fatalf("Confirmed cleanup outcome could not be replayed after reboot: %s %v", out, err)
+				}
+			}
+
 			for _, name := range []string{"transaction", "transaction-retired-token", "recovery", "lock", "lock-actor-token"} {
 				if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
 					t.Fatalf("Interrupted cleanup stranded %s", name)
@@ -554,7 +560,14 @@ func TestConfigurationWorldConfirmationWaitsForCompletedCleanup(t *testing.T) {
 	if time.Since(start) < 2*time.Second {
 		t.Fatal("Confirmation returned before delayed cleanup finished")
 	}
-	for _, name := range []string{"transaction", "transaction-retired-token", "recovery", "lock", "completed"} {
+	if out, err := f.run(configurationConfirmScript("token", spec, nil)); err != nil {
+		t.Fatalf("Lost SSH response could not be retried: %s %v", out, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "results", "token")); err != nil || string(data) != "confirm" {
+		t.Fatal("Confirmed outcome was not retained")
+	}
+
+	for _, name := range []string{"transaction", "transaction-retired-token", "recovery", "lock"} {
 		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
 			t.Fatalf("Successful confirmation left %s", name)
 		}
@@ -586,7 +599,7 @@ func TestConfigurationWorldRolledBackKeyRotationNeverAcknowledgesSuccess(t *test
 	if out, err := f.run(configurationConfirmScript("token", spec, keys)); err == nil {
 		t.Fatalf("Late confirmation accepted completed rollback: %s", out)
 	}
-	if _, err := os.Stat(filepath.Join(root, "completed", "token.confirmed")); !os.IsNotExist(err) {
-		t.Fatal("Recovery emitted a confirmed acknowledgment")
+	if data, err := os.ReadFile(filepath.Join(root, "results", "token")); err != nil || string(data) != "rollback" {
+		t.Fatal("Recovery did not retain its rollback outcome")
 	}
 }

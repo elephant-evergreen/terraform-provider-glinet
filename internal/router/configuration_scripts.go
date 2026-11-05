@@ -6,7 +6,7 @@ import (
 )
 
 const transactionDir = "/root/.terraform-provider-glinet-configuration"
-const completionDir = "/root/.terraform-provider-glinet-completed"
+const resultDir = "/root/.terraform-provider-glinet-results"
 const configurationLock = "/tmp/terraform-provider-glinet-wifi"
 const recoveryService = "/etc/init.d/terraform-glinet-recovery"
 const configurationPackages = "network wireless dhcp firewall gl-dns-v2 eth_ports_config_map"
@@ -44,13 +44,17 @@ func configurationReload(plan reloadPlan) string {
 	return script
 }
 
-func configurationCleanup(token string, confirmed bool) string {
-	retired := transactionDir + "-retired-" + token
-	cleanup := "if [ -d " + quote(transactionDir) + " ]; then mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\nrmdir " + quote(configurationLock) + "\n"
-	if confirmed {
-		cleanup += "mkdir -p " + quote(completionDir) + "\nmkdir " + quote(completionDir+"/"+token+".confirmed") + "\n"
+func configurationOutcome(token, outcome string) string {
+	result := resultDir + "/" + token
+	if outcome == "" {
+		return "test -f " + quote(result) + " || exit 75\n"
 	}
-	return cleanup
+	return "mkdir -p " + quote(resultDir) + "\nif [ ! -f " + quote(result) + " ]; then printf '%s' " + quote(outcome) + " > " + quote(result+".tmp") + "; mv " + quote(result+".tmp") + " " + quote(result) + "; sync; fi\ntest \"$(cat " + quote(result) + ")\" = " + quote(outcome) + " || exit 75\n"
+}
+
+func configurationCleanup(token, outcome string) string {
+	retired := transactionDir + "-retired-" + token
+	return "test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || exit 75\n" + configurationOutcome(token, outcome) + "if [ -d " + quote(transactionDir) + " ]; then test \"$(cat " + quote(transactionDir+"/token") + ")\" = " + quote(token) + " || exit 75; mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrm -f " + quote(configurationLock+"/token") + "\nrmdir " + quote(configurationLock) + "\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\n"
 }
 
 func configurationStableReadScript(config Configuration, keys map[string]string) string {
@@ -64,15 +68,15 @@ func configurationStableReadScript(config Configuration, keys map[string]string)
 
 func configurationApplyScript(config Configuration, keys map[string]string, token string, plan reloadPlan) string {
 	dir := transactionDir
-	restore := "#!/bin/sh\nset -eu\nexec >> " + quote(dir+"/rollback.log") + " 2>&1\n"
+	restore := "#!/bin/sh\nset -eu\nexec >> " + quote(dir+"/rollback.log") + " 2>&1\n" + configurationOutcome(token, "rollback")
 	if plan.Reboot {
-		restore += "if [ -f " + quote(dir+"/restored_boot") + " ] && [ \"$(cat /proc/sys/kernel/random/boot_id)\" != \"$(cat " + quote(dir+"/restored_boot") + ")\" ]; then\n" + configurationCleanup(token, false) + "exit 0\nfi\n"
+		restore += "if [ -f " + quote(dir+"/restored_boot") + " ] && [ \"$(cat /proc/sys/kernel/random/boot_id)\" != \"$(cat " + quote(dir+"/restored_boot") + ")\" ]; then\n" + configurationCleanup(token, "rollback") + "exit 0\nfi\n"
 	}
 	restore += "for package in " + configurationPackages + "; do\ncp " + quote(dir) + "/\"$package\" /etc/config/\"$package\"\nuci -q revert \"$package\"\ndone\n" + configurationReload(plan)
 	if plan.Reboot {
 		restore += "cat /proc/sys/kernel/random/boot_id > " + quote(dir+"/restored_boot") + "\nsync\nreboot\n"
 	} else {
-		restore += configurationCleanup(token, false)
+		restore += configurationCleanup(token, "rollback")
 	}
 	watchdog := `#!/bin/sh
 trap '' HUP
@@ -93,11 +97,11 @@ if [ "$current_boot" = "$initial_boot" ]; then
   sync
   if ! /bin/sh request; then ln recover decision 2>/dev/null || true; fi
  else
-  ` + configurationCleanup(token, false) + `exit 0
+  ` + configurationCleanup(token, "cancel") + `exit 0
  fi
 else
  if [ ! -f started ]; then
-  ` + configurationCleanup(token, false) + `exit 0
+  ` + configurationCleanup(token, "cancel") + `exit 0
  fi
  if [ -f awaiting_boot ]; then printf '%s' "$current_boot" > ready; else ln recover decision 2>/dev/null || true; fi
 fi
@@ -107,7 +111,7 @@ ln recover decision 2>/dev/null || true
 sync
 case "$(cat decision)" in
  confirm)
- ` + configurationCleanup(token, true) + ` ;;
+ ` + configurationCleanup(token, "confirm") + ` ;;
  rollback)
  while ! /bin/sh restore; do sleep 5; done
  ;;
@@ -115,7 +119,7 @@ case "$(cat decision)" in
 esac
 `
 
-	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nset -eu\numask 077\nmkdir -p " + quote(configurationLock) + "\nif [ ! -d " + quote(dir) + " ]; then\nmkdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || return 73\n" + configurationCleanup(token, false) + "return 0\nfi\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
+	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nset -eu\numask 077\nmkdir " + quote(configurationLock) + " 2>/dev/null || test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || return 73\nprintf '%s' " + quote(token) + " > " + quote(configurationLock+"/token") + "\nif [ ! -d " + quote(dir) + " ]; then\nmkdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || return 73\n" + configurationCleanup(token, "") + "return 0\nfi\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
 	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, keys) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + "; do uci commit \"$package\"; done\n" + configurationReload(plan)
 	if plan.Reboot {
 		request += "touch awaiting_boot\nsync\nreboot\n"
@@ -132,9 +136,10 @@ command -v fw3 >/dev/null
 ` + configurationDNSOwnership(config) + `test ! -e ` + quote(recoveryService) + ` && test ! -L ` + quote(recoveryService) + ` || exit 73
 umask 077
 mkdir ` + quote(configurationLock) + ` 2>/dev/null || exit 73
+printf '%s' ` + quote(token) + ` > ` + quote(configurationLock+"/token") + `
 transferred=0
 prepared=0
-trap 'if [ "$transferred" = 0 ]; then if [ "$prepared" = 1 ]; then ` + recoveryService + ` disable 2>/dev/null || true; rm -f ` + quote(recoveryService) + `; rm -rf ` + quote(dir) + `; fi; rmdir ` + quote(configurationLock) + `; fi' EXIT
+trap 'if [ "$transferred" = 0 ]; then if [ "$prepared" = 1 ]; then ` + recoveryService + ` disable 2>/dev/null || true; rm -f ` + quote(recoveryService) + `; rm -rf ` + quote(dir) + `; fi; rm -f ` + quote(configurationLock+"/token") + `; rmdir ` + quote(configurationLock) + `; fi' EXIT
 mkdir ` + quote(dir) + ` 2>/dev/null || exit 73
 prepared=1
 cd ` + quote(dir) + `
@@ -162,7 +167,8 @@ touch activate
 }
 
 func configurationConfirmScript(token string, config Configuration, keys map[string]string) string {
-	ack := "if rmdir " + quote(completionDir+"/"+token+".confirmed") + " 2>/dev/null; then rmdir " + quote(completionDir) + " 2>/dev/null || true; exit 0; fi\n"
+	result := resultDir + "/" + token
+	ack := "if [ -f " + quote(result) + " ]; then\ncase \"$(cat " + quote(result) + ")\" in\nconfirm)\nif [ ! -d " + quote(configurationLock+"-actor-"+token) + " ] && [ ! -d " + quote(transactionDir+"-retired-"+token) + " ] && [ \"$(cat " + quote(transactionDir+"/token") + " 2>/dev/null || true)\" != " + quote(token) + " ] && ! grep -F " + quote(token) + " " + quote(recoveryService) + " >/dev/null 2>&1; then exit 0; fi\n;;\nrollback|cancel) exit 77 ;;\n*) exit 75 ;;\nesac\nfi\n"
 	script := preflight + ack + "cd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest \"$(cat ready)\" = \"$(cat /proc/sys/kernel/random/boot_id)\" || exit 75\ntest \"$(cat token)\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
 	for _, s := range config {
 		if s.Absent {

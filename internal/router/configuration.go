@@ -373,10 +373,13 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 			if confirmErr == nil {
 				return nil
 			}
+			if errors.As(confirmErr, &exit) && exit.Code == 77 {
+				return operationError(confirmErr)
+			}
 		}
 		select {
 		case <-wait.Done():
-			return fmt.Errorf("Configuration was not confirmed. Router-side recovery restores the previous configuration after 300 seconds, including after reboot. Inspect connectivity before retrying: %w", wait.Err())
+			return fmt.Errorf("The operation outcome could not be confirmed. Recovery or confirmed cleanup may still be pending. Inspect router transaction results and connectivity before retrying: %w", wait.Err())
 		case <-time.After(2 * time.Second):
 		}
 	}

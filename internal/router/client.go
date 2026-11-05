@@ -69,6 +69,8 @@ func operationError(err error) error {
 			return errors.New("Uncommitted UCI changes exist. Commit or revert them outside Terraform before applying.")
 		case 75:
 			return errors.New("The change could not be confirmed before recovery started. Inspect the router before retrying.")
+		case 77:
+			return errors.New("The router selected rollback or canceled the transaction. Inspect recovery and connectivity before retrying.")
 		case 76:
 			return errors.New("Cannot arm automatic recovery. No configuration was changed. Inspect pending recovery before retrying.")
 		}
