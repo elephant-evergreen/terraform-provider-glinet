@@ -59,7 +59,7 @@ type boundedOutput struct {
 }
 
 func (b *boundedOutput) Write(p []byte) (int, error) {
-	remaining := 4096 - len(b.data)
+	remaining := 262144 - len(b.data)
 	if len(p) > remaining {
 		b.overflow = true
 		b.data = append(b.data, p[:remaining]...)
