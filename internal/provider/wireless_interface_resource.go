@@ -82,7 +82,7 @@ func NewWirelessInterfaceResource() resource.Resource {
 			if key == "" || section == "" {
 				return nil
 			}
-			return map[string]string{section: key}
+			return map[string]string{"wireless." + section + ".key": key}
 		},
 		WriteOnly: []string{"key_wo"},
 		Validate: func(values map[string]attr.Value) error {

@@ -23,7 +23,7 @@ func NewFirewallRuleResource() resource.Resource {
 func typedFirewallRuleSpec() typedSpec {
 	return typedSpec{
 		TypeName:    "firewall_rule",
-		Description: "Manage one firewall rule by its unique `name` option. Stock rules can be adopted by name; new rules are created as named sections. `position` requests an absolute UCI rule index.",
+		Description: "Manage one firewall rule by its unique `name` option. Stock rules can be imported by name; new rules are created as named sections. `position` requests an absolute UCI rule index.",
 		Attributes: map[string]schema.Attribute{
 			"name":       schema.StringAttribute{Required: true, MarkdownDescription: "Unique rule name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"src":        schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Source zone, `*`, or empty."},

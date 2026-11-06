@@ -142,3 +142,13 @@ func TestTypedNetworkInterfaceProtocol(t *testing.T) {
 			{ResourceName: "glinet_network_interface.test", ImportState: true, ImportStateVerify: true},
 		}})
 }
+
+func configurationSafetyResponse(script string) ([]byte, bool) {
+	switch {
+	case strings.Contains(script, "GLINET_SAFETY_ENV"):
+		return []byte("ipv6_enabled=0\nipv6_forwarding=0\n@@addresses@@\n\n@@routes@@\n\n@@upnp@@\n0\n\n@@adguard@@\n0\n0\n@@leases@@\n"), true
+	case strings.Contains(script, "GLINET_SAFETY_RUNTIME"):
+		return []byte("@@generated@@\niptables -t filter -P INPUT ACCEPT\niptables -t filter -P FORWARD DROP\niptables -t filter -N reject\niptables -t filter -A FORWARD -j reject\niptables -t filter -A reject -j REJECT\n@@running@@\n*filter\n:INPUT ACCEPT [0:0]\n:FORWARD DROP [0:0]\n:reject - [0:0]\n-A FORWARD -j reject\n-A reject -j REJECT\nCOMMIT\n"), true
+	}
+	return nil, false
+}

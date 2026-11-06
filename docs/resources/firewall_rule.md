@@ -3,12 +3,12 @@
 page_title: "glinet_firewall_rule Resource - glinet"
 subcategory: ""
 description: |-
-  Manage one firewall rule by its unique name option. Stock rules can be adopted by name; new rules are created as named sections. position requests an absolute UCI rule index.
+  Manage one firewall rule by its unique name option. Stock rules can be imported by name; new rules are created as named sections. position requests an absolute UCI rule index.
 ---
 
 # glinet_firewall_rule (Resource)
 
-Manage one firewall rule by its unique `name` option. Stock rules can be adopted by name; new rules are created as named sections. `position` requests an absolute UCI rule index.
+Manage one firewall rule by its unique `name` option. Stock rules can be imported by name; new rules are created as named sections. `position` requests an absolute UCI rule index.
 
 
 
