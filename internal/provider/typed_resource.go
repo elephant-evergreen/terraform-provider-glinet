@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -275,6 +276,7 @@ func (r *typedResource) stateObject(planned map[string]attr.Value, actual router
 	for key, value := range loaded {
 		values[key] = value
 	}
+	r.preserveWriteOnlyVersions(planned, values)
 	for key, valueType := range r.attrTypes {
 		if _, ok := values[key]; !ok {
 			values[key] = nullValue(valueType)
@@ -297,6 +299,17 @@ func (r *typedResource) stateObject(planned map[string]attr.Value, actual router
 	}
 	values["delete_behavior"] = deleteBehavior
 	return types.ObjectValue(r.attrTypes, values)
+}
+
+func (r *typedResource) preserveWriteOnlyVersions(planned, values map[string]attr.Value) {
+	for _, key := range r.spec.WriteOnly {
+		version := strings.TrimSuffix(key, "_wo") + "_version"
+		value, ok := planned[version]
+		if !ok || value.IsNull() || value.IsUnknown() {
+			continue
+		}
+		values[version] = value
+	}
 }
 
 func (r *typedResource) secrets(values map[string]attr.Value) map[string]string {
