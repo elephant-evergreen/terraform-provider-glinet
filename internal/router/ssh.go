@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -25,6 +26,7 @@ func (e *ExitError) Error() string { return "The router rejected the operation."
 type SSH struct {
 	address string
 	config  *ssh.ClientConfig
+	mu      sync.Mutex
 }
 
 func NewSSH(host string, port int, keyFile, knownHostsFile string) (*SSH, error) {
@@ -70,6 +72,8 @@ func (b *boundedOutput) Write(p []byte) (int, error) {
 }
 
 func (s *SSH) Run(ctx context.Context, script string) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", s.address)
