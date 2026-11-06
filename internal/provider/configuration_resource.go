@@ -3,18 +3,21 @@ package provider
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 type configurationResource struct{ client *router.Client }
 type configurationModel struct {
-	Configuration types.String `tfsdk:"configuration"`
-	Keys          types.Map    `tfsdk:"wireless_keys_wo"`
-	KeysVersion   types.Int64  `tfsdk:"wireless_keys_version"`
+	Configuration   types.String `tfsdk:"configuration"`
+	Keys            types.Map    `tfsdk:"wireless_keys_wo"`
+	KeysVersion     types.Int64  `tfsdk:"wireless_keys_version"`
+	AdoptionVersion types.Int64  `tfsdk:"adoption_version"`
 }
 
 var (
@@ -28,10 +31,11 @@ func (r *configurationResource) Metadata(_ context.Context, req resource.Metadat
 	resp.TypeName = req.ProviderTypeName + "_uci_configuration"
 }
 func (r *configurationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = schema.Schema{MarkdownDescription: "Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Before mutation the provider refuses conflicting unmanaged Wi-Fi, zones, forwardings, redirects, ACCEPT rules, bridge port changes, DHCP reservations, IPv6/UPnP state, non-stock includes, and private LAN address changes. Refresh also compares the generated firewall with the running policy. Network and wireless topology changes reboot the router; existing AP settings reload Wi-Fi. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.", Attributes: map[string]schema.Attribute{
+	resp.Schema = schema.Schema{DeprecationMessage: "Use the typed network, wireless, DHCP, DNS, and firewall resources for new configurations. glinet_uci_configuration remains for migration and compatibility only.", MarkdownDescription: "Deprecated. Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Before mutation the provider refuses conflicting unmanaged Wi-Fi, zones, forwardings, redirects, ACCEPT rules, bridge port changes, DHCP reservations, IPv6/UPnP state, non-stock includes, and private LAN address changes. Refresh also compares the generated firewall with the running policy. Network and wireless topology changes reboot the router; existing AP settings reload Wi-Fi. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.", Attributes: map[string]schema.Attribute{
 		"configuration":         schema.StringAttribute{Required: true, MarkdownDescription: "JSON array of ordered UCI sections, preferably constructed with jsonencode. Each has package, name, type, optional scalar options and string lists. Supported packages: network, wireless, dhcp, firewall, gl-dns-v2, eth_ports_config_map. Only the supported nonsecret option allowlist is accepted. Named sections are created if missing; missing Wi-Fi sections require explicit write-only keys. Wi-Fi attributes use scalar options. Anonymous selectors require exactly one section of the specified type, or a unique match map. Match maps are restricted to anonymous selectors. An explicit absent=true removes a named section; omitted sections and options remain untouched. Existing firewall placement is preserved unless position is configured for every managed rule. Missing anonymous matches are recreated with deterministic named sections. Secret options are rejected. Configuration and network identifiers are stored in local Terraform state."},
 		"wireless_keys_wo":      schema.MapAttribute{Optional: true, WriteOnly: true, Sensitive: true, ElementType: types.StringType, MarkdownDescription: "Write-only map from managed named wireless wifi-iface sections to WPA passphrases. Values are never stored in plan or state. Set wireless_keys_version and increase it to rotate keys. Omit this map to preserve existing keys. Key drift cannot be detected by refresh."},
 		"wireless_keys_version": schema.Int64Attribute{Optional: true, MarkdownDescription: "Positive key rotation generation. Increase this value whenever wireless_keys_wo changes. Keys are applied only on creation or a generation change."},
+		"adoption_version":      schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1), MarkdownDescription: "Migration trigger. Increase this value once to write the provider ownership marker to every managed section before moving to typed resources. Marker-only changes do not reload services."},
 	}}
 }
 func (r *configurationResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -74,10 +78,14 @@ func (r *configurationResource) Read(ctx context.Context, req resource.ReadReque
 		resp.Diagnostics.AddError("Invalid stored configuration", err.Error())
 		return
 	}
-	actual, err := r.client.StableConfiguration(ctx, config)
+	actual, err := r.client.StableConfiguration(ctx, router.MarkConfiguration(config))
 	if err != nil {
 		resp.Diagnostics.AddError("Cannot read configuration", err.Error())
 		return
+	}
+	actual = router.StripManagedMarker(actual)
+	if data.AdoptionVersion.IsNull() || data.AdoptionVersion.IsUnknown() {
+		data.AdoptionVersion = types.Int64Value(1)
 	}
 	if !router.SameConfiguration(actual, config) {
 		encoded, _ := json.Marshal(actual)
@@ -135,7 +143,7 @@ func (r *configurationResource) Delete(context.Context, resource.DeleteRequest, 
 func (r *configurationResource) write(ctx context.Context, data configurationModel, keys map[string]string, diagnostics *diag.Diagnostics) bool {
 	config, err := router.DecodeConfiguration(data.Configuration.ValueString())
 	if err == nil {
-		err = r.client.WriteConfiguration(ctx, config, keys)
+		err = r.client.WriteConfiguration(ctx, router.MarkConfiguration(config), keys)
 	}
 	if err != nil {
 		diagnostics.AddError("Cannot apply configuration", err.Error())

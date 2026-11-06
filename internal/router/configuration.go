@@ -302,6 +302,10 @@ func ValidWirelessKeys(config Configuration, keys map[string]string) bool {
 }
 
 func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, keys map[string]string) error {
+	return c.writeConfiguration(ctx, config, keys, config)
+}
+
+func (c *Client) writeConfiguration(ctx context.Context, config Configuration, keys map[string]string, safetyConfig Configuration) error {
 	if !ValidWirelessKeys(config, keys) {
 		return errors.New("Wi-Fi keys must reference managed named wifi-iface sections and contain 8–63 printable ASCII characters.")
 	}
@@ -311,7 +315,7 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 	if err != nil {
 		return err
 	}
-	if err := c.checkConfigurationSafety(ctx, config); err != nil {
+	if err := c.checkConfigurationSafety(ctx, safetyConfig); err != nil {
 		return err
 	}
 	if keysMatch {
@@ -335,7 +339,7 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 	token := hex.EncodeToString(tokenBytes)
 	plan := reloadPlan{}
 	for i, s := range config {
-		if reflect.DeepEqual(s, actual[i]) {
+		if reflect.DeepEqual(s, actual[i]) || sameSectionExceptManagedMarker(s, actual[i]) {
 			continue
 		}
 		switch s.Package {
@@ -391,6 +395,19 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 	}
 }
 
+func sameSectionExceptManagedMarker(a, b Section) bool {
+	left, right := a, b
+	left.Options = copyOptions(a.Options)
+	right.Options = copyOptions(b.Options)
+	if left.Options != nil {
+		delete(left.Options, ManagedOption)
+	}
+	if right.Options != nil {
+		delete(right.Options, ManagedOption)
+	}
+	return reflect.DeepEqual(left, right)
+}
+
 func (c *Client) stableConfiguration(ctx context.Context, config Configuration, keys map[string]string) (Configuration, bool, error) {
 	output, err := c.runner.Run(ctx, configurationStableReadScript(config, keys))
 	if err != nil {
@@ -416,21 +433,22 @@ func (c *Client) stableConfiguration(ctx context.Context, config Configuration, 
 
 var allowedOptions = func() map[string]map[string]bool {
 	definitions := map[string]string{
-		"network.device":            "name type bridge_empty ports",
-		"network.interface":         "device proto disabled ipaddr netmask vlan_id display_name home_iac_owner force_link delegate",
-		"wireless.wifi-iface":       "disabled ssid encryption hidden isolate ifname device network mode",
-		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force",
-		"dhcp.host":                 "mac ip name",
-		"dhcp.dnsmasq":              "noresolv server",
-		"firewall.zone":             "name network input output forward",
+		"network.device":            "name type bridge_empty ports stp igmp_snooping",
+		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu vlan_id display_name home_iac_owner force_link delegate",
+		"wireless.wifi-iface":       "disabled ssid encryption hidden isolate ifname device network mode macaddr wds ieee80211w wpa_group_rekey",
+		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force ignore dynamicdhcp instance",
+		"dhcp.host":                 "mac ip name dns leasetime duid",
+		"dhcp.dnsmasq":              "noresolv server domain local rebind_domain cachesize",
+		"firewall.zone":             "name network input output forward enabled masq mtu_fix log log_limit conntrack device subnet extra_src extra_dest",
 		"firewall.forwarding":       "src dest enabled",
-		"firewall.rule":             "name src dest src_ip dest_ip proto dest_port family target enabled",
+		"firewall.redirect":         "name src src_dport dest dest_ip dest_port proto target enabled reflection reflection_src helper",
+		"firewall.rule":             "name src dest src_ip dest_ip proto src_port dest_port family target enabled src_mac icmp_type limit limit_burst weekdays start_date stop_date utc_time mark set_mark set_xmark helper log log_limit",
 		"gl-dns-v2.dns":             "provider proto servers_list mode manual_enable manual_type manual_local_dns override_vpn force_dns",
 		"eth_ports_config_map.port": "mode vlan_mode pvid port",
 	}
 	result := map[string]map[string]bool{}
 	for scope, names := range definitions {
-		result[scope] = map[string]bool{}
+		result[scope] = map[string]bool{"home_iac_owner": true}
 		for _, name := range strings.Fields(names) {
 			result[scope][name] = true
 		}

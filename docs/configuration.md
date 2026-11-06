@@ -1,3 +1,5 @@
+> This guide describes the deprecated `glinet_uci_configuration` resource. Use [typed resources](typed-resources.md) and the [migration guide](migration.md) for new configurations.
+
 # Coordinated router configuration
 
 Use one `glinet_uci_configuration` resource per router to manage network, wireless, DHCP, firewall, `gl-dns-v2`, and Ethernet port mapping together. Build the provider using the [development setup](development.md), then adapt the [synthetic example](../examples/resources/glinet_uci_configuration/resource.tf).
