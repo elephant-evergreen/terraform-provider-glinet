@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -151,4 +153,18 @@ func configurationSafetyResponse(script string) ([]byte, bool) {
 		return []byte("@@generated@@\niptables -t filter -P INPUT ACCEPT\niptables -t filter -P FORWARD DROP\niptables -t filter -N reject\niptables -t filter -A FORWARD -j reject\niptables -t filter -A reject -j REJECT\n@@running@@\n*filter\n:INPUT ACCEPT [0:0]\n:FORWARD DROP [0:0]\n:reject - [0:0]\n-A FORWARD -j reject\n-A reject -j REJECT\nCOMMIT\n"), true
 	}
 	return nil, false
+}
+
+func TestPreserveWriteOnlyVersion(t *testing.T) {
+	r := &typedResource{spec: typedSpec{WriteOnly: []string{"key_wo"}}}
+	values := map[string]attr.Value{"key_version": int64Value(1)}
+	r.preserveWriteOnlyVersions(map[string]attr.Value{"key_version": int64Value(3)}, values)
+	if values["key_version"].(types.Int64).ValueInt64() != 3 {
+		t.Fatalf("key_version was overwritten: %+v", values["key_version"])
+	}
+	values = map[string]attr.Value{"key_version": int64Value(1)}
+	r.preserveWriteOnlyVersions(map[string]attr.Value{"key_version": types.Int64Null()}, values)
+	if values["key_version"].(types.Int64).ValueInt64() != 1 {
+		t.Fatalf("null key_version should keep the loaded default: %+v", values["key_version"])
+	}
 }
