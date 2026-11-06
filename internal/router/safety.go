@@ -18,6 +18,8 @@ const safetyStateLua = `local uci=require('uci').cursor()
 local packages={'network','wireless','dhcp','firewall','gl-dns-v2','eth_ports_config_map'}
 local function secret(pkg,key)
  if pkg=='wireless' and (key=='key' or key:match('^key%d$') or key=='wpa_psk' or key=='password' or key=='psk') then return true end
+ if pkg=='network' and (key=='private_key' or key=='preshared_key') then return true end
+ if pkg=='openvpn' and (key=='auth_user_pass' or key=='key' or key=='password') then return true end
  return false
 end
 local result={}

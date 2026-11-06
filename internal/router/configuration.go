@@ -62,7 +62,7 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 			return nil, errors.New("missing is reserved for observed drift.")
 		}
 		anonymous := selector.FindStringSubmatch(s.Name)
-		if allowedOptions[s.Package+"."+s.Type] == nil || (!ValidSection(s.Name) && anonymous == nil) {
+		if allowedOptionsFor(s.Package, s.Type) == nil || (!ValidSection(s.Name) && anonymous == nil) {
 			return nil, errors.New("Unsupported UCI package, section name or section type.")
 		}
 		if len(s.Options) == 0 {
@@ -108,7 +108,7 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 			if !observed && s.Package == "wireless" && ((k == "ssid" && !ValidSSID(v)) || ((k == "disabled" || k == "hidden" || k == "isolate") && v != "0" && v != "1")) {
 				return nil, errors.New("Wi-Fi SSIDs must contain 1–32 UTF-8 bytes and flags must be 0 or 1.")
 			}
-			if !allowedOptions[s.Package+"."+s.Type][k] || (!observed && !validOption(s.Package, s.Type, k, v)) {
+			if !allowedOptionsFor(s.Package, s.Type)[k] || (!observed && !validOption(s.Package, s.Type, k, v)) {
 				return nil, errors.New("Invalid or secret UCI option. Use wireless_keys_wo for Wi-Fi keys.")
 			}
 			if _, ok := s.Lists[k]; ok {
@@ -130,14 +130,14 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 			if s.Package == "wireless" && !observed {
 				return nil, errors.New("Wi-Fi attributes must use scalar options, not lists.")
 			}
-			if !allowedOptions[s.Package+"."+s.Type][k] {
+			if !allowedOptionsFor(s.Package, s.Type)[k] {
 				return nil, errors.New("Unsupported UCI list option.")
 			}
 			if len(vs) == 0 && !observed {
 				return nil, errors.New("UCI lists must contain at least one item.")
 			}
 			for _, v := range vs {
-				if !allowedOptions[s.Package+"."+s.Type][k] || (!observed && !validOption(s.Package, s.Type, k, v)) {
+				if !allowedOptionsFor(s.Package, s.Type)[k] || (!observed && !validOption(s.Package, s.Type, k, v)) {
 					return nil, errors.New("Invalid or secret UCI list option.")
 				}
 			}
@@ -149,15 +149,26 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 	return config, nil
 }
 
+func allowedOptionsFor(pkg, kind string) map[string]bool {
+	if options := allowedOptions[pkg+"."+kind]; options != nil {
+		return options
+	}
+	if pkg == "network" && strings.HasPrefix(kind, "wireguard_") {
+		return allowedOptions["network.wireguard"]
+	}
+	return nil
+}
+
 func validOption(pkg, kind, key, value string) bool {
-	return allowedOptions[pkg+"."+kind][key] && len(value) <= 1024 && !strings.ContainsFunc(value, unicode.IsControl)
+	options := allowedOptionsFor(pkg, kind)
+	return options != nil && options[key] && len(value) <= 1024 && !strings.ContainsFunc(value, unicode.IsControl)
 }
 
 func luaQuote(value string) string {
 	return "'" + strings.NewReplacer("\\", "\\\\", "'", "\\'", "\n", "\\n", "\r", "\\r").Replace(value) + "'"
 }
 
-func configurationLua(config Configuration, write bool, keys map[string]string) string {
+func configurationLua(config Configuration, write bool, keys map[string]string, secrets ...map[string]string) string {
 	type wireSection struct {
 		Section
 		CreateName string `json:"create_name,omitempty"`
@@ -253,6 +264,15 @@ for i,s in ipairs(spec) do
 		for name, value := range keys {
 			source += "assert(uci:get('wireless'," + luaQuote(name) + ")=='wifi-iface')\nassert(uci:set('wireless'," + luaQuote(name) + ",'key'," + luaQuote(value) + "))\n"
 		}
+		if len(secrets) > 0 {
+			for key, value := range secrets[0] {
+				parts := strings.SplitN(key, ".", 3)
+				if len(parts) != 3 {
+					continue
+				}
+				source += "assert(uci:get(" + luaQuote(parts[0]) + "," + luaQuote(parts[1]) + "))\nassert(uci:set(" + luaQuote(parts[0]) + "," + luaQuote(parts[1]) + "," + luaQuote(parts[2]) + "," + luaQuote(value) + "))\n"
+			}
+		}
 		source += "local ordered={}\nlocal count=0\nuci:foreach('firewall',nil,function() count=count+1 end)\nfor i,s in ipairs(spec) do if s.position~=nil and not s.absent then if s.position>=count then os.exit(65) end; ordered[#ordered+1]={name=resolved[i],position=s.position} end end\ntable.sort(ordered,function(a,b) return a.position<b.position end)\nfor _,s in ipairs(ordered) do assert(uci:reorder('firewall',s.name,count-1)) end\nfor _,s in ipairs(ordered) do assert(uci:reorder('firewall',s.name,s.position)) end\n"
 		source += "local touched={}\nfor _,s in ipairs(spec) do touched[s.package]=true end\nfor p in pairs(touched) do assert(uci:save(p)) end\n"
 	} else {
@@ -301,17 +321,67 @@ func ValidWirelessKeys(config Configuration, keys map[string]string) bool {
 	return true
 }
 
-func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, keys map[string]string) error {
-	return c.writeConfiguration(ctx, config, keys, config)
+var secretOptions = map[string]map[string]bool{
+	"network.device":    nil,
+	"network.interface": {"private_key": true},
+	"network.wireguard": {"preshared_key": true},
+	"openvpn.openvpn":   {"auth_user_pass": true, "key": true},
 }
 
-func (c *Client) writeConfiguration(ctx context.Context, config Configuration, keys map[string]string, safetyConfig Configuration) error {
+func ValidSecretOptions(config Configuration, secrets map[string]string) bool {
+	for key, value := range secrets {
+		parts := strings.SplitN(key, ".", 3)
+		if len(parts) != 3 {
+			return false
+		}
+		packageName, sectionName, optionName := parts[0], parts[1], parts[2]
+		if value == "" || len(value) > 4096 || strings.ContainsFunc(value, func(r rune) bool { return r < 32 || r == 127 }) {
+			return false
+		}
+		found := false
+		for _, section := range config {
+			if section.Package == packageName && section.Name == sectionName && !section.Absent {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+		allowed := false
+		for _, section := range config {
+			if section.Package != packageName || section.Name != sectionName {
+				continue
+			}
+			options := secretOptions[packageName+"."+section.Type]
+			if options == nil && packageName == "network" && strings.HasPrefix(section.Type, "wireguard_") {
+				options = secretOptions["network.wireguard"]
+			}
+			if options[optionName] {
+				allowed = true
+			}
+		}
+		if !allowed {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, keys map[string]string) error {
+	return c.writeConfiguration(ctx, config, keys, nil, config)
+}
+
+func (c *Client) writeConfiguration(ctx context.Context, config Configuration, keys, secrets map[string]string, safetyConfig Configuration) error {
 	if !ValidWirelessKeys(config, keys) {
 		return errors.New("Wi-Fi keys must reference managed named wifi-iface sections and contain 8–63 printable ASCII characters.")
 	}
+	if !ValidSecretOptions(config, secrets) {
+		return errors.New("Secret options must reference managed sections and supported secret names.")
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	actual, keysMatch, err := c.stableConfiguration(ctx, config, keys)
+	actual, keysMatch, err := c.stableConfiguration(ctx, config, keys, secrets)
 	if err != nil {
 		return err
 	}
@@ -320,6 +390,7 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, k
 	}
 	if keysMatch {
 		keys = nil
+		secrets = nil
 	}
 	for i, s := range config {
 		if s.Package == "wireless" && !s.Absent && actual[i].Missing && keys[s.Name] == "" {
@@ -366,7 +437,12 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, k
 	if len(keys) > 0 {
 		plan.Wireless = true
 	}
-	_, err = c.runner.Run(ctx, configurationApplyScript(config, keys, token, plan))
+	for key := range secrets {
+		if strings.HasPrefix(key, "network.") {
+			plan.Reboot = true
+		}
+	}
+	_, err = c.runner.Run(ctx, configurationApplyScript(config, keys, token, plan, secrets))
 	var exit *ExitError
 	if errors.As(err, &exit) {
 		return operationError(err)
@@ -379,7 +455,7 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, k
 			if runtimeErr := c.verifyRuntimeConfiguration(wait, config); runtimeErr != nil {
 				return runtimeErr
 			}
-			_, confirmErr := c.runner.Run(wait, configurationConfirmScript(token, config, keys))
+			_, confirmErr := c.runner.Run(wait, configurationConfirmScript(token, config, keys, secrets))
 			if confirmErr == nil {
 				return nil
 			}
@@ -408,8 +484,8 @@ func sameSectionExceptManagedMarker(a, b Section) bool {
 	return reflect.DeepEqual(left, right)
 }
 
-func (c *Client) stableConfiguration(ctx context.Context, config Configuration, keys map[string]string) (Configuration, bool, error) {
-	output, err := c.runner.Run(ctx, configurationStableReadScript(config, keys))
+func (c *Client) stableConfiguration(ctx context.Context, config Configuration, keys map[string]string, secrets ...map[string]string) (Configuration, bool, error) {
+	output, err := c.runner.Run(ctx, configurationStableReadScript(config, keys, secrets...))
 	if err != nil {
 		return nil, false, operationError(err)
 	}
@@ -434,7 +510,8 @@ func (c *Client) stableConfiguration(ctx context.Context, config Configuration, 
 var allowedOptions = func() map[string]map[string]bool {
 	definitions := map[string]string{
 		"network.device":            "name type bridge_empty ports stp igmp_snooping",
-		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu vlan_id display_name home_iac_owner force_link delegate",
+		"network.wireguard":         "public_key allowed_ips endpoint_host endpoint_port persistent_keepalive route_allowed_ips description",
+		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name home_iac_owner force_link delegate",
 		"wireless.wifi-iface":       "disabled ssid encryption hidden isolate ifname device network mode macaddr wds ieee80211w wpa_group_rekey",
 		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force ignore dynamicdhcp instance",
 		"dhcp.host":                 "mac ip name dns leasetime duid",

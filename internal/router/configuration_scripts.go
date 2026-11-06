@@ -57,16 +57,21 @@ func configurationCleanup(token, outcome string) string {
 	return "test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || exit 75\n" + configurationOutcome(token, outcome) + "if [ -d " + quote(transactionDir) + " ]; then test \"$(cat " + quote(transactionDir+"/token") + ")\" = " + quote(token) + " || exit 75; mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrm -f " + quote(configurationLock+"/token") + "\nrmdir " + quote(configurationLock) + "\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\n"
 }
 
-func configurationStableReadScript(config Configuration, keys map[string]string) string {
+func configurationStableReadScript(config Configuration, keys map[string]string, secrets ...map[string]string) string {
 	data, _ := json.Marshal(keys)
-	check := "local keys=json.decode(" + luaQuote(string(data)) + ")\nlocal equal=true\nif type(keys)=='table' then for name,value in pairs(keys) do if uci:get('wireless',name,'key')~=value then equal=false end end end\nio.write(json.encode({configuration=result,keys_match=equal}))"
+	secretData := "{}"
+	if len(secrets) > 0 {
+		encoded, _ := json.Marshal(secrets[0])
+		secretData = string(encoded)
+	}
+	check := "local keys=json.decode(" + luaQuote(string(data)) + ")\nlocal secrets=json.decode(" + luaQuote(secretData) + ")\nlocal equal=true\nif type(keys)=='table' then for name,value in pairs(keys) do if uci:get('wireless',name,'key')~=value then equal=false end end end\nif type(secrets)=='table' then for key,value in pairs(secrets) do local p,s,o=key:match('^([^.]+)%.([^.]+)%.(.+)$'); if not p or uci:get(p,s,o)~=value then equal=false end end end\nio.write(json.encode({configuration=result,keys_match=equal}))"
 	read := strings.Replace(configurationLua(config, false, nil), "io.write(json.encode(result))", check, 1)
 	return preflight +
 		"test ! -d " + quote(transactionDir) + " || exit 73\ntest ! -e " + quote(recoveryService) + " && test ! -L " + quote(recoveryService) + " || exit 73\n" +
 		"test ! -d /tmp/home-network-iac.lock || exit 73\n" + configurationDNSOwnership(config) + "mkdir " + quote(configurationLock) + " 2>/dev/null || exit 73\ntrap 'rmdir " + quote(configurationLock) + "' EXIT\npending=$(uci changes)\ntest -z \"$pending\" || exit 74\n" + read
 }
 
-func configurationApplyScript(config Configuration, keys map[string]string, token string, plan reloadPlan) string {
+func configurationApplyScript(config Configuration, keys map[string]string, token string, plan reloadPlan, secrets ...map[string]string) string {
 	dir := transactionDir
 	restore := "#!/bin/sh\nset -eu\nexec >> " + quote(dir+"/rollback.log") + " 2>&1\n" + configurationOutcome(token, "rollback")
 	if plan.Reboot {
@@ -120,7 +125,7 @@ esac
 `
 
 	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nset -eu\numask 077\nmkdir " + quote(configurationLock) + " 2>/dev/null || test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || return 73\nprintf '%s' " + quote(token) + " > " + quote(configurationLock+"/token") + "\nif [ ! -d " + quote(dir) + " ]; then\nmkdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || return 73\n" + configurationCleanup(token, "") + "return 0\nfi\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
-	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, keys) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + "; do uci commit \"$package\"; done\n" + configurationReload(plan)
+	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, keys, secrets...) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + "; do uci commit \"$package\"; done\n" + configurationReload(plan)
 	if plan.Reboot {
 		request += "touch awaiting_boot\nsync\nreboot\n"
 	} else {
@@ -166,7 +171,7 @@ touch activate
 	return script
 }
 
-func configurationConfirmScript(token string, config Configuration, keys map[string]string) string {
+func configurationConfirmScript(token string, config Configuration, keys map[string]string, secrets ...map[string]string) string {
 	result := resultDir + "/" + token
 	ack := "if [ -f " + quote(result) + " ]; then\ncase \"$(cat " + quote(result) + ")\" in\nconfirm)\nif [ ! -d " + quote(configurationLock+"-actor-"+token) + " ] && [ ! -d " + quote(transactionDir+"-retired-"+token) + " ] && [ \"$(cat " + quote(transactionDir+"/token") + " 2>/dev/null || true)\" != " + quote(token) + " ] && ! grep -F " + quote(token) + " " + quote(recoveryService) + " >/dev/null 2>&1; then exit 0; fi\n;;\nrollback|cancel) exit 77 ;;\n*) exit 75 ;;\nesac\nfi\n"
 	script := preflight + ack + "cd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest \"$(cat ready)\" = \"$(cat /proc/sys/kernel/random/boot_id)\" || exit 75\ntest \"$(cat token)\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
@@ -192,6 +197,15 @@ func configurationConfirmScript(token string, config Configuration, keys map[str
 	}
 	for name, value := range keys {
 		script += "test \"$(uci -q get " + quote("wireless."+name+".key") + ")\" = " + quote(value) + " || exit 75\n"
+	}
+	if len(secrets) > 0 {
+		for key, value := range secrets[0] {
+			parts := strings.SplitN(key, ".", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			script += "test \"$(uci -q get " + quote(parts[0]+"."+parts[1]+"."+parts[2]) + ")\" = " + quote(value) + " || exit 75\n"
+		}
 	}
 	return script + "ln confirm decision 2>/dev/null || test \"$(cat decision)\" = confirm || exit 75\nsync\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n" + ack + "sleep 1\ndone\nexit 75\n"
 }

@@ -29,6 +29,8 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_firewall_forwarding` | firewall forwarding | `src:dest` | forget |
 | `glinet_firewall_rule` | firewall rule | unique rule name | forget |
 | `glinet_firewall_redirect` | firewall redirect | unique redirect name | forget |
+| `glinet_wireguard_interface` | `network` WireGuard interface | interface name (`wg0`) | forget |
+| `glinet_wireguard_peer` | `network` `wireguard_<iface>` peer | `interface:section` | forget |
 | `glinet_system` data source | router model, firmware, mode | n/a | n/a |
 
 `delete_behavior = "delete"` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved, and `forget` releases the provider marker without deleting the object. Use `lifecycle { prevent_destroy = true }` on network and management objects.
@@ -65,30 +67,24 @@ Reads never request secret options from UCI. The existing encrypted backup and r
 
 The old resource's destroy behavior remains "forget"; it never deletes router settings.
 
-## VPN specification (not shipped)
+## VPN status
 
-WireGuard and OpenVPN are the next resource family. They are specified here so implementations stay inside the provider instead of falling back to Python or shell.
+WireGuard is implemented as an experimental typed resource family; OpenVPN remains specified. Neither is hardware-verified in this change. Do not use Python or shell fallbacks.
+
+WireGuard resources:
+
+- `glinet_wireguard_interface`: `name`, `addresses`, `listen_port`, `mtu`, `fwmark`, `no_host_route`, `enabled`, `private_key_wo`, `private_key_version`.
+- `glinet_wireguard_peer`: `section`, `interface`, `public_key`, `allowed_ips`, `endpoint_host`, `endpoint_port`, `persistent_keepalive`, `route_allowed_ips`, `description`, `preshared_key_wo`, `preshared_key_version`.
+
+The peer resolves the OpenWrt dynamic section type `wireguard_<interface>`. The private key and preshared key use the generic write-only secret transport (`package.section.option`), are checked during stable read, apply, and confirmation, and are redacted from safety-state reads.
+
+OpenVPN remains planned:
 
 | Planned resource | UCI object | Identity / import ID | Secrets |
 | --- | --- | --- | --- |
-| `glinet_wireguard_interface` | `network` interface with `proto=wireguard` | interface name (`wg0`) | `private_key_wo` |
-| `glinet_wireguard_peer` | `network` `wireguard` peer | `interface:public_key` | `preshared_key_wo` |
 | `glinet_openvpn_client` | `openvpn` client section | section name | `private_key_wo`, `auth_password_wo` |
 
-Planned attributes:
-
-- WireGuard interface: `name`, `addresses` (set of CIDRs), `listen_port`, `mtu`, `fwmark`, `no_host_route`, `enabled`, `private_key_wo`, `private_key_version`.
-- WireGuard peer: `interface`, `public_key`, `allowed_ips`, `endpoint_host`, `endpoint_port`, `persistent_keepalive`, `route_allowed_ips`, `description`, `preshared_key_wo`, `preshared_key_version`.
-- OpenVPN client: `section`, `config`, `dev`, `proto`, `remote_host`, `remote_port`, `auth_user`, `auth_password_wo`, `private_key_wo`, `ca_file`, `cert_file`, `enabled`.
-
-Implementation requirements before these resources are marked supported:
-
-1. Add their nonsecret options and section types to the UCI allowlist.
-2. Generalise write-only secret transport from wireless keys to arbitrary `package.section.option` values, with checks in stable read, apply, and confirmation.
-3. Add mapper, schema, import, drift, delete, and fixture protocol tests.
-4. Extend the transaction reload plan (network reload/reboot) and the full managed-config safety checks.
-5. Generate resource documentation and add examples.
-6. Verify on physical hardware; until then, mark the resources as unreleased/experimental and do not claim hardware support.
+Remaining before OpenVPN can be shipped: add the nonsecret option allowlist, import/mapping tests, secret names, service reload handling, generated docs, and hardware validation.
 
 Do not manage VPN with the deprecated JSON resource or external scripts in a new configuration. The JSON resource is retained only for migration and compatibility.
 

@@ -8,7 +8,7 @@ Initial development targets the Flint 2 (GL-MT6000) with firmware 4.11.0 in rout
 
 This project is in initial development. No provider release is available. Hardware verification status and outstanding release requirements are documented in the pull request. The intended Terraform source address is `elephant-evergreen/glinet`.
 
-The supported API is the typed resource set described in [typed resources](docs/typed-resources.md): network interfaces, bridges, Ethernet ports, Wi-Fi interfaces, DHCP pools/reservations, stock DNS, dnsmasq, firewall zones/forwardings/rules/redirects, plus the `glinet_system` data source. Each resource owns one UCI object, supports import by stable identity, detects drift on refresh, and uses write-only arguments for secrets.
+The supported API is the typed resource set described in [typed resources](docs/typed-resources.md): network interfaces, bridges, Ethernet ports, Wi-Fi interfaces, DHCP pools/reservations, stock DNS, dnsmasq, firewall zones/forwardings/rules/redirects, experimental WireGuard interfaces/peers, plus the `glinet_system` data source. OpenVPN remains planned and is not shipped. Each resource owns one UCI object, supports import by stable identity, detects drift on refresh, and uses write-only arguments for secrets.
 
 [`glinet_uci_configuration`](docs/resources/uci_configuration.md) is deprecated and retained only for migration. The old `glinet_wireless_interface_settings` resource remains available for existing named AP settings. Use the [migration guide](docs/migration.md) to move existing JSON state to typed resources.
 
