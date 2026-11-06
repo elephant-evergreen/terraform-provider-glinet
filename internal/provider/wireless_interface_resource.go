@@ -17,7 +17,11 @@ import (
 )
 
 func NewWirelessInterfaceResource() resource.Resource {
-	return newTypedResource(typedSpec{
+	return newTypedResource(typedWirelessInterfaceSpec())
+}
+
+func typedWirelessInterfaceSpec() typedSpec {
+	return typedSpec{
 		TypeName:    "wireless_interface",
 		Description: "Manage one OpenWrt `wireless` wifi-iface section. Wi-Fi passphrases use a write-only argument and never enter plan or state; omit it to preserve the existing key.",
 		Attributes: map[string]schema.Attribute{
@@ -107,5 +111,5 @@ func NewWirelessInterfaceResource() resource.Resource {
 			}
 			return nil
 		},
-	})
+	}
 }
