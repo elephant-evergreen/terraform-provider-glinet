@@ -23,14 +23,14 @@ Manage one firewall rule by its unique `name` option. Stock rules can be adopted
 
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `dest` (String) Destination zone, `*`, or empty.
-- `dest_ip` (String) Destination address or CIDR.
+- `dest_ips` (Set of String) Destination addresses or CIDRs.
 - `dest_ports` (Set of String) Destination ports or ranges.
 - `enabled` (Boolean) Whether the rule is active.
 - `family` (String) Address family: `ipv4`, `ipv6`, or `any`.
 - `position` (Number) Absolute UCI firewall rule index. Zero leaves ordering unspecified.
 - `protocols` (Set of String) Protocols, such as `tcp`, `udp`, `icmp`, or `all`.
 - `src` (String) Source zone, `*`, or empty.
-- `src_ip` (String) Source address or CIDR.
+- `src_ips` (Set of String) Source addresses or CIDRs.
 - `src_ports` (Set of String) Source ports or ranges.
 - `target` (String) Target: ACCEPT, REJECT, DROP, or LOG.
 
