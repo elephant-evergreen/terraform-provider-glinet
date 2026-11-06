@@ -39,11 +39,12 @@ The design follows the [HashiCorp provider design principles](https://developer.
 
 Every typed write:
 
-1. Reads the current marked configuration and the requested change.
+1. Acquires the provider mutex and reads the current marked configuration and the requested change.
 2. Builds the full managed configuration and runs the existing preflight checks (bridge port ownership, unmanaged Wi-Fi/zone/forwarding/ACCEPT conflicts, DHCP conflicts, private LAN, IPv6, UPnP, include hashes, DNS provider metadata).
-3. Acquires the provider mutex and the router transaction lock.
-4. Snapshots the six UCI packages, stages the change, commits, reloads the affected service or reboots, and confirms the generated firewall.
-5. On failure, the router-side watchdog restores the previous packages.
+3. Requires a direct active wired management route for disruptive changes and creates a verified external encrypted backup.
+4. Acquires the router transaction lock and rechecks pending UCI changes and section identities.
+5. Snapshots the six UCI packages, stages the change, commits, reloads the affected service or reboots, and confirms managed activation and the generated firewall.
+6. On failure, the router-side watchdog restores the previous packages.
 
 A marker (`home_iac_owner=1`) is written in the same transaction. It is how the provider distinguishes its own sections from firmware sections without a separate registry. Marker-only changes do not trigger a service reload or reboot.
 
@@ -53,7 +54,9 @@ Terraform has no cross-resource commit barrier. The provider therefore guarantee
 
 Wi-Fi keys use `key_wo` with `key_version`. The value is passed only in the provider process and the SSH transaction script, and is removed before state or plan is persisted. Named wifi-iface sections require 8–63 printable ASCII characters.
 
-Reads never request secret options from UCI. The existing encrypted backup and recovery snapshot remain operator responsibilities and are not replaced by Terraform state.
+Reads never return secret options from UCI. The provider creates and verifies an age-encrypted sysupgrade configuration backup before the first mutation in each apply, using the SSH identity for encryption and decryption. Each transaction also retains its own on-router recovery snapshot until its outcome is settled. Terraform state replaces neither backup.
+
+The external file is a standard age-encrypted `sysupgrade` `.tar.gz` configuration archive. Keep the SSH identity and verified ciphertext in separate recoverable locations. To recover a replacement or reset router, decrypt the archive with that identity using an age-compatible recovery tool, then follow the vendor configuration-restore procedure on the supported firmware. Firmware images, installed packages, and storage-device data are outside this archive. Decryption and complete restoration of a failed device require independent recovery access; ordinary Terraform operations create and verify the archive automatically.
 
 ## Import
 
@@ -84,4 +87,4 @@ Do not manage VPN with external scripts.
 
 ## Hardware status
 
-The typed resources have fixture, protocol, schema, and live plan/import coverage. The home-network configuration has been applied and verified on the target router. WireGuard and OpenVPN remain unverified on hardware; do not treat schema or fixture success as hardware verification for them.
+The typed resources have fixture, protocol, schema, and live plan/import coverage. The pre-migration home-network configuration has been applied on the target router. Current acceptance evidence must identify the exact provider version; prior hardware results do not prove the new backup and management protections. WireGuard and OpenVPN remain unverified on hardware; do not treat schema or fixture success as hardware verification for them.

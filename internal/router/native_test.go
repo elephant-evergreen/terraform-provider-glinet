@@ -23,7 +23,7 @@ func TestNativeUCIFixture(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	if err := NewClient(transport).Verify(ctx); err != nil {
+	if err := newFixtureClient(transport).Verify(ctx); err != nil {
 		t.Fatal(err)
 	}
 	nonce := make([]byte, 12)
@@ -155,6 +155,17 @@ func TestNativeUCIFixture(t *testing.T) {
 	write(missingWiFi, map[string]string{"missing_ap": "fixture-secret-restored"})
 	if !SameConfiguration(read(missingWiFi), missingWiFi) {
 		t.Fatal("Explicit Wi-Fi credential restoration did not converge")
+	}
+	optional := Configuration{{Package: "network", Name: "example", Type: "interface", Options: map[string]string{"proto": "static", "gateway": "192.168.8.1"}, Lists: map[string][]string{"dns": {"192.168.8.1"}}}}
+	write(optional, nil)
+	optional[0].Options["gateway"] = ""
+	optional[0].Lists["dns"] = nil
+	write(optional, nil)
+	if !SameConfiguration(read(optional), optional) {
+		t.Fatal("Cleared scalar/list attributes did not converge in native UCI")
+	}
+	if _, err := transport.Run(ctx, "test -z \"$(uci -c "+quote(conf)+" -P "+quote(saved)+" -q get network.example.gateway || true)\"\ntest -z \"$(uci -c "+quote(conf)+" -P "+quote(saved)+" -q get network.example.dns || true)\"\n"); err != nil {
+		t.Fatal("Optional attributes remain in native UCI")
 	}
 	check := "test \"$(uci -c " + quote(conf) + " -P " + quote(saved) + " get wireless.wifi2g.key)\" = 'fixture-secret-updated'\n"
 	if _, err := transport.Run(ctx, check); err != nil {

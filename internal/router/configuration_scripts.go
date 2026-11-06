@@ -67,7 +67,7 @@ func configurationStableReadScript(config Configuration, secrets ...map[string]s
 	read := strings.Replace(configurationLua(config, false), "io.write(json.encode(result))", check, 1)
 	return preflight +
 		"test ! -d " + quote(transactionDir) + " || exit 73\ntest ! -e " + quote(recoveryService) + " && test ! -L " + quote(recoveryService) + " || exit 73\n" +
-		"test ! -d /tmp/home-network-iac.lock || exit 73\n" + configurationDNSOwnership(config) + "mkdir " + quote(configurationLock) + " 2>/dev/null || exit 73\ntrap 'rmdir " + quote(configurationLock) + "' EXIT\npending=$(uci changes)\ntest -z \"$pending\" || exit 74\n" + read
+		configurationDNSOwnership(config) + "mkdir " + quote(configurationLock) + " 2>/dev/null || exit 73\ntrap 'rmdir " + quote(configurationLock) + "' EXIT\npending=$(uci changes)\ntest -z \"$pending\" || exit 74\n" + read
 }
 
 func configurationApplyScript(config Configuration, token string, plan reloadPlan, secrets ...map[string]string) string {
@@ -136,8 +136,7 @@ esac
 		request += "cat /proc/sys/kernel/random/boot_id > ready\n"
 	}
 
-	script := preflight + `test ! -d /tmp/home-network-iac.lock || exit 73
-pending=$(uci changes)
+	script := preflight + `pending=$(uci changes)
 test -z "$pending" || exit 74
 command -v lua >/dev/null
 command -v start-stop-daemon >/dev/null

@@ -770,13 +770,6 @@ func checkDNSProviders(ctx context.Context, client *Client, config Configuration
 	return nil
 }
 
-func (c *Client) verifyRuntimeConfiguration(ctx context.Context, config Configuration) error {
-	if !hasPackage(config, "firewall") {
-		return nil
-	}
-	return c.verifyRuntimeFirewall(ctx)
-}
-
 func (c *Client) verifyRuntimeFirewall(ctx context.Context) error {
 	output, err := c.runner.Run(ctx, safetyRuntimeScript)
 	if err != nil {
@@ -993,27 +986,4 @@ func checkDHCPReservations(config Configuration, state uciState, leases string) 
 		}
 	}
 	return nil
-}
-
-// VerifyRuntimeConfiguration re-reads the stored configuration and checks the
-// running firewall against the generated policy. It is used by refresh so a
-// plan cannot report a clean managed configuration while runtime ACCEPT rules
-// bypass it.
-func (c *Client) VerifyRuntimeConfiguration(ctx context.Context, value string) error {
-	config, err := DecodeObservedConfiguration(value)
-	if err != nil {
-		return err
-	}
-	return c.verifyRuntimeConfiguration(ctx, config)
-}
-
-// VerifyConfigurationSafety runs the read-only preflight used by refresh and
-// plan. It never mutates the router and is skipped when the stored
-// configuration already differs from the router.
-func (c *Client) VerifyConfigurationSafety(ctx context.Context, value string) error {
-	config, err := DecodeObservedConfiguration(value)
-	if err != nil {
-		return err
-	}
-	return c.checkConfigurationSafety(ctx, config)
 }

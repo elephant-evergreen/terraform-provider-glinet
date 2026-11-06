@@ -13,7 +13,7 @@ func TestWirelessOnlyConfigurationReadsSafetyState(t *testing.T) {
 	}}}
 	state := `{"wireless":[{"name":"stock_guest","type":"wifi-iface","options":{"ifname":"rax0","network":"lan"}}]}`
 	requested := 0
-	client := NewClient(runnerFunc(func(_ context.Context, script string) ([]byte, error) {
+	client := newFixtureClient(runnerFunc(func(_ context.Context, script string) ([]byte, error) {
 		if !strings.Contains(script, "GLINET_SAFETY_STATE") {
 			return nil, errors.New("unexpected script")
 		}
@@ -34,7 +34,7 @@ func TestWirelessOnlyConfigurationWithoutConflictIsAccepted(t *testing.T) {
 		"ifname": "rax0", "network": "lan", "ssid": "Example", "mode": "ap",
 	}}}
 	state := `{"wireless":[{"name":"wifi2g","type":"wifi-iface","options":{"ifname":"rax0","network":"lan"}}]}`
-	client := NewClient(runnerFunc(func(_ context.Context, _ string) ([]byte, error) {
+	client := newFixtureClient(runnerFunc(func(_ context.Context, _ string) ([]byte, error) {
 		return []byte(state), nil
 	}))
 	if err := client.checkConfigurationSafety(context.Background(), config); err != nil {

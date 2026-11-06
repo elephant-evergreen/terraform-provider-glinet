@@ -72,13 +72,24 @@ func (b *boundedOutput) Write(p []byte) (int, error) {
 }
 
 func (s *SSH) Run(ctx context.Context, script string) ([]byte, error) {
+	output := &boundedOutput{}
+	if err := s.RunTo(ctx, script, output); err != nil {
+		return nil, err
+	}
+	if output.overflow {
+		return nil, errors.New("The router returned more data than expected.")
+	}
+	return output.data, nil
+}
+
+func (s *SSH) RunTo(ctx context.Context, script string, output io.Writer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", s.address)
 	if err != nil {
-		return nil, errors.New("Cannot reach the router over SSH. Check host, port, and network access.")
+		return errors.New("Cannot reach the router over SSH. Check host, port, and network access.")
 	}
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
@@ -88,28 +99,24 @@ func (s *SSH) Run(ctx context.Context, script string) ([]byte, error) {
 	}
 	channel, requests, messages, err := ssh.NewClientConn(conn, s.address, s.config)
 	if err != nil {
-		return nil, errors.New("SSH authentication or host-key verification failed. Check private_key_file and known_hosts_file; host-key checking cannot be disabled.")
+		return errors.New("SSH authentication or host-key verification failed. Check private_key_file and known_hosts_file; host-key checking cannot be disabled.")
 	}
 	client := ssh.NewClient(channel, requests, messages)
 	defer client.Close()
 	session, err := client.NewSession()
 	if err != nil {
-		return nil, errors.New("Cannot start a router SSH session.")
+		return errors.New("Cannot start a router SSH session.")
 	}
 	defer session.Close()
-	output := &boundedOutput{}
 	session.Stdin = strings.NewReader(script)
 	session.Stdout = output
 	session.Stderr = io.Discard
 	if err = session.Run("sh -s"); err != nil {
 		var exit *ssh.ExitError
 		if errors.As(err, &exit) {
-			return nil, &ExitError{Code: exit.ExitStatus()}
+			return &ExitError{Code: exit.ExitStatus()}
 		}
-		return nil, errors.New("The router SSH operation did not complete. Check connectivity before retrying.")
+		return errors.New("The router SSH operation did not complete. Check connectivity before retrying.")
 	}
-	if output.overflow {
-		return nil, errors.New("The router returned more data than expected.")
-	}
-	return output.data, nil
+	return nil
 }

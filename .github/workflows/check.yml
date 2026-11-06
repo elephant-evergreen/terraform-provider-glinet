@@ -21,7 +21,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: '1.17.1'
+          terraform_wrapper: false
       - run: bin/check-for-agent
-      - run: mise run docs
+      - run: go tool tfplugindocs generate --provider-name glinet
       - run: git diff --exit-code -- docs
+      - name: Verify release packages
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de
+        with:
+          version: v2.20.0
+          args: release --snapshot --clean --skip=publish,sign --parallelism 2

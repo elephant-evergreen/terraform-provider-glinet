@@ -15,7 +15,8 @@ Manage independent network, wireless, DHCP, DNS, firewall and WireGuard objects 
 terraform {
   required_providers {
     glinet = {
-      source = "elephant-evergreen/glinet"
+      source  = "elephant-evergreen/glinet"
+      version = "= 0.1.0"
     }
   }
 }
@@ -28,6 +29,7 @@ provider "glinet" {}
 
 ### Optional
 
+- `backup_directory` (String) Directory for verified age-encrypted full router configuration backups. Falls back to `GLINET_BACKUP_DIRECTORY`, then the operating system user configuration directory under `glinet/backups`. The SSH private key decrypts these backups. A backup is required before the first mutation of each apply; backup failure prevents all changes.
 - `host` (String) Router hostname or IP address. Falls back to `GLINET_HOST`.
 - `known_hosts_file` (String) Path to a known_hosts file containing the verified router host key. Falls back to `GLINET_KNOWN_HOSTS_FILE`. Host-key verification is always required.
 - `port` (Number) SSH port. Falls back to `GLINET_PORT`, then `22`.
