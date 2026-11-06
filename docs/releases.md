@@ -6,10 +6,10 @@ The release workflow runs provider checks, builds Linux and macOS packages for a
 
 ## First publication
 
-The configured release public key is [keys/release.asc](../keys/release.asc), fingerprint `9699ECB55B3E8B042C68A4B063527B92B224D3DD`. The encrypted private key and passphrase are configured as repository Actions secrets; neither is part of this repository. Namespace registration remains a separate authenticated action.
+The configured release public key is [keys/release.asc](../keys/release.asc), fingerprint `9699ECB55B3E8B042C68A4B063527B92B224D3DD`. The encrypted private key and passphrase are configured as repository Actions secrets; neither is part of this repository. The public key is registered in the `elephant-evergreen` HCP Terraform public namespace. [Version 0.1.0 is published in Terraform Registry](https://registry.terraform.io/providers/elephant-evergreen/glinet/0.1.0), and normal Terraform initialization verified the release signature with key ID `63527B92B224D3DD`.
 
 1. Store the release signing key in the repository Actions secret `GPG_PRIVATE_KEY` and its passphrase in `PASSPHRASE`. Back up this identity outside Git. Upload only its public key to the publisher's HCP Terraform public namespace.
-2. Register the public `elephant-evergreen/terraform-provider-glinet` repository under the `elephant-evergreen` Registry namespace using an authorized HCP Terraform account. This step requires namespace ownership and Registry authentication.
+2. In HCP Terraform, open Registry > Public namespaces and select or claim `elephant-evergreen`. Connect the Terraform Cloud GitHub App to the public `terraform-provider-glinet` repository, register the public signing key under namespace Settings, then choose Publish > Provider. Select the repository and Networking category, review the publishing terms, and publish. Namespace creation requires organization ownership; provider management requires the corresponding public-provider permissions.
 3. Create a semantic version tag, such as `v0.1.0`, from a reviewed default-branch commit whose checks passed. The release workflow owns the build and publication of GitHub assets.
 4. Confirm Registry ingestion, then run `terraform init` in a fresh directory using the pinned provider version. Verify the downloaded signature and checksums, and commit the generated dependency lock file in the consuming configuration.
 
