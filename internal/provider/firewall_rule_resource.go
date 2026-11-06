@@ -17,15 +17,19 @@ import (
 )
 
 func NewFirewallRuleResource() resource.Resource {
-	return newTypedResource(typedSpec{
+	return newTypedResource(typedFirewallRuleSpec())
+}
+
+func typedFirewallRuleSpec() typedSpec {
+	return typedSpec{
 		TypeName:    "firewall_rule",
 		Description: "Manage one firewall rule by its unique `name` option. Stock rules can be adopted by name; new rules are created as named sections. `position` requests an absolute UCI rule index.",
 		Attributes: map[string]schema.Attribute{
 			"name":       schema.StringAttribute{Required: true, MarkdownDescription: "Unique rule name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"src":        schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Source zone, `*`, or empty."},
 			"dest":       schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Destination zone, `*`, or empty."},
-			"src_ip":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Source address or CIDR."},
-			"dest_ip":    schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Destination address or CIDR."},
+			"src_ips":    schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Source addresses or CIDRs."},
+			"dest_ips":   schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Destination addresses or CIDRs."},
 			"protocols":  schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Protocols, such as `tcp`, `udp`, `icmp`, or `all`."},
 			"src_ports":  schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Source ports or ranges."},
 			"dest_ports": schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Destination ports or ranges."},
@@ -42,9 +46,20 @@ func NewFirewallRuleResource() resource.Resource {
 			options := map[string]string{
 				"name": name, "family": stringOf(values, "family"), "target": stringOf(values, "target"), "enabled": boolString(boolOf(values, "enabled", true)),
 			}
-			for _, field := range []struct{ attr, option string }{{"src", "src"}, {"dest", "dest"}, {"src_ip", "src_ip"}, {"dest_ip", "dest_ip"}} {
+			for _, field := range []struct{ attr, option string }{{"src", "src"}, {"dest", "dest"}} {
 				if value := stringOf(values, field.attr); value != "" {
 					options[field.option] = value
+				}
+			}
+			section := router.Section{Package: "firewall", Type: "rule", Name: "@rule[0]", Match: map[string]string{"name": name}, Options: options, Lists: map[string][]string{}}
+			for _, field := range []struct{ attr, option string }{{"src_ips", "src_ip"}, {"dest_ips", "dest_ip"}} {
+				addresses := stringsOf(values, field.attr)
+				switch len(addresses) {
+				case 0:
+				case 1:
+					options[field.option] = addresses[0]
+				default:
+					section.Lists[field.option] = addresses
 				}
 			}
 			if protocols := stringsOf(values, "protocols"); len(protocols) > 0 {
@@ -56,7 +71,6 @@ func NewFirewallRuleResource() resource.Resource {
 			if ports := stringsOf(values, "dest_ports"); len(ports) > 0 {
 				options["dest_port"] = joinStrings(ports)
 			}
-			section := router.Section{Package: "firewall", Type: "rule", Name: "@rule[0]", Match: map[string]string{"name": name}, Options: options}
 			if position := int64Of(values, "position"); position > 0 {
 				value := int(position)
 				section.Position = &value
@@ -76,8 +90,8 @@ func NewFirewallRuleResource() resource.Resource {
 				"name":       stringValue(name),
 				"src":        stringValue(section.Options["src"]),
 				"dest":       stringValue(section.Options["dest"]),
-				"src_ip":     stringValue(section.Options["src_ip"]),
-				"dest_ip":    stringValue(section.Options["dest_ip"]),
+				"src_ips":    stringSet(append(splitFields(section.Options["src_ip"]), section.Lists["src_ip"]...)),
+				"dest_ips":   stringSet(append(splitFields(section.Options["dest_ip"]), section.Lists["dest_ip"]...)),
 				"protocols":  stringSet(splitFields(section.Options["proto"])),
 				"src_ports":  stringSet(splitFields(section.Options["src_port"])),
 				"dest_ports": stringSet(splitFields(section.Options["dest_port"])),
@@ -113,5 +127,5 @@ func NewFirewallRuleResource() resource.Resource {
 			}
 			return nil
 		},
-	})
+	}
 }
