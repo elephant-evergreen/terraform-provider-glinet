@@ -40,8 +40,11 @@ func NewWirelessInterfaceResource() resource.Resource {
 				return router.Section{}, fmt.Errorf("section is required")
 			}
 			options := map[string]string{
-				"disabled": boolString(boolOf(values, "disabled", false)), "ssid": stringOf(values, "ssid"),
+				"disabled":   boolString(boolOf(values, "disabled", false)),
 				"encryption": stringOf(values, "encryption"), "hidden": boolString(boolOf(values, "hidden", false)), "isolate": boolString(boolOf(values, "isolate", true)),
+			}
+			if ssid := stringOf(values, "ssid"); ssid != "" {
+				options["ssid"] = ssid
 			}
 			for _, field := range []struct{ attrName, option string }{{"device", "device"}, {"network", "network"}, {"mode", "mode"}, {"ifname", "ifname"}} {
 				if value := stringOf(values, field.attrName); value != "" {
@@ -87,8 +90,10 @@ func NewWirelessInterfaceResource() resource.Resource {
 				return fmt.Errorf("section is required")
 			}
 			ssid := stringOf(values, "ssid")
-			if len(ssid) < 1 || len(ssid) > 32 || strings.ContainsFunc(ssid, func(r rune) bool { return r < 32 || r == 127 }) {
-				return fmt.Errorf("ssid must contain 1–32 UTF-8 bytes without control characters")
+			if !boolOf(values, "disabled", false) {
+				if len(ssid) < 1 || len(ssid) > 32 || strings.ContainsFunc(ssid, func(r rune) bool { return r < 32 || r == 127 }) {
+					return fmt.Errorf("enabled Wi-Fi sections require an ssid of 1–32 UTF-8 bytes without control characters")
+				}
 			}
 			if key := stringOf(values, "key_wo"); key != "" {
 				if len(key) < 8 || len(key) > 63 || strings.ContainsFunc(key, func(r rune) bool { return r < 32 || r > 126 }) {
