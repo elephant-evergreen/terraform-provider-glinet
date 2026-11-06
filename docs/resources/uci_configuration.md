@@ -42,5 +42,6 @@ resource "glinet_uci_configuration" "example" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
+- `adoption_version` (Number) Migration trigger. Increase this value once to write the provider ownership marker to every managed section before moving to typed resources. Marker-only changes do not reload services.
 - `wireless_keys_version` (Number) Positive key rotation generation. Increase this value whenever wireless_keys_wo changes. Keys are applied only on creation or a generation change.
 - `wireless_keys_wo` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only map from managed named wireless wifi-iface sections to WPA passphrases. Values are never stored in plan or state. Set wireless_keys_version and increase it to rotate keys. Omit this map to preserve existing keys. Key drift cannot be detected by refresh.

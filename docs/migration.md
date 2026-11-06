@@ -4,11 +4,34 @@ The coordinated JSON resource is deprecated. Migration is designed to preserve t
 
 ## 1. Back up and freeze changes
 
-Create an external encrypted backup and do not edit the router or run another Terraform apply during migration. Keep the old resource in configuration until all imports succeed.
+Create an external encrypted backup and do not edit the router or run another Terraform apply during migration. Keep the old resource in configuration until the ownership marker is written.
 
-## 2. Add typed resources with import blocks
+## 2. Write ownership markers through the old resource
 
-Use import IDs from [typed resources](typed-resources.md#resources). For example:
+Add `adoption_version = 2` (or any higher value) to the existing resource:
+
+```hcl
+resource "glinet_uci_configuration" "home" {
+  configuration         = jsonencode(local.sections)
+  wireless_keys_wo      = var.wireless_keys
+  wireless_keys_version = var.wireless_keys_version
+  adoption_version      = 2
+}
+```
+
+Run `terraform plan` and confirm the only expected change is the ownership marker. Apply. The provider writes `home_iac_owner = "1"` to every managed section in one recovery-protected transaction; marker-only changes do not reboot or reload network, wireless, DHCP, DNS, or firewall services. Run `terraform plan` again and confirm it is clean.
+
+`adoption_version` is a one-time migration trigger. It is not needed by the typed resources.
+
+## 3. Replace the old resource with typed resources
+
+Remove `glinet_uci_configuration.home` from configuration and state:
+
+```sh
+terraform state rm glinet_uci_configuration.home
+```
+
+Add typed resources with import blocks. Example IDs:
 
 ```hcl
 import {
@@ -27,7 +50,7 @@ import {
 }
 ```
 
-For anonymous stock sections, use the stable option value, not the numeric UCI index:
+For anonymous stock sections, import by the stable option value, not the numeric UCI index:
 
 ```hcl
 import {
@@ -42,22 +65,12 @@ Run:
 terraform plan -generate-config-out=generated.tf
 ```
 
-Review `generated.tf`. It is a starting point; add references between resources (`network = glinet_network_interface.lan.name`) and keep `delete_behavior = "forget"` on network and management objects.
+Review `generated.tf`. Add references between resources (`network = glinet_network_interface.lan.name`) and keep `delete_behavior = "forget"` on network and management objects.
 
-## 3. Remove the old state entry
+## 4. Apply and verify
 
-After the typed resources are imported and the configuration is complete:
-
-```sh
-terraform state rm glinet_uci_configuration.home
-```
-
-Do not destroy the old resource through Terraform; its destroy behavior is forget, but removing state first is explicit and avoids any chance of a coordinated write.
-
-## 4. Adopt ownership markers
-
-Run `terraform plan`. The first plan should show only the provider ownership marker and any explicit attribute corrections. Apply once; marker-only changes do not reload network, wireless, DHCP, DNS, or firewall services. Verify that the plan is clean afterward.
+Run `terraform plan` again, review the diff, then apply. The ownership marker is already present, so adoption should not reload services. A functional difference in the generated HCL will be applied with the normal recovery protection; use `prevent_destroy` on critical network objects.
 
 ## 5. Roll back
 
-If the migration plan is not acceptable, restore the old configuration and the encrypted backup. The old resource and state can be restored with `git` and the backup; no router setting was deleted by the import or state removal.
+If the migration plan is not acceptable, restore the old configuration and the encrypted backup. The old resource and state can be restored with `git` and the backup; no router setting was deleted by state removal or typed import.

@@ -10,7 +10,7 @@ import (
 )
 
 func configurationFixture() Configuration {
-	return Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Example", "mode": "ap", "disabled": "0"}}, {Package: "firewall", Name: "allow_example", Type: "rule", Options: map[string]string{"target": "ACCEPT", "dest_port": "443"}}}
+	return Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Example", "mode": "ap", "disabled": "0", ManagedOption: "1"}}, {Package: "firewall", Name: "allow_example", Type: "rule", Options: map[string]string{"target": "ACCEPT", "dest_port": "443", ManagedOption: "1"}}}
 }
 
 func TestConfigurationValidation(t *testing.T) {

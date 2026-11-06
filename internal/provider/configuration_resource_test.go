@@ -69,7 +69,7 @@ func (r *configurationRunner) Run(_ context.Context, script string) ([]byte, err
 	return nil, nil
 }
 func TestConfigurationProtocolAdoptionUpdateDriftAndForget(t *testing.T) {
-	initial := router.Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"name": "Example", "target": "REJECT"}}}
+	initial := router.Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"name": "Example", "target": "REJECT", router.ManagedOption: "1"}}}
 	remote := &configurationRunner{actual: initial}
 	client := router.NewClient(remote)
 	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
@@ -105,8 +105,8 @@ func TestConfigurationProtocolAdoptionUpdateDriftAndForget(t *testing.T) {
 
 func TestConfigurationPartialDriftDoesNotRotateUnchangedGeneration(t *testing.T) {
 	remote := &configurationRunner{actual: router.Configuration{
-		{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}},
-		{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Example"}},
+		{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT", router.ManagedOption: "1"}},
+		{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Example", router.ManagedOption: "1"}},
 	}}
 	client := router.NewClient(remote)
 	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
@@ -136,5 +136,29 @@ func TestConfigurationPartialDriftDoesNotRotateUnchangedGeneration(t *testing.T)
 		Steps: []resource.TestStep{
 			{Config: config("initial-fixture-password"), Check: check},
 			{PreConfig: func() { remote.mu.Lock(); remote.actual[0].Missing = true; remote.mu.Unlock() }, Config: config("changed-fixture-password"), Check: check},
+		}})
+}
+
+func TestLegacyAdoptionVersionWritesOwnershipMarkerWithoutStateMarker(t *testing.T) {
+	initial := router.Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"name": "Example", "target": "REJECT"}}}
+	remote := &configurationRunner{actual: initial}
+	client := router.NewClient(remote)
+	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
+	config := `resource "glinet_uci_configuration" "test" {
+ configuration=jsonencode([{package="firewall",name="example",type="rule",options={name="Example",target="REJECT"}}])
+ wireless_keys_version=1
+ adoption_version=2
+}`
+	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{Config: config, Check: func(*terraform.State) error {
+				remote.mu.Lock()
+				defer remote.mu.Unlock()
+				if remote.writes != 1 || remote.actual[0].Options[router.ManagedOption] != "1" {
+					t.Fatalf("ownership marker was not written once: writes=%d options=%v", remote.writes, remote.actual[0].Options)
+				}
+				return nil
+			}},
+			{Config: config, PlanOnly: true},
 		}})
 }
