@@ -23,6 +23,21 @@ func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bo
 	if err != nil {
 		return Section{}, false, err
 	}
+	if strings.HasPrefix(selector.Name, "@") && len(selector.Match) == 0 {
+		var singleton *uciSection
+		count := 0
+		for index := range state[selector.Package] {
+			actual := &state[selector.Package][index]
+			if actual.Type == selector.Type {
+				count++
+				singleton = actual
+			}
+		}
+		if count == 1 {
+			result := Section{Package: selector.Package, Name: singleton.Name, Type: singleton.Type, Options: copyOptions(singleton.Options), Lists: copyLists(singleton.Lists)}
+			return result, true, nil
+		}
+	}
 	position := 0
 	for _, actual := range state[selector.Package] {
 		matched := false
