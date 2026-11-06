@@ -228,7 +228,7 @@ func verifyRuntimeFirewall(generated, running string) error {
 	if err := verifyTable(expected, actual, "filter", "INPUT", "FORWARD"); err != nil {
 		return err
 	}
-	return verifyTable(expected, actual, "nat", "PREROUTING")
+	return verifyTable(expected, actual, "nat", "PREROUTING", "POSTROUTING", "OUTPUT")
 }
 
 func verifyTable(expected, actual firewallRules, table string, roots ...string) error {
