@@ -15,6 +15,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
+func configurationSafetyResponse(script string) ([]byte, bool) {
+	switch {
+	case strings.Contains(script, "GLINET_SAFETY_STATE"):
+		return []byte(`{"network":[],"wireless":[],"dhcp":[],"firewall":[],"gl-dns-v2":[],"eth_ports_config_map":[]}`), true
+	case strings.Contains(script, "GLINET_SAFETY_ENV"):
+		return []byte("ipv6_enabled=0\nipv6_forwarding=0\n@@addresses@@\n\n@@routes@@\n\n@@upnp@@\n0\n\n@@adguard@@\n0\n0\n@@leases@@\n"), true
+	case strings.Contains(script, "GLINET_SAFETY_RUNTIME"):
+		return []byte("@@generated@@\niptables -t filter -P INPUT ACCEPT\niptables -t filter -P FORWARD DROP\niptables -t filter -N reject\niptables -t filter -A FORWARD -j reject\niptables -t filter -A reject -j REJECT\n@@running@@\n*filter\n:INPUT ACCEPT [0:0]\n:FORWARD DROP [0:0]\n:reject - [0:0]\n-A FORWARD -j reject\n-A reject -j REJECT\nCOMMIT\n"), true
+	}
+	return nil, false
+}
+
 type configurationRunner struct {
 	mu        sync.Mutex
 	actual    router.Configuration
@@ -24,6 +36,9 @@ type configurationRunner struct {
 }
 
 func (r *configurationRunner) Run(_ context.Context, script string) ([]byte, error) {
+	if data, ok := configurationSafetyResponse(script); ok {
+		return data, nil
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if strings.Contains(script, "keys_match") {

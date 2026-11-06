@@ -55,6 +55,9 @@ func newConfigurationWorld(t *testing.T) *configurationWorld {
 	return &configurationWorld{base: f, delay: "3"}
 }
 func (f *configurationWorld) run(script string) ([]byte, error) {
+	if data, ok := safetyTestResponse(script); ok {
+		return data, nil
+	}
 	root := f.base.root
 	script = strings.ReplaceAll(script, preflight, "set -eu\n")
 	script = strings.ReplaceAll(script, "remaining=300", "remaining="+f.delay)

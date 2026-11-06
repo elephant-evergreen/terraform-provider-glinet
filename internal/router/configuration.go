@@ -311,6 +311,9 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 	if err != nil {
 		return err
 	}
+	if err := c.checkConfigurationSafety(ctx, config); err != nil {
+		return err
+	}
 	if keysMatch {
 		keys = nil
 	}
@@ -369,6 +372,9 @@ func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, k
 	for {
 		actual, readErr := c.ReadConfiguration(wait, config)
 		if readErr == nil && SameConfiguration(actual, config) {
+			if runtimeErr := c.verifyRuntimeConfiguration(wait, config); runtimeErr != nil {
+				return runtimeErr
+			}
 			_, confirmErr := c.runner.Run(wait, configurationConfirmScript(token, config, keys))
 			if confirmErr == nil {
 				return nil

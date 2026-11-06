@@ -3,12 +3,12 @@
 page_title: "glinet_uci_configuration Resource - glinet"
 subcategory: ""
 description: |-
-  Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Network and wireless topology changes reboot the router; existing AP settings reload Wi-Fi. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.
+  Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Before mutation the provider refuses conflicting unmanaged Wi-Fi, zones, forwardings, redirects, ACCEPT rules, bridge port changes, DHCP reservations, IPv6/UPnP state, non-stock includes, and private LAN address changes. Refresh also compares the generated firewall with the running policy. Network and wireless topology changes reboot the router; existing AP settings reload Wi-Fi. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.
 ---
 
 # glinet_uci_configuration (Resource)
 
-Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Network and wireless topology changes reboot the router; existing AP settings reload Wi-Fi. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.
+Manage a coordinated UCI configuration on one Flint 2 router. Adopts existing matching settings without mutation. Changed settings are committed together and protected by a router-side 300-second recovery timer that restarts after reboot. Before mutation the provider refuses conflicting unmanaged Wi-Fi, zones, forwardings, redirects, ACCEPT rules, bridge port changes, DHCP reservations, IPv6/UPnP state, non-stock includes, and private LAN address changes. Refresh also compares the generated firewall with the running policy. Network and wireless topology changes reboot the router; existing AP settings reload Wi-Fi. Destroy forgets management and preserves all settings. Use exactly one configuration resource per router and do not overlap with other resources or management tools.
 
 ## Example Usage
 

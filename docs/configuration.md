@@ -13,6 +13,21 @@ Missing members remain drift within the coordinated resource and preserve its ke
 Existing firewall rules retain their placement relative to unmanaged rules. To change order or restore a missing rule at a specific location, configure `position` for every managed firewall rule using absolute package indices. Refresh observes those indices. Without positions, an update requiring a different managed order is rejected before staging; new rules otherwise append. Explicit placement is part of the Terraform configuration and must preserve the intended policy relative to unmanaged rules. Anonymous sections missing their unique match are recreated as named sections with deterministic provider-generated names and their declared match options.
 
 
+## Safety checks
+
+Before changing a coordinated configuration, the provider compares the declared sections with the router's current UCI state and the live prerequisites. It stops without mutation when:
+
+- a managed bridge would add or remove a port without moving that port between managed bridges;
+- an enabled unmanaged Wi-Fi, zone, forwarding, redirect, or ACCEPT rule can join, classify, or bypass a managed network, the NAS, a management port, or the WAN private-subnet policy;
+- a managed DHCP reservation conflicts with an existing reservation, an active lease, another managed reservation, or its DHCP pool;
+- the private `lan` interface would change its address or netmask;
+- IPv6 is enabled or active, UPnP/NAT-PMP is enabled or `miniupnpd` is running, an enabled firewall include is not a stock script with the ROM hash, or the stock DNS provider does not offer the requested endpoint;
+- AdGuard Home owns DNS while the configuration declares DNS ownership.
+
+The rules describe what the router must already contain. Resolve a reported conflict outside Terraform first, or declare the existing section explicitly; the provider does not silently overwrite unmanaged policy. A failed check leaves all six configuration packages and the running services untouched.
+
+Refresh and apply also compare the generated IPv4 firewall with `fw3 -4 -q print` and `iptables-save`. A plan with no managed drift fails if the running firewall contains an undeclared ACCEPT, chain branch, destination NAT, or a missing forwarding rule. The same check runs before a confirmed apply, so an unconfirmed transaction still rolls back.
+
 ## Rotate Wi-Fi keys
 
 Use the sensitive write-only map `wireless_keys_wo`, keyed by managed named `wifi-iface` sections. Obtain values from ephemeral input variables and increase the positive `wireless_keys_version` when rotating. Keys are evaluated on creation and version changes; identical keys do not cause a router reload. They never enter saved plan or state artifacts. Omitting the map preserves existing keys. Refresh cannot detect key drift. A missing Wi-Fi section is never recreated without an explicitly supplied key. Increase the generation and supply the missing named section’s key to restore it; other missing members do not reset the generation.
