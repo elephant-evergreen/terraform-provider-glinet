@@ -52,7 +52,7 @@ func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bo
 // ApplySections writes the given sections as one recovery-protected UCI
 // transaction. The full managed configuration (all sections carrying
 // ManagedOption, plus the change set) is validated before mutation.
-func (c *Client) ApplySections(ctx context.Context, changes Configuration, keys map[string]string) error {
+func (c *Client) ApplySections(ctx context.Context, changes Configuration, keys, secrets map[string]string) error {
 	for _, section := range changes {
 		if section.Absent {
 			continue
@@ -67,7 +67,7 @@ func (c *Client) ApplySections(ctx context.Context, changes Configuration, keys 
 	}
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, changes)
-	return c.writeConfiguration(ctx, changes, keys, full)
+	return c.writeConfiguration(ctx, changes, keys, secrets, full)
 }
 
 // ForgetSection releases Terraform ownership while preserving the section.
@@ -79,7 +79,7 @@ func (c *Client) ForgetSection(ctx context.Context, selector Section) error {
 	}
 	selector.Options[ManagedOption] = "0"
 	selector.Absent = false
-	return c.ApplySections(ctx, Configuration{selector}, nil)
+	return c.ApplySections(ctx, Configuration{selector}, nil, nil)
 }
 
 func configurationFromManagedState(state uciState) Configuration {

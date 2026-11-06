@@ -113,7 +113,7 @@ func (r *typedResource) Create(ctx context.Context, req resource.CreateRequest, 
 		section.Options = map[string]string{}
 	}
 	section.Options[router.ManagedOption] = "1"
-	if err := r.client.ApplySections(ctx, router.Configuration{section}, r.secrets(values)); err != nil {
+	if err := r.client.ApplySections(ctx, router.Configuration{section}, nil, r.secrets(values)); err != nil {
 		resp.Diagnostics.AddError("Cannot apply section", err.Error())
 		return
 	}
@@ -176,7 +176,7 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		section.Options = map[string]string{}
 	}
 	section.Options[router.ManagedOption] = "1"
-	if err := r.client.ApplySections(ctx, router.Configuration{section}, r.secrets(values)); err != nil {
+	if err := r.client.ApplySections(ctx, router.Configuration{section}, nil, r.secrets(values)); err != nil {
 		resp.Diagnostics.AddError("Cannot apply section", err.Error())
 		return
 	}
@@ -217,7 +217,7 @@ func (r *typedResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 	if deleteBehavior == "delete" && actual.Name != "" && !isAnonymousSection(actual.Name) {
 		absent := router.Section{Package: actual.Package, Name: actual.Name, Type: actual.Type, Absent: true}
-		if err := r.client.ApplySections(ctx, router.Configuration{absent}, nil); err != nil {
+		if err := r.client.ApplySections(ctx, router.Configuration{absent}, nil, nil); err != nil {
 			resp.Diagnostics.AddError("Cannot delete section", err.Error())
 		}
 		return
