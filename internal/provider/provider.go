@@ -34,7 +34,7 @@ func (p *glinetProvider) Metadata(_ context.Context, _ provider.MetadataRequest,
 
 func (p *glinetProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manage Wi-Fi settings and coordinated network, DHCP, firewall and DNS configuration on GL.iNet Flint 2 (GL-MT6000), stock firmware 4.11.0 in router mode over verified SSH.",
+		MarkdownDescription: "Manage independent network, wireless, DHCP, DNS, firewall and WireGuard objects on GL.iNet Flint 2 (GL-MT6000), stock firmware 4.11.0 in router mode over verified SSH.",
 		Attributes: map[string]schema.Attribute{
 			"host":             schema.StringAttribute{Optional: true, MarkdownDescription: "Router hostname or IP address. Falls back to `GLINET_HOST`."},
 			"port":             schema.Int64Attribute{Optional: true, MarkdownDescription: "SSH port. Falls back to `GLINET_PORT`, then `22`."},
@@ -106,8 +106,6 @@ func (p *glinetProvider) Configure(ctx context.Context, req provider.ConfigureRe
 
 func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewWirelessSettingsResource,
-		NewConfigurationResource,
 		NewNetworkInterfaceResource,
 		NewNetworkBridgeResource,
 		NewEthernetPortResource,

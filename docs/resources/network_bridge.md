@@ -3,12 +3,12 @@
 page_title: "glinet_network_bridge Resource - glinet"
 subcategory: ""
 description: |-
-  Manage an OpenWrt bridge device and its port membership. The resource resolves a bridge by its name option, so stock bridges such as br-lan can be adopted without knowing their anonymous UCI indices.
+  Manage an OpenWrt bridge device and its port membership. The resource resolves a bridge by its name option, so stock bridges such as br-lan can be imported without knowing their anonymous UCI indices.
 ---
 
 # glinet_network_bridge (Resource)
 
-Manage an OpenWrt bridge device and its port membership. The resource resolves a bridge by its `name` option, so stock bridges such as `br-lan` can be adopted without knowing their anonymous UCI indices.
+Manage an OpenWrt bridge device and its port membership. The resource resolves a bridge by its `name` option, so stock bridges such as `br-lan` can be imported without knowing their anonymous UCI indices.
 
 
 

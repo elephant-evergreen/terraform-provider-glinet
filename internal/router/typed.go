@@ -75,7 +75,7 @@ func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bo
 // ApplySections writes the given sections as one recovery-protected UCI
 // transaction. The full managed configuration (all sections carrying
 // ManagedOption, plus the change set) is validated before mutation.
-func (c *Client) ApplySections(ctx context.Context, changes Configuration, keys, secrets map[string]string) error {
+func (c *Client) ApplySections(ctx context.Context, changes Configuration, secrets map[string]string) error {
 	for _, section := range changes {
 		if section.Absent {
 			continue
@@ -90,7 +90,7 @@ func (c *Client) ApplySections(ctx context.Context, changes Configuration, keys,
 	}
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, changes)
-	return c.writeConfiguration(ctx, changes, keys, secrets, full)
+	return c.writeConfiguration(ctx, changes, secrets, full)
 }
 
 // ForgetSection releases Terraform ownership while preserving the section.
@@ -102,7 +102,7 @@ func (c *Client) ForgetSection(ctx context.Context, selector Section) error {
 	}
 	selector.Options[ManagedOption] = "0"
 	selector.Absent = false
-	return c.ApplySections(ctx, Configuration{selector}, nil, nil)
+	return c.ApplySections(ctx, Configuration{selector}, nil)
 }
 
 func configurationFromManagedState(state uciState) Configuration {
@@ -183,43 +183,6 @@ func copyLists(lists map[string][]string) map[string][]string {
 	result := make(map[string][]string, len(lists))
 	for key, values := range lists {
 		result[key] = append([]string{}, values...)
-	}
-	return result
-}
-
-// MarkConfiguration adds the provider ownership marker to every non-absent
-// section. The legacy coordinated resource uses this to adopt all of its
-// sections atomically before typed resources take over.
-func MarkConfiguration(config Configuration) Configuration {
-	result := make(Configuration, 0, len(config))
-	for _, section := range config {
-		next := section
-		if !next.Absent {
-			next.Options = copyOptions(next.Options)
-			if next.Options == nil {
-				next.Options = map[string]string{}
-			}
-			next.Options[ManagedOption] = "1"
-		}
-		result = append(result, next)
-	}
-	return result
-}
-
-// StripManagedMarker removes the internal ownership marker before comparing
-// legacy state with the router or writing Terraform state.
-func StripManagedMarker(config Configuration) Configuration {
-	result := make(Configuration, 0, len(config))
-	for _, section := range config {
-		next := section
-		next.Options = copyOptions(section.Options)
-		if next.Options != nil {
-			delete(next.Options, ManagedOption)
-			if len(next.Options) == 0 {
-				next.Options = nil
-			}
-		}
-		result = append(result, next)
 	}
 	return result
 }

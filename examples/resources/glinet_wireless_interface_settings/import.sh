@@ -1,1 +1,0 @@
-terraform import glinet_wireless_interface_settings.guest_2g guest2g

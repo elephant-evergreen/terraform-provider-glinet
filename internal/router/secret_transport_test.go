@@ -17,15 +17,15 @@ func TestSecretTransportIsSeparateFromDesiredOptions(t *testing.T) {
 	if ValidSecretOptions(Configuration{}, secrets) {
 		t.Fatal("secret for an unmanaged section was accepted")
 	}
-	lua := configurationLua(config, true, nil, secrets)
+	lua := configurationLua(config, true, secrets)
 	if !strings.Contains(lua, "uci:set('network','wg0','private_key','private-key-value')") {
 		t.Fatal("secret was not written by the transaction")
 	}
-	stable := configurationStableReadScript(config, nil, secrets)
+	stable := configurationStableReadScript(config, secrets)
 	if !strings.Contains(stable, "preshared_key") && !strings.Contains(stable, "private_key-value") && !strings.Contains(stable, "secrets") {
 		t.Fatal("stable read did not include the secret check")
 	}
-	confirm := configurationConfirmScript("token", config, nil, secrets)
+	confirm := configurationConfirmScript("token", config, secrets)
 	if !strings.Contains(confirm, "network.wg0.private_key") {
 		t.Fatal("confirmation did not verify the secret")
 	}

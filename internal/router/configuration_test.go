@@ -36,12 +36,6 @@ func TestConfigurationValidation(t *testing.T) {
 			t.Fatalf("Accepted invalid configuration: %s", bad)
 		}
 	}
-	if ValidWirelessKeys(configurationFixture(), map[string]string{"missing": "example-password"}) {
-		t.Fatal("Key for unmanaged section accepted")
-	}
-	if !ValidWirelessKeys(configurationFixture(), map[string]string{"wifi2g": "example-password"}) {
-		t.Fatal("Valid write-only key rejected")
-	}
 }
 
 const (
@@ -97,14 +91,14 @@ func TestConfigurationAdoptionDoesNotWriteAndCancellationDoesNotArm(t *testing.T
 	config := configurationFixture()
 	remote := &configurationReader{config: config}
 	client := NewClient(remote)
-	if err := client.WriteConfiguration(context.Background(), config, nil); err != nil {
+	if err := client.writeConfiguration(context.Background(), config, nil, config); err != nil {
 		t.Fatal(err)
 	}
 	if remote.calls != 1 || strings.Contains(remote.script, "uci commit") {
 		t.Fatal("Matching configuration was mutated")
 	}
 	remote.err = context.Canceled
-	if err := client.WriteConfiguration(context.Background(), config, nil); !errors.Is(err, context.Canceled) {
+	if err := client.writeConfiguration(context.Background(), config, nil, config); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if strings.Contains(remote.script, "uci commit") {
@@ -115,7 +109,7 @@ func TestConfigurationAdoptionDoesNotWriteAndCancellationDoesNotArm(t *testing.T
 func TestConfigurationGeneratedScriptsAreShellSafe(t *testing.T) {
 	config := configurationFixture()
 	config[0].Options["ssid"] = "Example ' $(touch /tmp/glinet-should-not-exist)"
-	for _, script := range []string{configurationLua(config, false, nil), configurationApplyScript(config, map[string]string{"wifi2g": "example'password"}, "example-token", reloadPlan{Reboot: true, DNS: true, DHCP: true, Firewall: true}), configurationApplyScript(config, nil, "example-token", reloadPlan{DNS: true, DHCP: true, Firewall: true}), configurationConfirmScript("example-token", config, nil)} {
+	for _, script := range []string{configurationLua(config, false), configurationApplyScript(config, "example-token", reloadPlan{Reboot: true, DNS: true, DHCP: true, Firewall: true}, map[string]string{"wireless.wifi2g.key": "example'password"}), configurationApplyScript(config, "example-token", reloadPlan{DNS: true, DHCP: true, Firewall: true}), configurationConfirmScript("example-token", config)} {
 		cmd := exec.Command("/bin/sh", "-n")
 		cmd.Stdin = strings.NewReader(script)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -148,7 +142,7 @@ func TestPortMappingOnlyChangeSynchronizesRuntime(t *testing.T) {
 	before := Configuration{{Package: "eth_ports_config_map", Name: "lan2", Type: "port", Options: map[string]string{"pvid": "1"}}}
 	after := Configuration{{Package: "eth_ports_config_map", Name: "lan2", Type: "port", Options: map[string]string{"pvid": "11"}}}
 	remote := &configurationMutationRunner{current: before, wanted: after}
-	if err := NewClient(remote).WriteConfiguration(context.Background(), after, nil); err != nil {
+	if err := NewClient(remote).writeConfiguration(context.Background(), after, nil, after); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(remote.apply, "gl-vlan-port-map sync") || !strings.Contains(remote.apply, "reboot") {
@@ -181,7 +175,7 @@ func TestSSIDChangeReloadsOnlyWireless(t *testing.T) {
 	before := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Before"}}}
 	after := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "After"}}}
 	remote := &configurationMutationRunner{current: before, wanted: after}
-	if err := NewClient(remote).WriteConfiguration(context.Background(), after, nil); err != nil {
+	if err := NewClient(remote).writeConfiguration(context.Background(), after, nil, after); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(remote.apply, "wifi reload") || strings.Contains(remote.apply, "/etc/init.d/network reload") || strings.Contains(remote.apply, "module\\\":\\\"dns") {
@@ -194,11 +188,11 @@ func TestMissingWiFiRequiresExplicitCredentialRestoration(t *testing.T) {
 	actual := configurationFixture()
 	actual[0].Missing = true
 	remote := &configurationReader{config: actual}
-	err := NewClient(remote).WriteConfiguration(context.Background(), desired, nil)
+	err := NewClient(remote).writeConfiguration(context.Background(), desired, nil, desired)
 	if err == nil || !strings.Contains(err.Error(), "write-only key") || remote.calls != 1 {
 		t.Fatalf("Missing Wi-Fi was recreated without a key: %v", err)
 	}
-	script := configurationApplyScript(desired, nil, "token", reloadPlan{})
+	script := configurationApplyScript(desired, "token", reloadPlan{})
 	if !strings.Contains(script, " enable\nsync\ntransferred=1") || !strings.Contains(script, "touch started\n  sync\n") {
 		t.Fatal("Recovery was not persisted before activation and mutation")
 	}
@@ -216,7 +210,7 @@ func TestMissingAnonymousIdentityObservationRemainsReadable(t *testing.T) {
 	if _, err := DecodeConfiguration(configurationJSON(config)); err == nil {
 		t.Fatal("Invalid desired identity accepted")
 	}
-	script := configurationApplyScript(configurationFixture(), nil, "token", reloadPlan{})
+	script := configurationApplyScript(configurationFixture(), "token", reloadPlan{})
 	if !strings.Contains(script, "ln recover decision 2>/dev/null || true\nsync\ncase") {
 		t.Fatal("Rollback can run before the winning decision is persisted")
 	}

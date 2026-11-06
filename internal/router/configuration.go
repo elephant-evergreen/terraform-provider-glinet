@@ -109,7 +109,7 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 				return nil, errors.New("Wi-Fi SSIDs must contain 1–32 UTF-8 bytes and flags must be 0 or 1.")
 			}
 			if !allowedOptionsFor(s.Package, s.Type)[k] || (!observed && !validOption(s.Package, s.Type, k, v)) {
-				return nil, errors.New("Invalid or secret UCI option. Use wireless_keys_wo for Wi-Fi keys.")
+				return nil, errors.New("Invalid or secret UCI option. Use key_wo for Wi-Fi keys.")
 			}
 			if _, ok := s.Lists[k]; ok {
 				return nil, errors.New("An option cannot be both a scalar and a list.")
@@ -168,7 +168,7 @@ func luaQuote(value string) string {
 	return "'" + strings.NewReplacer("\\", "\\\\", "'", "\\'", "\n", "\\n", "\r", "\\r").Replace(value) + "'"
 }
 
-func configurationLua(config Configuration, write bool, keys map[string]string, secrets ...map[string]string) string {
+func configurationLua(config Configuration, write bool, secrets ...map[string]string) string {
 	type wireSection struct {
 		Section
 		CreateName string `json:"create_name,omitempty"`
@@ -183,12 +183,7 @@ func configurationLua(config Configuration, write bool, keys map[string]string, 
 		}
 	}
 	data, _ := json.Marshal(wire)
-	keyNames := map[string]bool{}
-	for name := range keys {
-		keyNames[name] = true
-	}
-	available, _ := json.Marshal(keyNames)
-	source := "local json=require('cjson')\nlocal uci=require('uci').cursor()\nlocal writing=" + fmt.Sprint(write) + "\nlocal spec=json.decode(" + luaQuote(string(data)) + ")\nlocal key_names=json.decode(" + luaQuote(string(available)) + ")\n" + `local result={}
+	source := "local json=require('cjson')\nlocal uci=require('uci').cursor()\nlocal writing=" + fmt.Sprint(write) + "\nlocal spec=json.decode(" + luaQuote(string(data)) + ")\n" + `local result={}
 local rule_order={}
 local rule_slots={}
 local resolved={}
@@ -213,7 +208,6 @@ for i,s in ipairs(spec) do
  seen[identity]=true
  resolved[i]=name
  local kind=uci:get(s.package,name)
- if writing and s.package=='wireless' and not s.absent and not kind and not key_names[s.name] then os.exit(65) end
  if s.package=='firewall' then if s.absent and kind then next_index=next_index-1 elseif not s.absent and not kind then next_index=next_index+1 end end
  if kind and kind~=s.type then os.exit(65) end
  for k,want in pairs(s.match or {}) do
@@ -261,9 +255,6 @@ for i,s in ipairs(spec) do
 	}
 	source += "end\n"
 	if write {
-		for name, value := range keys {
-			source += "assert(uci:get('wireless'," + luaQuote(name) + ")=='wifi-iface')\nassert(uci:set('wireless'," + luaQuote(name) + ",'key'," + luaQuote(value) + "))\n"
-		}
 		if len(secrets) > 0 {
 			for key, value := range secrets[0] {
 				parts := strings.SplitN(key, ".", 3)
@@ -306,26 +297,12 @@ func (c *Client) ReadConfiguration(ctx context.Context, config Configuration) (C
 
 func SameConfiguration(a, b Configuration) bool { return reflect.DeepEqual(a, b) }
 
-func ValidWirelessKeys(config Configuration, keys map[string]string) bool {
-	for name, key := range keys {
-		found := false
-		for _, s := range config {
-			if s.Package == "wireless" && s.Name == name && s.Type == "wifi-iface" && !s.Absent {
-				found = true
-			}
-		}
-		if !ValidSection(name) || !found || len(key) < 8 || len(key) > 63 || strings.ContainsFunc(key, func(r rune) bool { return r < 32 || r > 126 }) {
-			return false
-		}
-	}
-	return true
-}
-
 var secretOptions = map[string]map[string]bool{
-	"network.device":    nil,
-	"network.interface": {"private_key": true},
-	"network.wireguard": {"preshared_key": true},
-	"openvpn.openvpn":   {"auth_user_pass": true, "key": true},
+	"network.device":      nil,
+	"network.interface":   {"private_key": true},
+	"wireless.wifi-iface": {"key": true, "key1": true, "key2": true, "key3": true, "wpa_psk": true, "password": true, "psk": true},
+	"network.wireguard":   {"preshared_key": true},
+	"openvpn.openvpn":     {"auth_user_pass": true, "key": true},
 }
 
 func ValidSecretOptions(config Configuration, secrets map[string]string) bool {
@@ -368,39 +345,31 @@ func ValidSecretOptions(config Configuration, secrets map[string]string) bool {
 	return true
 }
 
-func (c *Client) WriteConfiguration(ctx context.Context, config Configuration, keys map[string]string) error {
-	return c.writeConfiguration(ctx, config, keys, nil, config)
-}
-
-func (c *Client) writeConfiguration(ctx context.Context, config Configuration, keys, secrets map[string]string, safetyConfig Configuration) error {
-	if !ValidWirelessKeys(config, keys) {
-		return errors.New("Wi-Fi keys must reference managed named wifi-iface sections and contain 8–63 printable ASCII characters.")
-	}
+func (c *Client) writeConfiguration(ctx context.Context, config Configuration, secrets map[string]string, safetyConfig Configuration) error {
 	if !ValidSecretOptions(config, secrets) {
 		return errors.New("Secret options must reference managed sections and supported secret names.")
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	actual, keysMatch, err := c.stableConfiguration(ctx, config, keys, secrets)
+	actual, secretsMatch, err := c.stableConfiguration(ctx, config, secrets)
 	if err != nil {
 		return err
 	}
 	if err := c.checkConfigurationSafety(ctx, safetyConfig); err != nil {
 		return err
 	}
-	if keysMatch {
-		keys = nil
+	if secretsMatch {
 		secrets = nil
 	}
 	for i, s := range config {
-		if s.Package == "wireless" && !s.Absent && actual[i].Missing && keys[s.Name] == "" {
+		if s.Package == "wireless" && !s.Absent && actual[i].Missing && secrets["wireless."+s.Name+".key"] == "" {
 			return errors.New("A missing Wi-Fi section requires its write-only key and a new key generation before it can be restored.")
 		}
 		if s.Package == "firewall" && s.Type == "rule" && s.Position == nil && s.Name != actual[i].Name {
 			return errors.New("Changing managed firewall rule order requires explicit positions for all managed rules.")
 		}
 	}
-	if SameConfiguration(actual, config) && len(keys) == 0 {
+	if SameConfiguration(actual, config) && len(secrets) == 0 {
 		return nil
 	}
 	tokenBytes := make([]byte, 16)
@@ -434,15 +403,15 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, k
 			plan.Firewall = true
 		}
 	}
-	if len(keys) > 0 {
-		plan.Wireless = true
-	}
 	for key := range secrets {
-		if strings.HasPrefix(key, "network.") {
+		switch {
+		case strings.HasPrefix(key, "wireless."):
+			plan.Wireless = true
+		case strings.HasPrefix(key, "network."):
 			plan.Reboot = true
 		}
 	}
-	_, err = c.runner.Run(ctx, configurationApplyScript(config, keys, token, plan, secrets))
+	_, err = c.runner.Run(ctx, configurationApplyScript(config, token, plan, secrets))
 	var exit *ExitError
 	if errors.As(err, &exit) {
 		return operationError(err)
@@ -455,7 +424,7 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, k
 			if runtimeErr := c.verifyRuntimeConfiguration(wait, config); runtimeErr != nil {
 				return runtimeErr
 			}
-			_, confirmErr := c.runner.Run(wait, configurationConfirmScript(token, config, keys, secrets))
+			_, confirmErr := c.runner.Run(wait, configurationConfirmScript(token, config, secrets))
 			if confirmErr == nil {
 				return nil
 			}
@@ -484,8 +453,8 @@ func sameSectionExceptManagedMarker(a, b Section) bool {
 	return reflect.DeepEqual(left, right)
 }
 
-func (c *Client) stableConfiguration(ctx context.Context, config Configuration, keys map[string]string, secrets ...map[string]string) (Configuration, bool, error) {
-	output, err := c.runner.Run(ctx, configurationStableReadScript(config, keys, secrets...))
+func (c *Client) stableConfiguration(ctx context.Context, config Configuration, secrets ...map[string]string) (Configuration, bool, error) {
+	output, err := c.runner.Run(ctx, configurationStableReadScript(config, secrets...))
 	if err != nil {
 		return nil, false, operationError(err)
 	}

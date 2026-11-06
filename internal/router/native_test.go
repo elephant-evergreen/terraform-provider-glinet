@@ -55,7 +55,7 @@ func TestNativeUCIFixture(t *testing.T) {
 	}
 	read := func(config Configuration) Configuration {
 		t.Helper()
-		output, err := transport.Run(ctx, redirect(configurationLua(config, false, nil)))
+		output, err := transport.Run(ctx, redirect(configurationLua(config, false)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +78,11 @@ func TestNativeUCIFixture(t *testing.T) {
 	}
 	write := func(config Configuration, keys map[string]string) {
 		t.Helper()
-		if _, err := transport.Run(ctx, redirect(configurationLua(config, true, keys))); err != nil {
+		secrets := map[string]string{}
+		for name, value := range keys {
+			secrets["wireless."+name+".key"] = value
+		}
+		if _, err := transport.Run(ctx, redirect(configurationLua(config, true, secrets))); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -119,7 +123,7 @@ func TestNativeUCIFixture(t *testing.T) {
 	copySection := anonymous[0]
 	copySection.Name = "@forwarding[1]"
 	duplicate = append(duplicate, copySection)
-	_, err = transport.Run(ctx, redirect(configurationLua(duplicate, true, nil)))
+	_, err = transport.Run(ctx, redirect(configurationLua(duplicate, true)))
 	var status *ExitError
 	if !errors.As(err, &status) || status.Code != 65 {
 		t.Fatal("Duplicate physical identities were accepted")
@@ -144,7 +148,7 @@ func TestNativeUCIFixture(t *testing.T) {
 		t.Fatal("Native AP setting handling failed")
 	}
 	missingWiFi := Configuration{{Package: "wireless", Name: "missing_ap", Type: "wifi-iface", Options: map[string]string{"mode": "ap", "encryption": "psk2", "ssid": "Example Restored"}}}
-	_, err = transport.Run(ctx, redirect(configurationLua(missingWiFi, true, nil)))
+	_, err = transport.Run(ctx, redirect(configurationLua(missingWiFi, true)))
 	if !errors.As(err, &status) || status.Code != 65 || !read(missingWiFi)[0].Missing {
 		t.Fatal("Missing Wi-Fi was created without credential restoration")
 	}

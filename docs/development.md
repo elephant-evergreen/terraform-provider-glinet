@@ -9,7 +9,7 @@ mise run docs
 mkdir -p work/bin work/example
 mise exec -- go build -o work/bin/terraform-provider-glinet .
 cp examples/provider/provider.tf work/example/
-cp examples/resources/glinet_wireless_interface_settings/resource.tf work/example/
+cp examples/resources/glinet_wireless_interface/resource.tf work/example/
 ```
 
 Create a local Terraform CLI configuration that points to this build:
@@ -38,7 +38,7 @@ Terraform's development override uses the local binary. With this standalone exa
 
 After an apply, confirm client connectivity independently. Do not edit the router through another tool during an apply. Manage each UCI section with one Terraform resource only. An unconfirmed change keeps its recovery snapshot and lock until recovery finishes; inspect router connectivity before retrying. Recovery snapshots are temporary, contain the previous wireless configuration, and stay on the router.
 
-Destroy releases Terraform management and does not restore earlier settings or delete the Wi-Fi interface. Import an existing section using the example in the [resource reference](resources/wireless_interface_settings.md).
+Destroy releases Terraform management and does not restore earlier settings or delete the Wi-Fi interface. Import an existing section using the example in the [wireless interface reference](resources/wireless_interface.md).
 
 For coordinated network configuration, use the [configuration guide](configuration.md) and its synthetic example instead. Keep section ownership separate from the existing-AP resource.
 

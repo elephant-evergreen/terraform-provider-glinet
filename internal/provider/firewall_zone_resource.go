@@ -18,7 +18,7 @@ import (
 func NewFirewallZoneResource() resource.Resource {
 	return newTypedResource(typedSpec{
 		TypeName:    "firewall_zone",
-		Description: "Manage one OpenWrt firewall zone. Zones are resolved by their `name` option, so stock anonymous zones can be adopted safely. Destroy releases ownership by default.",
+		Description: "Manage one OpenWrt firewall zone. Zones are resolved by their `name` option, so stock anonymous zones can be imported safely. Destroy releases ownership by default.",
 		Attributes: map[string]schema.Attribute{
 			"name":     schema.StringAttribute{Required: true, MarkdownDescription: "Zone name, such as `lan` or `wan`.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"networks": schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Interfaces classified into this zone."},

@@ -3,12 +3,12 @@
 page_title: "glinet_firewall_zone Resource - glinet"
 subcategory: ""
 description: |-
-  Manage one OpenWrt firewall zone. Zones are resolved by their name option, so stock anonymous zones can be adopted safely. Destroy releases ownership by default.
+  Manage one OpenWrt firewall zone. Zones are resolved by their name option, so stock anonymous zones can be imported safely. Destroy releases ownership by default.
 ---
 
 # glinet_firewall_zone (Resource)
 
-Manage one OpenWrt firewall zone. Zones are resolved by their `name` option, so stock anonymous zones can be adopted safely. Destroy releases ownership by default.
+Manage one OpenWrt firewall zone. Zones are resolved by their `name` option, so stock anonymous zones can be imported safely. Destroy releases ownership by default.
 
 
 
