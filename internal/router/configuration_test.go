@@ -44,6 +44,36 @@ func TestConfigurationValidation(t *testing.T) {
 	}
 }
 
+const (
+	safetyStateMarker   = "GLINET_SAFETY_STATE"
+	safetyEnvMarker     = "GLINET_SAFETY_ENV"
+	safetyRuntimeMarker = "GLINET_SAFETY_RUNTIME"
+)
+
+func safetyStateFixture() []byte {
+	return []byte(`{"network":[],"wireless":[],"dhcp":[],"firewall":[],"gl-dns-v2":[],"eth_ports_config_map":[]}`)
+}
+
+func safetyEnvironmentFixture() []byte {
+	return []byte("ipv6_enabled=0\nipv6_forwarding=0\n@@addresses@@\n\n@@routes@@\n\n@@upnp@@\n0\n\n@@adguard@@\n0\n0\n@@leases@@\n")
+}
+
+func safetyRuntimeFixture() []byte {
+	return []byte("@@generated@@\niptables -t filter -P INPUT ACCEPT\niptables -t filter -P FORWARD DROP\niptables -t filter -N reject\niptables -t filter -A FORWARD -j reject\niptables -t filter -A reject -j REJECT\n@@running@@\n*filter\n:INPUT ACCEPT [0:0]\n:FORWARD DROP [0:0]\n:reject - [0:0]\n-A FORWARD -j reject\n-A reject -j REJECT\nCOMMIT\n")
+}
+
+func safetyTestResponse(script string) ([]byte, bool) {
+	switch {
+	case strings.Contains(script, safetyStateMarker):
+		return safetyStateFixture(), true
+	case strings.Contains(script, safetyEnvMarker):
+		return safetyEnvironmentFixture(), true
+	case strings.Contains(script, safetyRuntimeMarker):
+		return safetyRuntimeFixture(), true
+	}
+	return nil, false
+}
+
 type configurationReader struct {
 	config Configuration
 	calls  int
@@ -52,6 +82,9 @@ type configurationReader struct {
 }
 
 func (r *configurationReader) Run(_ context.Context, script string) ([]byte, error) {
+	if data, ok := safetyTestResponse(script); ok {
+		return data, nil
+	}
 	r.calls++
 	r.script = script
 	if r.err != nil {
@@ -99,6 +132,9 @@ type configurationMutationRunner struct {
 }
 
 func (r *configurationMutationRunner) Run(_ context.Context, script string) ([]byte, error) {
+	if data, ok := safetyTestResponse(script); ok {
+		return data, nil
+	}
 	if strings.Contains(script, "io.write(json.encode(result))") || strings.Contains(script, "keys_match") {
 		return configurationTestResponse(r.current, script)
 	}

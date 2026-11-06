@@ -6,6 +6,8 @@ SSH is the transport because the supported stock firmware exposes SSH and UCI bu
 
 Both resources use one persistent router worker. It snapshots all six configuration packages, synchronizes recovery preparation before activation, serializes mutations and restoration, and arbitrates confirmation versus recovery through an atomic durable decision. Network and wireless topology changes reboot; existing AP settings reload Wi-Fi. An init service resumes recovery or cleanup after reboot. Nonce-bound locks and boot-specific readiness reject stale participants. Small nonsecret terminal-outcome records make confirmation retryable after a lost SSH response; a rollback never acknowledges a successful apply. See the [configuration guide](configuration.md) for the recovery boundary and limitations.
 
+Before mutation, the coordinated resource checks bridge port ownership, unmanaged Wi-Fi/zones/forwardings/redirects/ACCEPT rules, DHCP reservations, the private LAN address, IPv6, UPnP, stock include hashes, and stock DNS provider metadata. It also compares the generated IPv4 firewall with the running `iptables-save` during refresh and before confirmation. These checks stop on conflicts instead of overwriting policy that Terraform does not own.
+
 Wi-Fi keys enter the coordinated resource only through sensitive write-only arguments and an explicit generation. Refresh does not read keys or complete exports into Terraform. Private snapshots and requests remain on the router until cleanup. Diagnostics discard remote stderr and rejected-command output. Host-key verification cannot be disabled, and SSH credentials are read from files rather than Terraform state.
 
 ## Selected dependencies

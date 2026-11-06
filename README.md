@@ -8,7 +8,7 @@ Initial development targets the Flint 2 (GL-MT6000) with firmware 4.11.0 in rout
 
 This project is in initial development. No provider release is available. Hardware verification status and outstanding release requirements are documented in the pull request. The intended Terraform source address is `elephant-evergreen/glinet`.
 
-The [`glinet_wireless_interface_settings` resource](docs/resources/wireless_interface_settings.md) manages an existing named OpenWrt `wifi-iface` section. Removing this resource from Terraform leaves the Wi-Fi interface and its settings intact. For coordinated changes, use [`glinet_uci_configuration`](docs/resources/uci_configuration.md). It supports named section creation, selected anonymous sections, firewall rule ordering, and write-only Wi-Fi keys.
+The [`glinet_wireless_interface_settings` resource](docs/resources/wireless_interface_settings.md) manages an existing named OpenWrt `wifi-iface` section. Removing this resource from Terraform leaves the Wi-Fi interface and its settings intact. For coordinated changes, use [`glinet_uci_configuration`](docs/resources/uci_configuration.md). It supports named section creation, selected anonymous sections, firewall rule ordering, write-only Wi-Fi keys, and preflight checks for bridge ports, unmanaged policy conflicts, DHCP reservations, IPv6/UPnP state, stock includes, and the running firewall.
 
 ## Try the development build
 
