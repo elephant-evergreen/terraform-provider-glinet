@@ -1,6 +1,6 @@
 # Design and dependencies
 
-The provider offers an existing-AP settings resource and one coordinated UCI configuration resource per router. The latter manages selected nonsecret network, wireless, DHCP, firewall, stock DNS and Ethernet-port settings together. Omitted options remain outside its ownership; explicit absence removes a named section. Destroy forgets management. Anonymous members resolve by type and unique match, while explicit firewall positions preserve policy relative to unmanaged rules.
+The supported API is a typed resource set: one resource per network interface, bridge, Ethernet port, Wi-Fi interface, DHCP pool/reservation, stock DNS singleton, dnsmasq singleton, firewall zone/forwarding/rule/redirect, plus a read-only system data source. Each resource maps to a UCI object, uses a stable identity for import, and owns one recovery-protected transaction. A `home_iac_owner=1` marker written in the same transaction lets the preflight checks distinguish Terraform-managed sections from firmware sections. The legacy `glinet_uci_configuration` resource remains deprecated for migration; its JSON API is not the target design.
 
 SSH is the transport because the supported stock firmware exposes SSH and UCI but the capability probe found no uci or session ubus objects. The upstream rpcd apply/confirm transaction cannot be assumed available. Native libuci Lua APIs own section lookup, option/list mutation and ordering rather than a separate UCI implementation.
 

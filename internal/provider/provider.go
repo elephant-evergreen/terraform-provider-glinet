@@ -105,7 +105,24 @@ func (p *glinetProvider) Configure(ctx context.Context, req provider.ConfigureRe
 }
 
 func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
-	return []func() resource.Resource{NewWirelessSettingsResource, NewConfigurationResource}
+	return []func() resource.Resource{
+		NewWirelessSettingsResource,
+		NewConfigurationResource,
+		NewNetworkInterfaceResource,
+		NewNetworkBridgeResource,
+		NewEthernetPortResource,
+		NewWirelessInterfaceResource,
+		NewDHCPPoolResource,
+		NewDHCPReservationResource,
+		NewDNSResource,
+		NewDNSMasqResource,
+		NewFirewallZoneResource,
+		NewFirewallForwardingResource,
+		NewFirewallRuleResource,
+		NewFirewallRedirectResource,
+	}
 }
 
-func (p *glinetProvider) DataSources(context.Context) []func() datasource.DataSource { return nil }
+func (p *glinetProvider) DataSources(context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{NewSystemDataSource}
+}

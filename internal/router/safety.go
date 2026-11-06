@@ -519,7 +519,10 @@ func checkTopologyOwnership(config Configuration, state uciState) error {
 		}
 		switch section.Type {
 		case "redirect":
-			return errors.New("An enabled port redirect exists. Destination NAT cannot be combined with this firewall policy.")
+			if managedFirewallSection(config, section) {
+				continue
+			}
+			return errors.New("An unmanaged enabled port redirect exists. Resolve it before applying.")
 		case "forwarding":
 			if managedFirewallSection(config, section) {
 				continue
