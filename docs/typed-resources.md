@@ -65,9 +65,32 @@ Reads never request secret options from UCI. The existing encrypted backup and r
 
 The old resource's destroy behavior remains "forget"; it never deletes router settings.
 
-## VPN and future domains
+## VPN specification (not shipped)
 
-WireGuard and OpenVPN use the same object model: one resource per interface/peer/client, write-only secrets, and the same transaction engine. They are specified but not shipped in this change; do not manage them with Python or shell fallbacks. When implemented, they must add their options to the UCI allowlist, secret transport, schema tests, fixture protocol tests, and generated documentation before being marked supported.
+WireGuard and OpenVPN are the next resource family. They are specified here so implementations stay inside the provider instead of falling back to Python or shell.
+
+| Planned resource | UCI object | Identity / import ID | Secrets |
+| --- | --- | --- | --- |
+| `glinet_wireguard_interface` | `network` interface with `proto=wireguard` | interface name (`wg0`) | `private_key_wo` |
+| `glinet_wireguard_peer` | `network` `wireguard` peer | `interface:public_key` | `preshared_key_wo` |
+| `glinet_openvpn_client` | `openvpn` client section | section name | `private_key_wo`, `auth_password_wo` |
+
+Planned attributes:
+
+- WireGuard interface: `name`, `addresses` (set of CIDRs), `listen_port`, `mtu`, `fwmark`, `no_host_route`, `enabled`, `private_key_wo`, `private_key_version`.
+- WireGuard peer: `interface`, `public_key`, `allowed_ips`, `endpoint_host`, `endpoint_port`, `persistent_keepalive`, `route_allowed_ips`, `description`, `preshared_key_wo`, `preshared_key_version`.
+- OpenVPN client: `section`, `config`, `dev`, `proto`, `remote_host`, `remote_port`, `auth_user`, `auth_password_wo`, `private_key_wo`, `ca_file`, `cert_file`, `enabled`.
+
+Implementation requirements before these resources are marked supported:
+
+1. Add their nonsecret options and section types to the UCI allowlist.
+2. Generalise write-only secret transport from wireless keys to arbitrary `package.section.option` values, with checks in stable read, apply, and confirmation.
+3. Add mapper, schema, import, drift, delete, and fixture protocol tests.
+4. Extend the transaction reload plan (network reload/reboot) and the full managed-config safety checks.
+5. Generate resource documentation and add examples.
+6. Verify on physical hardware; until then, mark the resources as unreleased/experimental and do not claim hardware support.
+
+Do not manage VPN with the deprecated JSON resource or external scripts in a new configuration. The JSON resource is retained only for migration and compatibility.
 
 ## Hardware status
 
