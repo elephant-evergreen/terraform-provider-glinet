@@ -23,39 +23,35 @@ func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bo
 	if err != nil {
 		return Section{}, false, err
 	}
-	rulePosition := 0
+	position := 0
 	for _, actual := range state[selector.Package] {
-		if actual.Type != selector.Type {
-			if selector.Package == "firewall" && selector.Type == "rule" && actual.Type == "rule" {
-				rulePosition++
-			}
-			continue
-		}
 		matched := false
-		switch {
-		case selector.Name != "" && !strings.HasPrefix(selector.Name, "@"):
-			matched = actual.Name == selector.Name
-		case len(selector.Match) > 0:
-			matched = true
-			for key, value := range selector.Match {
-				if actual.Options[key] != value {
-					matched = false
-					break
+		if actual.Type == selector.Type {
+			switch {
+			case selector.Name != "" && !strings.HasPrefix(selector.Name, "@"):
+				matched = actual.Name == selector.Name
+			case len(selector.Match) > 0:
+				matched = true
+				for key, value := range selector.Match {
+					if actual.Options[key] != value {
+						matched = false
+						break
+					}
 				}
+			default:
+				matched = actual.Name == selector.Name
 			}
-		default:
-			matched = actual.Name == selector.Name
 		}
 		if matched {
 			result := Section{Package: selector.Package, Name: actual.Name, Type: actual.Type, Options: copyOptions(actual.Options), Lists: copyLists(actual.Lists)}
 			if selector.Package == "firewall" && selector.Type == "rule" {
-				position := rulePosition
-				result.Position = &position
+				value := position
+				result.Position = &value
 			}
 			return result, true, nil
 		}
-		if selector.Package == "firewall" && selector.Type == "rule" && actual.Type == "rule" {
-			rulePosition++
+		if selector.Package == "firewall" {
+			position++
 		}
 	}
 	return Section{}, false, nil
