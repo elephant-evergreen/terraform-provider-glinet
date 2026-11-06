@@ -462,7 +462,7 @@ func checkTopologyOwnership(config Configuration, state uciState) error {
 		}
 	}
 	for _, section := range state["wireless"] {
-		if section.Type != "wifi-iface" || managedWirelessSection(config, section) || truthy(section.Options["disabled"]) {
+		if section.Type != "wifi-iface" || managedWirelessSection(config, section) || wirelessDisabled(section) {
 			continue
 		}
 		if ifname := section.Options["ifname"]; ifname != "" && managedIfnames[ifname] {
@@ -487,7 +487,7 @@ func checkTopologyOwnership(config Configuration, state uciState) error {
 	}
 	zoneNames := map[string]int{}
 	for _, section := range state["firewall"] {
-		if section.Type != "zone" || truthy(section.Options["disabled"]) || section.Options["family"] == "ipv6" {
+		if section.Type != "zone" || firewallDisabled(section) || section.Options["family"] == "ipv6" {
 			continue
 		}
 		name := section.Options["name"]
@@ -516,7 +516,7 @@ func checkTopologyOwnership(config Configuration, state uciState) error {
 		}
 	}
 	for _, section := range state["firewall"] {
-		if truthy(section.Options["disabled"]) || section.Options["family"] == "ipv6" {
+		if firewallDisabled(section) || section.Options["family"] == "ipv6" {
 			continue
 		}
 		switch section.Type {
@@ -694,7 +694,7 @@ var stockFirewallIncludes = map[string]bool{
 
 func checkIncludes(ctx context.Context, client *Client, state uciState) error {
 	for _, section := range state["firewall"] {
-		if section.Type != "include" || section.Options["enabled"] == "0" || section.Options["enabled"] == "false" {
+		if section.Type != "include" || firewallDisabled(section) {
 			continue
 		}
 		path := section.Options["path"]
@@ -794,8 +794,20 @@ func (c *Client) verifyRuntimeFirewall(ctx context.Context) error {
 	return nil
 }
 
-func truthy(value string) bool {
-	return value == "1" || value == "true" || value == "yes" || value == "on"
+func wirelessDisabled(section uciSection) bool {
+	switch strings.ToLower(section.Options["disabled"]) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+func firewallDisabled(section uciSection) bool {
+	switch strings.ToLower(section.Options["enabled"]) {
+	case "0", "false", "no", "off":
+		return true
+	}
+	return false
 }
 
 func stringSet(values []string) map[string]bool {
