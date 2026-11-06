@@ -23,8 +23,12 @@ func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bo
 	if err != nil {
 		return Section{}, false, err
 	}
+	rulePosition := 0
 	for _, actual := range state[selector.Package] {
 		if actual.Type != selector.Type {
+			if selector.Package == "firewall" && selector.Type == "rule" && actual.Type == "rule" {
+				rulePosition++
+			}
 			continue
 		}
 		matched := false
@@ -43,7 +47,15 @@ func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bo
 			matched = actual.Name == selector.Name
 		}
 		if matched {
-			return Section{Package: selector.Package, Name: actual.Name, Type: actual.Type, Options: copyOptions(actual.Options), Lists: copyLists(actual.Lists)}, true, nil
+			result := Section{Package: selector.Package, Name: actual.Name, Type: actual.Type, Options: copyOptions(actual.Options), Lists: copyLists(actual.Lists)}
+			if selector.Package == "firewall" && selector.Type == "rule" {
+				position := rulePosition
+				result.Position = &position
+			}
+			return result, true, nil
+		}
+		if selector.Package == "firewall" && selector.Type == "rule" && actual.Type == "rule" {
+			rulePosition++
 		}
 	}
 	return Section{}, false, nil
