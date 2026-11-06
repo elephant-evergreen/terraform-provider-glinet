@@ -162,12 +162,15 @@ func TestDHCPReservationsRejectConflicts(t *testing.T) {
 	if err := checkDHCPReservations(config, state, ""); err != nil {
 		t.Fatal(err)
 	}
+	inside := withHost(config, "inside", "192.168.11.120", "02:00:00:00:00:03")
+	if err := checkDHCPReservations(inside, state, ""); err != nil {
+		t.Fatalf("A static reservation inside the DHCP pool must be allowed: %v", err)
+	}
 	for name, test := range map[string]struct {
 		config Configuration
 		state  uciState
 		leases string
 	}{
-		"inside pool":    {config: withHost(config, "inside", "192.168.11.120", "02:00:00:00:00:03"), state: state},
 		"existing lease": {config: config, state: state, leases: "9999999999 02:00:00:00:00:99 192.168.11.10 host *"},
 		"existing host":  {config: config, state: uciState{"dhcp": {{Name: "stock", Type: "host", Options: map[string]string{"ip": "192.168.11.10", "mac": "02:00:00:00:00:99"}}}}, leases: ""},
 		"duplicate":      {config: withHost(config, "duplicate", "192.168.11.10", "02:00:00:00:00:04"), state: state},

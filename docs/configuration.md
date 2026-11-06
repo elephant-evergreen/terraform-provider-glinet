@@ -19,7 +19,7 @@ Before changing a coordinated configuration, the provider compares the declared 
 
 - a managed bridge would add or remove a port without moving that port between managed bridges;
 - an enabled unmanaged Wi-Fi, zone, forwarding, redirect, or ACCEPT rule can join, classify, or bypass a managed network, the NAS, a management port, or the WAN private-subnet policy;
-- a managed DHCP reservation conflicts with an existing reservation, an active lease, another managed reservation, or its DHCP pool;
+- a managed DHCP reservation conflicts with an existing reservation, an active lease, or another managed reservation;
 - the private `lan` interface would change its address or netmask;
 - IPv6 is enabled or active, UPnP/NAT-PMP is enabled or `miniupnpd` is running, an enabled firewall include is not a stock script with the ROM hash, or the stock DNS provider does not offer the requested endpoint;
 - AdGuard Home owns DNS while the configuration declares DNS ownership.

@@ -937,16 +937,6 @@ func checkDHCPReservations(config Configuration, state uciState, leases string) 
 		if ip == prefix.Addr() || ip == prefixBroadcast(prefix) {
 			return fmt.Errorf("DHCP reservation %s uses a network or broadcast address.", section.Name)
 		}
-		if limit, ok := pools[interfaceName]; ok {
-			start := prefix.Addr().As4()
-			value := uint32(start[0])<<24 | uint32(start[1])<<16 | uint32(start[2])<<8 | uint32(start[3])
-			first := netip.AddrFrom4([4]byte{byte((value + uint32(limit.start)) >> 24), byte((value + uint32(limit.start)) >> 16), byte((value + uint32(limit.start)) >> 8), byte(value + uint32(limit.start))})
-			lastValue := value + uint32(limit.start) + uint32(limit.limit) - 1
-			last := netip.AddrFrom4([4]byte{byte(lastValue >> 24), byte(lastValue >> 16), byte(lastValue >> 8), byte(lastValue)})
-			if ip.Compare(first) >= 0 && ip.Compare(last) <= 0 {
-				return fmt.Errorf("DHCP reservation %s is inside the DHCP pool for %s.", section.Name, interfaceName)
-			}
-		}
 		for name, existing := range reservations {
 			if existing.ip == ip || existing.mac == mac {
 				return fmt.Errorf("DHCP reservations %s and %s reuse the same address or MAC.", name, section.Name)
