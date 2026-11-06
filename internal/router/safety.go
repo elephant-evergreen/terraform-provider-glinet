@@ -182,7 +182,7 @@ func after(source, marker string) string {
 }
 
 func (c *Client) checkConfigurationSafety(ctx context.Context, config Configuration) error {
-	needsState := hasPackage(config, "network") || hasPackage(config, "firewall") || hasPackage(config, "dhcp") || hasPackage(config, "eth_ports_config_map")
+	needsState := hasPackage(config, "network") || hasPackage(config, "wireless") || hasPackage(config, "firewall") || hasPackage(config, "dhcp") || hasPackage(config, "eth_ports_config_map")
 	var state uciState
 	if needsState {
 		var err error

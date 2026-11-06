@@ -35,7 +35,7 @@ func NewDNSResource() resource.Resource {
 			return router.Section{
 				Package: "gl-dns-v2", Type: "dns", Name: "@dns[0]",
 				Options: map[string]string{
-					"dns_provider": stringOf(values, "dns_provider"), "proto": stringOf(values, "protocol"), "mode": stringOf(values, "mode"),
+					"provider": stringOf(values, "dns_provider"), "proto": stringOf(values, "protocol"), "mode": stringOf(values, "mode"),
 					"manual_enable": boolString(boolOf(values, "manual_enable", true)), "manual_type": stringOf(values, "manual_type"),
 					"manual_local_dns": boolString(boolOf(values, "manual_local_dns", true)),
 					"override_vpn":     boolString(boolOf(values, "override_vpn", false)), "force_dns": boolString(boolOf(values, "force_dns", false)),
