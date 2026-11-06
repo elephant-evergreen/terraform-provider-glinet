@@ -102,6 +102,7 @@ func (p *glinetProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		return
 	}
 	resp.ResourceData = client
+	resp.DataSourceData = client
 }
 
 func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {

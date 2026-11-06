@@ -54,7 +54,7 @@ func configurationOutcome(token, outcome string) string {
 
 func configurationCleanup(token, outcome string) string {
 	retired := transactionDir + "-retired-" + token
-	return "test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || exit 75\n" + configurationOutcome(token, outcome) + "if [ -d " + quote(transactionDir) + " ]; then test \"$(cat " + quote(transactionDir+"/token") + ")\" = " + quote(token) + " || exit 75; mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrm -f " + quote(configurationLock+"/token") + "\nrmdir " + quote(configurationLock) + "\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\n"
+	return "if [ -e " + quote(configurationLock+"/token") + " ]; then test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || exit 75; fi\n" + configurationOutcome(token, outcome) + "if [ -d " + quote(transactionDir) + " ]; then test \"$(cat " + quote(transactionDir+"/token") + ")\" = " + quote(token) + " || exit 75; mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrm -f " + quote(configurationLock+"/token") + "\nrmdir " + quote(configurationLock) + " 2>/dev/null || true\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\n"
 }
 
 func configurationStableReadScript(config Configuration, secrets ...map[string]string) string {
@@ -117,7 +117,12 @@ case "$(cat decision)" in
  confirm)
  ` + configurationCleanup(token, "confirm") + ` ;;
  rollback)
- while ! /bin/sh restore; do sleep 5; done
+ attempts=0
+ while ! /bin/sh restore; do
+  attempts=$((attempts+1))
+  if [ "$attempts" -ge 60 ]; then printf '%s' "$attempts" > stuck; sync; exit 75; fi
+  sleep 5
+ done
  ;;
  *) exit 75 ;;
 esac
