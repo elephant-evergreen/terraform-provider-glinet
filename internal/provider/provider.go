@@ -16,10 +16,11 @@ import (
 
 type glinetProvider struct{ version string }
 type providerModel struct {
-	Host       types.String `tfsdk:"host"`
-	Port       types.Int64  `tfsdk:"port"`
-	PrivateKey types.String `tfsdk:"private_key_file"`
-	KnownHosts types.String `tfsdk:"known_hosts_file"`
+	Host            types.String `tfsdk:"host"`
+	Port            types.Int64  `tfsdk:"port"`
+	PrivateKey      types.String `tfsdk:"private_key_file"`
+	KnownHosts      types.String `tfsdk:"known_hosts_file"`
+	BackupDirectory types.String `tfsdk:"backup_directory"`
 }
 
 var _ provider.Provider = &glinetProvider{}
@@ -40,6 +41,7 @@ func (p *glinetProvider) Schema(_ context.Context, _ provider.SchemaRequest, res
 			"port":             schema.Int64Attribute{Optional: true, MarkdownDescription: "SSH port. Falls back to `GLINET_PORT`, then `22`."},
 			"private_key_file": schema.StringAttribute{Optional: true, MarkdownDescription: "Path to an unencrypted OpenSSH private key for root. Falls back to `GLINET_PRIVATE_KEY_FILE`. Key contents are not part of the provider schema."},
 			"known_hosts_file": schema.StringAttribute{Optional: true, MarkdownDescription: "Path to a known_hosts file containing the verified router host key. Falls back to `GLINET_KNOWN_HOSTS_FILE`. Host-key verification is always required."},
+			"backup_directory": schema.StringAttribute{Optional: true, MarkdownDescription: "Directory for verified age-encrypted full router configuration backups. Falls back to `GLINET_BACKUP_DIRECTORY`, then the operating system user configuration directory under `glinet/backups`. The SSH private key decrypts these backups. A backup is required before the first mutation of each apply; backup failure prevents all changes."},
 		},
 	}
 }
@@ -50,7 +52,7 @@ func (p *glinetProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	values := map[string]types.String{"host": config.Host, "private_key_file": config.PrivateKey, "known_hosts_file": config.KnownHosts}
+	values := map[string]types.String{"host": config.Host, "private_key_file": config.PrivateKey, "known_hosts_file": config.KnownHosts, "backup_directory": config.BackupDirectory}
 	if config.Port.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(path.Root("port"), "Unknown SSH port", "port must be known before apply. Set a static value or GLINET_PORT.")
 	}
@@ -66,9 +68,9 @@ func (p *glinetProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	for name, value := range values {
 		resolved[name] = value.ValueString()
 		if value.IsNull() {
-			resolved[name] = os.Getenv(map[string]string{"host": "GLINET_HOST", "port": "GLINET_PORT", "private_key_file": "GLINET_PRIVATE_KEY_FILE", "known_hosts_file": "GLINET_KNOWN_HOSTS_FILE"}[name])
+			resolved[name] = os.Getenv(map[string]string{"host": "GLINET_HOST", "private_key_file": "GLINET_PRIVATE_KEY_FILE", "known_hosts_file": "GLINET_KNOWN_HOSTS_FILE", "backup_directory": "GLINET_BACKUP_DIRECTORY"}[name])
 		}
-		if resolved[name] == "" {
+		if resolved[name] == "" && name != "backup_directory" {
 			resp.Diagnostics.AddAttributeError(path.Root(name), "Missing connection setting", "Set "+name+" or its documented GLINET environment variable. Explicit empty values are not replaced by environment variables.")
 		}
 	}
@@ -96,7 +98,12 @@ func (p *glinetProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		resp.Diagnostics.AddError("Cannot configure SSH", err.Error())
 		return
 	}
-	client := router.NewClient(transport)
+	protection, err := router.NewProtection(resolved["backup_directory"], resolved["private_key_file"], resolved["host"], int(port))
+	if err != nil {
+		resp.Diagnostics.AddError("Cannot configure recovery backups", err.Error())
+		return
+	}
+	client := router.NewClient(transport, protection)
 	if err := client.Verify(ctx); err != nil {
 		resp.Diagnostics.AddError("Cannot verify router", err.Error())
 		return

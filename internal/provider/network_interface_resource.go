@@ -44,13 +44,12 @@ func typedNetworkInterfaceSpec() typedSpec {
 			if name == "" {
 				return router.Section{}, fmt.Errorf("name is required")
 			}
-			options := map[string]string{"proto": stringOf(values, "protocol")}
+			options := map[string]string{"proto": stringOf(values, "protocol"), "ipaddr": "", "netmask": "", "vlan_id": "", "force_link": boolString(boolOf(values, "force_link", false)), "delegate": boolString(boolOf(values, "delegate", false))}
 			if options["proto"] == "" {
 				options["proto"] = "static"
 			}
-			if device := stringOf(values, "device"); device != "" {
-				options["device"] = device
-			}
+			device := stringOf(values, "device")
+			options["device"] = device
 			if !boolOf(values, "enabled", true) {
 				options["disabled"] = "1"
 			} else {
@@ -64,25 +63,17 @@ func typedNetworkInterfaceSpec() typedSpec {
 				options["ipaddr"] = ip.String()
 				options["netmask"] = net.IP(network.Mask).String()
 			}
-			if gateway := stringOf(values, "gateway"); gateway != "" {
-				options["gateway"] = gateway
-			}
+			gateway := stringOf(values, "gateway")
+			options["gateway"] = gateway
 			if vlan := int64Of(values, "vlan_id"); vlan > 0 {
 				options["vlan_id"] = strconv.FormatInt(vlan, 10)
 			}
-			if display := stringOf(values, "display_name"); display != "" {
-				options["display_name"] = display
-			}
-			if boolOf(values, "force_link", false) {
-				options["force_link"] = "1"
-			}
-			if boolOf(values, "delegate", false) {
-				options["delegate"] = "1"
-			}
+			display := stringOf(values, "display_name")
+			options["display_name"] = display
+
 			section := router.Section{Package: "network", Type: "interface", Name: name, Options: options}
-			if dns := stringsOf(values, "dns"); len(dns) > 0 {
-				section.Lists = map[string][]string{"dns": dns}
-			}
+			dns := stringsOf(values, "dns")
+			section.Lists = map[string][]string{"dns": dns}
 			return section, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {

@@ -46,9 +46,7 @@ func NewDHCPPoolResource() resource.Resource {
 				"ra":        stringOf(values, "ra"),
 				"force":     boolString(boolOf(values, "force", true)),
 			}
-			if boolOf(values, "ignore", false) {
-				options["ignore"] = "1"
-			}
+			options["ignore"] = boolString(boolOf(values, "ignore", false))
 			return router.Section{Package: "dhcp", Type: "dhcp", Name: section, Options: options}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {

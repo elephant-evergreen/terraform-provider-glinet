@@ -20,7 +20,7 @@ func NewNetworkBridgeResource() resource.Resource {
 		Description: "Manage an OpenWrt bridge device and its port membership. The resource resolves a bridge by its `name` option, so stock bridges such as `br-lan` can be imported without knowing their anonymous UCI indices.",
 		Attributes: map[string]schema.Attribute{
 			"name":          schema.StringAttribute{Required: true, MarkdownDescription: "Bridge device name, such as `br-lan` or `br-vlan11`.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
-			"ports":         schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Bridge member ports. Omitted or empty membership leaves the list untouched."},
+			"ports":         schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Bridge member ports. Omitted or empty membership removes all member ports, subject to management-path safety checks."},
 			"empty":         schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Set `bridge_empty` so the bridge can exist without ports."},
 			"stp":           schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable spanning tree protocol."},
 			"igmp_snooping": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable IGMP snooping."},
@@ -32,9 +32,8 @@ func NewNetworkBridgeResource() resource.Resource {
 			}
 			options := map[string]string{"name": name, "type": "bridge", "bridge_empty": boolString(boolOf(values, "empty", false)), "stp": boolString(boolOf(values, "stp", false)), "igmp_snooping": boolString(boolOf(values, "igmp_snooping", false))}
 			section := router.Section{Package: "network", Type: "device", Name: "@device[0]", Match: map[string]string{"name": name}, Options: options}
-			if ports := stringsOf(values, "ports"); len(ports) > 0 {
-				section.Lists = map[string][]string{"ports": ports}
-			}
+			ports := stringsOf(values, "ports")
+			section.Lists = map[string][]string{"ports": ports}
 			return section, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {

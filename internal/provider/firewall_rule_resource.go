@@ -47,30 +47,25 @@ func typedFirewallRuleSpec() typedSpec {
 				"name": name, "family": stringOf(values, "family"), "target": stringOf(values, "target"), "enabled": boolString(boolOf(values, "enabled", true)),
 			}
 			for _, field := range []struct{ attr, option string }{{"src", "src"}, {"dest", "dest"}} {
-				if value := stringOf(values, field.attr); value != "" {
-					options[field.option] = value
-				}
+				value := stringOf(values, field.attr)
+				options[field.option] = value
 			}
 			section := router.Section{Package: "firewall", Type: "rule", Name: "@rule[0]", Match: map[string]string{"name": name}, Options: options, Lists: map[string][]string{}}
 			for _, field := range []struct{ attr, option string }{{"src_ips", "src_ip"}, {"dest_ips", "dest_ip"}} {
 				addresses := stringsOf(values, field.attr)
 				switch len(addresses) {
 				case 0:
+					options[field.option] = ""
 				case 1:
 					options[field.option] = addresses[0]
 				default:
 					section.Lists[field.option] = addresses
 				}
 			}
-			if protocols := stringsOf(values, "protocols"); len(protocols) > 0 {
-				options["proto"] = joinStrings(protocols)
-			}
-			if ports := stringsOf(values, "src_ports"); len(ports) > 0 {
-				options["src_port"] = joinStrings(ports)
-			}
-			if ports := stringsOf(values, "dest_ports"); len(ports) > 0 {
-				options["dest_port"] = joinStrings(ports)
-			}
+			protocols := stringsOf(values, "protocols")
+			options["proto"] = joinStrings(protocols)
+			options["src_port"] = joinStrings(stringsOf(values, "src_ports"))
+			options["dest_port"] = joinStrings(stringsOf(values, "dest_ports"))
 			if position := int64Of(values, "position"); position > 0 {
 				value := int(position)
 				section.Position = &value

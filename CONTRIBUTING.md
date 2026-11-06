@@ -18,6 +18,6 @@ Tests against a router must use a dedicated test device and explicitly documente
 
 Explain the problem, the resulting behavior, and the verification performed in each pull request. Describe any unverified hardware behavior explicitly. Update documentation alongside changes to the public schema.
 
-Run `mise install`, then `bin/check-for-agent`. The required checks use the tools pinned in mise.toml, run the provider protocol and local router-fixture tests, and do not require real router credentials. Run `mise run docs` after schema or example changes and commit the generated documentation.
+Use the Go version declared in `go.mod` and Terraform 1.17.1. Run `bin/check-for-agent` for formatting, module verification, vet, race-enabled fixture and Terraform protocol tests, compilation, and Terraform example formatting. Ordinary checks do not require router credentials. Run `go tool tfplugindocs generate --provider-name glinet` after schema or example changes and commit the generated documentation. Release artifacts are built and signed by the release workflow.
 
 The initial implementation supports Linux and macOS development environments. Additional operating systems require separate verification.

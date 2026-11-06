@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -64,7 +63,7 @@ func TestWireGuardPeerSpecMapping(t *testing.T) {
 	if section.Type != "wireguard_wg0" || section.Options["public_key"] == "" || section.Lists["allowed_ips"][0] != "10.8.0.2/32" {
 		t.Fatalf("unexpected peer section: %+v", section)
 	}
-	if _, err := router.DecodeConfiguration(configurationJSONForTest(section)); err != nil {
+	if err := router.ValidateConfiguration(router.Configuration{section}); err != nil {
 		t.Fatalf("dynamic WireGuard peer type rejected: %v", err)
 	}
 	secrets := spec.Secrets(values)
@@ -75,9 +74,4 @@ func TestWireGuardPeerSpecMapping(t *testing.T) {
 	if loaded["interface"].(types.String).ValueString() != "wg0" || loaded["section"].(types.String).ValueString() != "peer1" {
 		t.Fatalf("unexpected peer round trip: %+v", loaded)
 	}
-}
-
-func configurationJSONForTest(sections ...router.Section) string {
-	encoded, _ := json.Marshal(sections)
-	return string(encoded)
 }

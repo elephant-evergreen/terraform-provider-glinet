@@ -222,13 +222,16 @@ func verifyRuntimeFirewall(generated, running string) error {
 	if expected.policies[firewallChain{table: "filter", name: "FORWARD"}] != "DROP" || actual.policies[firewallChain{table: "filter", name: "FORWARD"}] != "DROP" {
 		return errors.New("Cannot verify the FORWARD default policy.")
 	}
-	if expected.policies[firewallChain{table: "filter", name: "INPUT"}] == "" || actual.policies[firewallChain{table: "filter", name: "INPUT"}] != expected.policies[firewallChain{table: "filter", name: "INPUT"}] {
-		return errors.New("The INPUT default policy differs from the generated policy.")
+	for _, name := range []string{"INPUT", "OUTPUT"} {
+		chain := firewallChain{table: "filter", name: name}
+		if expected.policies[chain] == "" || actual.policies[chain] != expected.policies[chain] {
+			return fmt.Errorf("The %s default policy differs from the generated policy.", name)
+		}
 	}
-	if err := verifyTable(expected, actual, "filter", "INPUT", "FORWARD"); err != nil {
+	if err := verifyTable(expected, actual, "filter", "INPUT", "FORWARD", "OUTPUT"); err != nil {
 		return err
 	}
-	return verifyTable(expected, actual, "nat", "PREROUTING", "POSTROUTING", "OUTPUT")
+	return verifyTable(expected, actual, "nat", "PREROUTING", "INPUT", "POSTROUTING", "OUTPUT")
 }
 
 func verifyTable(expected, actual firewallRules, table string, roots ...string) error {
@@ -246,7 +249,7 @@ func verifyTable(expected, actual firewallRules, table string, roots ...string) 
 		position := 0
 		for _, rule := range actual.chains[chain] {
 			target := ruleTarget(rule)
-			child, childExists := actual.chains[firewallChain{table: table, name: target}]
+			_, childExists := actual.chains[firewallChain{table: table, name: target}]
 			if target != "" && childExists {
 				pending = append(pending, target)
 			}
@@ -255,7 +258,7 @@ func verifyTable(expected, actual firewallRules, table string, roots ...string) 
 				continue
 			}
 			counterOnly := !containsRule(rule, "-g", "--goto", "--jump") && target == ""
-			harmlessChain := target != "" && childExists && allRulesHarmless(child)
+			harmlessChain := target != "" && childExists && actual.counterOnlyChain(table, target, map[string]bool{})
 			stockDNAT := table == "filter" && stockDNATChains[name] && position == 0 && equalRule(rule, []string{"-m", "conntrack", "--ctstate", "DNAT", "-j", "ACCEPT"})
 			stockICMP := table == "filter" && name == "INPUT" && equalRule(rule, []string{"-p", "1", "-i", "br-lan", "--icmp-type", "8", "-m", "limit", "--limit", "25/sec", "-j", "ACCEPT"})
 			if !(counterOnly || harmlessChain || stockDNAT || stockICMP || target == "DROP" || target == "REJECT" || target == "LOG") {
@@ -281,9 +284,21 @@ func equalRule(a, b []string) bool {
 	return true
 }
 
-func allRulesHarmless(rules [][]string) bool {
-	for _, rule := range rules {
-		if hasJump(rule) {
+func (r firewallRules) counterOnlyChain(table, name string, visiting map[string]bool) bool {
+	if visiting[name] {
+		return false
+	}
+	visiting[name] = true
+	defer delete(visiting, name)
+	for _, rule := range r.chains[firewallChain{table: table, name: name}] {
+		target := ruleTarget(rule)
+		if target == "" {
+			if hasJump(rule) {
+				return false
+			}
+			continue
+		}
+		if _, exists := r.chains[firewallChain{table: table, name: target}]; !exists || !r.counterOnlyChain(table, target, visiting) {
 			return false
 		}
 	}

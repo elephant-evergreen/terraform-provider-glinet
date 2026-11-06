@@ -30,6 +30,7 @@ func TestConfigureGuardsUnknownAndExplicitEmptySettings(t *testing.T) {
 			config := tfsdk.Config{Schema: schema.Schema, Raw: tftypes.NewValue(schema.Schema.Type().TerraformType(context.Background()), map[string]tftypes.Value{
 				"host": tftypes.NewValue(tftypes.String, tc.host), "port": tftypes.NewValue(tftypes.Number, nil),
 				"private_key_file": tftypes.NewValue(tftypes.String, nil), "known_hosts_file": tftypes.NewValue(tftypes.String, nil),
+				"backup_directory": tftypes.NewValue(tftypes.String, nil),
 			})}
 			var response provider.ConfigureResponse
 			p.Configure(context.Background(), provider.ConfigureRequest{Config: config}, &response)

@@ -47,7 +47,10 @@ func (r *typedFixtureRunner) Run(_ context.Context, script string) ([]byte, erro
 					updated = append(updated, existing)
 				}
 			}
-			r.actual = append(updated, desired)
+			r.actual = updated
+			if !desired.Absent {
+				r.actual = append(r.actual, desired)
+			}
 		}
 		r.applyCalls++
 		return nil, nil
@@ -62,13 +65,20 @@ func (r *typedFixtureRunner) Run(_ context.Context, script string) ([]byte, erro
 			found := false
 			for _, existing := range r.actual {
 				if typedSameIdentity(existing, desired) {
-					observed = append(observed, existing)
+					if desired.Absent {
+						desired.Absent = false
+						observed = append(observed, desired)
+					} else {
+						observed = append(observed, existing)
+					}
 					found = true
 					break
 				}
 			}
 			if !found {
-				desired.Missing = true
+				if !desired.Absent {
+					desired.Missing = true
+				}
 				observed = append(observed, desired)
 			}
 		}
@@ -123,25 +133,58 @@ func safetyStateJSON(config router.Configuration) []byte {
 
 func TestTypedNetworkInterfaceProtocol(t *testing.T) {
 	remote := &typedFixtureRunner{}
-	client := router.NewClient(remote)
+	client := router.NewClient(remote, fixtureProtection{})
 	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
 	config := func(address string) string {
 		return `resource "glinet_network_interface" "test" {
   name = "guest"
   device = "br-guest"
   address = "` + address + `"
+  delete_behavior = "delete"
 }`
 	}
 	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		CheckDestroy: func(*terraform.State) error {
+			if len(remote.actual) != 0 {
+				t.Fatal("Destroy preserved a delete-managed section")
+			}
+			return nil
+		},
 		Steps: []resource.TestStep{
-			{Config: config("192.168.9.1/24"), Check: func(state *terraform.State) error {
-				if remote.applyCalls != 1 {
+			{Config: config("192.168.9.1/24") + `
+resource "glinet_dhcp_reservation" "optional" {
+ section="example"
+ mac="02:00:00:00:00:01"
+ ip=cidrhost(glinet_network_interface.test.address,10)
+ hostname="old-host"
+ dns=["192.168.9.1"]
+ delete_behavior="delete"
+}
+`, Check: func(state *terraform.State) error {
+				if remote.applyCalls != 2 {
 					t.Fatalf("apply calls = %d", remote.applyCalls)
 				}
 				return nil
 			}},
-			{Config: config("192.168.9.2/24")},
-			{ResourceName: "glinet_network_interface.test", ImportState: true, ImportStateVerify: true},
+			{Config: config("192.168.9.2/24") + `
+resource "glinet_dhcp_reservation" "optional" {
+ section="example"
+ mac="02:00:00:00:00:01"
+ ip=cidrhost(glinet_network_interface.test.address,10)
+ delete_behavior="delete"
+}
+`},
+			{Config: config("192.168.9.2/24"), PreConfig: func() {
+				remote.mu.Lock()
+				defer remote.mu.Unlock()
+				for _, s := range remote.actual {
+					if s.Package == "network" {
+						s.Options["ipaddr"] = "192.168.9.99"
+					}
+				}
+			}, Check: resource.TestCheckResourceAttr("glinet_network_interface.test", "address", "192.168.9.2/24")},
+			{Config: config("192.168.9.2/24"), PreConfig: func() { remote.mu.Lock(); defer remote.mu.Unlock(); remote.actual = nil }},
+			{ResourceName: "glinet_network_interface.test", ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"delete_behavior"}},
 		}})
 }
 
@@ -150,7 +193,7 @@ func configurationSafetyResponse(script string) ([]byte, bool) {
 	case strings.Contains(script, "GLINET_SAFETY_ENV"):
 		return []byte("ipv6_enabled=0\nipv6_forwarding=0\n@@addresses@@\n\n@@routes@@\n\n@@upnp@@\n0\n\n@@adguard@@\n0\n0\n@@leases@@\n"), true
 	case strings.Contains(script, "GLINET_SAFETY_RUNTIME"):
-		return []byte("@@generated@@\niptables -t filter -P INPUT ACCEPT\niptables -t filter -P FORWARD DROP\niptables -t filter -N reject\niptables -t filter -A FORWARD -j reject\niptables -t filter -A reject -j REJECT\n@@running@@\n*filter\n:INPUT ACCEPT [0:0]\n:FORWARD DROP [0:0]\n:reject - [0:0]\n-A FORWARD -j reject\n-A reject -j REJECT\nCOMMIT\n"), true
+		return []byte("@@generated@@\niptables -t filter -P INPUT ACCEPT\niptables -t filter -P FORWARD DROP\niptables -t filter -P OUTPUT ACCEPT\niptables -t filter -N reject\niptables -t filter -A FORWARD -j reject\niptables -t filter -A reject -j REJECT\n@@running@@\n*filter\n:INPUT ACCEPT [0:0]\n:FORWARD DROP [0:0]\n:OUTPUT ACCEPT [0:0]\n:reject - [0:0]\n-A FORWARD -j reject\n-A reject -j REJECT\nCOMMIT\n"), true
 	}
 	return nil, false
 }
@@ -168,3 +211,7 @@ func TestPreserveWriteOnlyVersion(t *testing.T) {
 		t.Fatalf("null key_version should keep the loaded default: %+v", values["key_version"])
 	}
 }
+
+type fixtureProtection struct{}
+
+func (fixtureProtection) Protect(context.Context, router.Runner, bool) error { return nil }

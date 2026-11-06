@@ -95,12 +95,10 @@ func NewDNSMasqResource() resource.Resource {
 				return router.Section{}, fmt.Errorf("at least one upstream server is required")
 			}
 			options := map[string]string{"noresolv": boolString(boolOf(values, "no_resolv", true))}
-			if domain := stringOf(values, "domain"); domain != "" {
-				options["domain"] = domain
-			}
-			if local := stringOf(values, "local"); local != "" {
-				options["local"] = local
-			}
+			domain := stringOf(values, "domain")
+			options["domain"] = domain
+			local := stringOf(values, "local")
+			options["local"] = local
 			return router.Section{Package: "dhcp", Type: "dnsmasq", Name: "@dnsmasq[0]", Options: options, Lists: map[string][]string{"server": servers}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {

@@ -38,9 +38,8 @@ func NewFirewallZoneResource() resource.Resource {
 				"name": name, "input": stringOf(values, "input"), "output": stringOf(values, "output"), "forward": stringOf(values, "forward"),
 				"masq": boolString(boolOf(values, "masq", false)), "mtu_fix": boolString(boolOf(values, "mtu_fix", false)), "enabled": boolString(boolOf(values, "enabled", true)),
 			}}
-			if networks := stringsOf(values, "networks"); len(networks) > 0 {
-				section.Lists = map[string][]string{"network": networks}
-			}
+			networks := stringsOf(values, "networks")
+			section.Lists = map[string][]string{"network": networks}
 			return section, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {

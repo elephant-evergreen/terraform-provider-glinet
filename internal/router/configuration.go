@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"reflect"
 	"regexp"
 	"strings"
@@ -32,38 +31,20 @@ type Configuration []Section
 
 var selector = regexp.MustCompile(`^@([A-Za-z0-9_-]+)\[[0-9]+\]$`)
 
-func DecodeConfiguration(value string) (Configuration, error) {
-	return decodeConfiguration(value, false)
-}
-func DecodeObservedConfiguration(value string) (Configuration, error) {
-	return decodeConfiguration(value, true)
-}
-func decodeConfiguration(value string, observed bool) (Configuration, error) {
-	if len(value) > 262144 {
-		return nil, errors.New("Configuration exceeds 256 KiB.")
-	}
-	var config Configuration
-	decoder := json.NewDecoder(strings.NewReader(value))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&config); err != nil {
-		return nil, errors.New("configuration must be a JSON array of UCI section objects.")
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return nil, errors.New("configuration must contain exactly one JSON value.")
-	}
+func ValidateConfiguration(config Configuration) error {
 	if len(config) == 0 || len(config) > 256 {
-		return nil, errors.New("Configure between 1 and 256 UCI sections.")
+		return errors.New("Configure between 1 and 256 UCI sections.")
 	}
 	seen := map[string]bool{}
 	positions := map[int]bool{}
 	rules, positioned := 0, 0
 	for index, s := range config {
-		if s.Missing && !observed {
-			return nil, errors.New("missing is reserved for observed drift.")
+		if s.Missing {
+			return errors.New("missing is reserved for observed drift.")
 		}
 		anonymous := selector.FindStringSubmatch(s.Name)
 		if allowedOptionsFor(s.Package, s.Type) == nil || (!ValidSection(s.Name) && anonymous == nil) {
-			return nil, errors.New("Unsupported UCI package, section name or section type.")
+			return errors.New("Unsupported UCI package, section name or section type.")
 		}
 		if len(s.Options) == 0 {
 			s.Options = nil
@@ -77,21 +58,21 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 		config[index] = s
 		key := s.Package + "." + s.Name
 		if seen[key] {
-			return nil, errors.New("Each UCI section may appear only once.")
+			return errors.New("Each UCI section may appear only once.")
 		}
 		seen[key] = true
 		if anonymous == nil && len(s.Match) > 0 {
-			return nil, errors.New("Identity matches are supported only for anonymous sections.")
+			return errors.New("Identity matches are supported only for anonymous sections.")
 		}
 		if anonymous != nil && (anonymous[1] != s.Type || s.Absent) {
-			return nil, errors.New("Anonymous selectors must match the section type and cannot be deleted.")
+			return errors.New("Anonymous selectors must match the section type and cannot be deleted.")
 		}
 		if s.Position != nil {
-			if s.Package != "firewall" || s.Type != "rule" || (!observed && (*s.Position < 0 || *s.Position > 4095)) {
-				return nil, errors.New("position must be a firewall rule index between 0 and 4095.")
+			if s.Package != "firewall" || s.Type != "rule" || (*s.Position < 0 || *s.Position > 4095) {
+				return errors.New("position must be a firewall rule index between 0 and 4095.")
 			}
-			if !observed && positions[*s.Position] {
-				return nil, errors.New("Firewall rule positions must be unique.")
+			if positions[*s.Position] {
+				return errors.New("Firewall rule positions must be unique.")
 			}
 			positions[*s.Position] = true
 		}
@@ -102,51 +83,51 @@ func decodeConfiguration(value string, observed bool) (Configuration, error) {
 			}
 		}
 		if s.Absent && (len(s.Options)+len(s.Lists)+len(s.Match) > 0 || s.Position != nil) {
-			return nil, errors.New("Absent sections cannot include options, lists or matches.")
+			return errors.New("Absent sections cannot include options, lists or matches.")
 		}
 		for k, v := range s.Options {
-			if !observed && s.Package == "wireless" && ((k == "ssid" && !ValidSSID(v)) || ((k == "disabled" || k == "hidden" || k == "isolate") && v != "0" && v != "1")) {
-				return nil, errors.New("Wi-Fi SSIDs must contain 1–32 UTF-8 bytes and flags must be 0 or 1.")
+			if s.Package == "wireless" && ((k == "ssid" && !ValidSSID(v)) || ((k == "disabled" || k == "hidden" || k == "isolate") && v != "0" && v != "1")) {
+				return errors.New("Wi-Fi SSIDs must contain 1–32 UTF-8 bytes and flags must be 0 or 1.")
 			}
-			if !allowedOptionsFor(s.Package, s.Type)[k] || (!observed && !validOption(s.Package, s.Type, k, v)) {
-				return nil, errors.New("Invalid or secret UCI option. Use key_wo for Wi-Fi keys.")
+			if !allowedOptionsFor(s.Package, s.Type)[k] || (!validOption(s.Package, s.Type, k, v)) {
+				return errors.New("Invalid or secret UCI option. Use key_wo for Wi-Fi keys.")
 			}
 			if _, ok := s.Lists[k]; ok {
-				return nil, errors.New("An option cannot be both a scalar and a list.")
+				return errors.New("An option cannot be both a scalar and a list.")
 			}
 		}
 		for k, v := range s.Match {
-			if value, ok := s.Options[k]; !observed && ok && value != v {
-				return nil, errors.New("Managed identity options must equal their match values.")
+			if value, ok := s.Options[k]; ok && value != v {
+				return errors.New("Managed identity options must equal their match values.")
 			}
 			if _, ok := s.Lists[k]; ok {
-				return nil, errors.New("Identity match options cannot be lists.")
+				return errors.New("Identity match options cannot be lists.")
 			}
 			if !validOption(s.Package, s.Type, k, v) {
-				return nil, errors.New("Invalid UCI identity match.")
+				return errors.New("Invalid UCI identity match.")
 			}
 		}
 		for k, vs := range s.Lists {
-			if s.Package == "wireless" && !observed {
-				return nil, errors.New("Wi-Fi attributes must use scalar options, not lists.")
+			if s.Package == "wireless" {
+				return errors.New("Wi-Fi attributes must use scalar options, not lists.")
 			}
 			if !allowedOptionsFor(s.Package, s.Type)[k] {
-				return nil, errors.New("Unsupported UCI list option.")
+				return errors.New("Unsupported UCI list option.")
 			}
-			if len(vs) == 0 && !observed {
-				return nil, errors.New("UCI lists must contain at least one item.")
+			if len(vs) == 0 {
+				s.Lists[k] = nil
 			}
 			for _, v := range vs {
-				if !allowedOptionsFor(s.Package, s.Type)[k] || (!observed && !validOption(s.Package, s.Type, k, v)) {
-					return nil, errors.New("Invalid or secret UCI list option.")
+				if !allowedOptionsFor(s.Package, s.Type)[k] || (!validOption(s.Package, s.Type, k, v)) {
+					return errors.New("Invalid or secret UCI list option.")
 				}
 			}
 		}
 	}
 	if positioned > 0 && positioned != rules {
-		return nil, errors.New("Set positions for all managed firewall rules or leave all positions unspecified.")
+		return errors.New("Set positions for all managed firewall rules or leave all positions unspecified.")
 	}
-	return config, nil
+	return nil
 }
 
 func allowedOptionsFor(pkg, kind string) map[string]bool {
@@ -183,7 +164,12 @@ func configurationLua(config Configuration, write bool, secrets ...map[string]st
 		}
 	}
 	data, _ := json.Marshal(wire)
-	source := "local json=require('cjson')\nlocal uci=require('uci').cursor()\nlocal writing=" + fmt.Sprint(write) + "\nlocal spec=json.decode(" + luaQuote(string(data)) + ")\n" + `local result={}
+	provided := "{}"
+	if len(secrets) > 0 && len(secrets[0]) > 0 {
+		encoded, _ := json.Marshal(secrets[0])
+		provided = string(encoded)
+	}
+	source := "local json=require('cjson')\nlocal uci=require('uci').cursor()\nlocal writing=" + fmt.Sprint(write) + "\nlocal provided=json.decode(" + luaQuote(provided) + ")\nlocal spec=json.decode(" + luaQuote(string(data)) + ")\n" + `local result={}
 local rule_order={}
 local rule_slots={}
 local resolved={}
@@ -208,6 +194,10 @@ for i,s in ipairs(spec) do
  seen[identity]=true
  resolved[i]=name
  local kind=uci:get(s.package,name)
+ if writing and not kind and not s.absent and s.package=='wireless' then
+  local key=provided['wireless.'..s.name..'.key']
+  if type(key)~='string' or key=='' then os.exit(65) end
+ end
  if s.package=='firewall' then if s.absent and kind then next_index=next_index-1 elseif not s.absent and not kind then next_index=next_index+1 end end
  if kind and kind~=s.type then os.exit(65) end
  for k,want in pairs(s.match or {}) do
@@ -226,8 +216,14 @@ for i,s in ipairs(spec) do
   if kind then assert(uci:delete(s.package,name)) end
  else
   if not kind then assert(uci:set(s.package,name,s.type)); for k,v in pairs(s.match or {}) do assert(uci:set(s.package,name,k,v)) end end
-  for k,v in pairs(s.options or {}) do assert(uci:set(s.package,name,k,v)) end
-  for k,v in pairs(s.lists or {}) do assert(uci:set(s.package,name,k,v)) end
+  for k,v in pairs(s.options or {}) do
+   if v=='' then if uci:get(s.package,name,k)~=nil then assert(uci:delete(s.package,name,k)) end
+   else assert(uci:set(s.package,name,k,v)) end
+  end
+  for k,v in pairs(s.lists or {}) do
+   if v==json.null or #v==0 then if uci:get(s.package,name,k)~=nil then assert(uci:delete(s.package,name,k)) end
+   else assert(uci:set(s.package,name,k,v)) end
+  end
  end
 `
 	} else {
@@ -242,7 +238,7 @@ for i,s in ipairs(spec) do
   end
   for k,v in pairs(s.lists or {}) do
    local value=uci:get(s.package,name,k)
-   if type(value)~='table' then value=json.null end
+   if type(value)=='string' then value={value} elseif type(value)~='table' then value=json.null end
    actual.lists[k]=value
   end
  end
@@ -349,8 +345,6 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 	if !ValidSecretOptions(config, secrets) {
 		return errors.New("Secret options must reference managed sections and supported secret names.")
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	actual, secretsMatch, err := c.stableConfiguration(ctx, config, secrets)
 	if err != nil {
 		return err
@@ -411,6 +405,12 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 			plan.Reboot = true
 		}
 	}
+	if c.protection == nil {
+		return errors.New("Router changes require encrypted backup and management-path protection.")
+	}
+	if err := c.protection.Protect(ctx, c.runner, plan.Reboot || plan.Wireless); err != nil {
+		return err
+	}
 	_, err = c.runner.Run(ctx, configurationApplyScript(config, token, plan, secrets))
 	var exit *ExitError
 	if errors.As(err, &exit) {
@@ -421,10 +421,10 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 	for {
 		actual, readErr := c.ReadConfiguration(wait, config)
 		if readErr == nil && SameConfiguration(actual, config) {
-			if runtimeErr := c.verifyRuntimeConfiguration(wait, config); runtimeErr != nil {
+			if runtimeErr := c.verifyRuntimeFirewall(wait); runtimeErr != nil {
 				return runtimeErr
 			}
-			_, confirmErr := c.runner.Run(wait, configurationConfirmScript(token, config, secrets))
+			_, confirmErr := c.runner.Run(wait, configurationConfirmScript(token, safetyConfig, secrets))
 			if confirmErr == nil {
 				return nil
 			}
@@ -501,8 +501,3 @@ var allowedOptions = func() map[string]map[string]bool {
 	}
 	return result
 }()
-
-func (c *Client) StableConfiguration(ctx context.Context, config Configuration) (Configuration, error) {
-	actual, _, err := c.stableConfiguration(ctx, config, nil)
-	return actual, err
-}

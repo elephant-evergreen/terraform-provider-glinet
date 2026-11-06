@@ -14,16 +14,24 @@ Wi-Fi keys enter the wireless resource only through sensitive write-only argumen
 
 | Dependency | Fixed version | Responsibility and rationale |
 | --- | --- | --- |
-| [Go](https://go.dev/dl/) | 1.27.3 | Official compiler and standard library; pinned with mise. |
+| [Go](https://go.dev/dl/) | 1.27.3 | Official compiler and standard library; pinned in go.mod. |
 | [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework/tree/v1.19.0) | v1.19.0 | HashiCorp's provider protocol and schema implementation; avoids implementing a Terraform runtime. MPL-2.0. |
 | [Go SSH](https://pkg.go.dev/golang.org/x/crypto/ssh@v0.58.0) | v0.58.0 | Go project's SSH and known_hosts implementation; avoids implementing cryptography or disabling host verification. BSD-3-Clause. |
 | [Terraform Plugin Testing](https://github.com/hashicorp/terraform-plugin-testing/tree/v1.16.0) | v1.16.0 | Development dependency for actual Terraform protocol, plan, state, refresh, and import tests. MPL-2.0. |
 | [tfplugindocs](https://github.com/hashicorp/terraform-plugin-docs/tree/v0.25.0) | v0.25.0 | Official schema-driven documentation generator. MPL-2.0. |
 
-Go module versions and checksums are in go.mod and go.sum. Tests replace the external router transport or commands while using the shipping provider and Terraform Framework. Credentials are not available to ordinary CI. CI uses the official checkout and mise Actions pinned to reviewed commit IDs and a hosted Ubuntu runner with read-only repository access. Renovate proposes dependency updates without automatic merging.
+Go module versions and checksums are in go.mod and go.sum. Tests replace the external router transport or commands while using the shipping provider and Terraform Framework. Credentials are not available to ordinary CI. CI uses the official checkout, setup-go and setup-terraform Actions pinned to reviewed commit IDs and a hosted Ubuntu runner with read-only repository access. Renovate proposes dependency updates without automatic merging.
 
 The Framework's transitive gRPC dependency is pinned to v1.83.2 to address the Go vulnerability database findings GO-2026-6061, GO-2026-6348, and GO-2026-6443 affecting the upstream v1.79.3 selection. See the [official gRPC release](https://github.com/grpc/grpc-go/releases/tag/v1.83.2). Keep the override until the Framework selects a fixed version and verify updates with govulncheck and the protocol tests.
 
 The upstream provider scaffold examples in [HashiCorp Agent Skills](https://github.com/hashicorp/agent-skills/tree/5e30fa5c867ba6777c37e4206babfd08049c396f) informed the provider entry point and schema layout. The implementation is original; the upstream template files are not copied into this repository.
 
 Protocol references: [OpenWrt UCI](https://openwrt.org/docs/techref/uci), [rpcd transaction implementation](https://github.com/openwrt/rpcd/blob/469d7852316ef692805396d8af744ec43604b842/uci.c), [GL.iNet SSH access](https://docs.gl-inet.com/router/en/4/tutorials/ssh_log_in_to_the_router/), and [HashiCorp provider design principles](https://developer.hashicorp.com/terraform/plugin/best-practices/hashicorp-provider-design-principles).
+
+## Backup and publication dependencies
+
+The provider uses [filippo.io/age v1.3.2](https://github.com/FiloSottile/age/releases/tag/v1.3.2) for the existing age backup format and SSH key recipients. The provider streams the sysupgrade archive directly into age encryption, decrypts the resulting ciphertext for integrity and required-file checks, and never writes plaintext archives. This replaces external age/tar execution in the operation path without implementing cryptography. Backup transport is bounded to 32 MiB and expanded archive verification to 64 MiB. Failed or unverified backups prevent mutation. The library is maintained by the age project; dependency checksums are recorded in go.sum and rejection/round-trip tests cover its integration.
+
+[GoReleaser 2.20.0](https://github.com/goreleaser/goreleaser/releases/tag/v2.20.0) is a CI-only dependency selected for HashiCorp's standard provider archive, checksum, manifest and GPG-signature contract. It is not installed by provider users. Release workflow actions follow HashiCorp's official scaffold, with fixed commit IDs and write permission restricted to the release job.
+
+Typed resources own the attributes exposed by their schema. Clearing an optional scalar or collection removes its previous UCI value; firmware attributes outside that schema and omitted write-only secrets are preserved. Reads include out-of-band changes and missing sections so Terraform can plan repair. Anonymous identities must resolve uniquely.

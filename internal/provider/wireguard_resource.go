@@ -43,20 +43,16 @@ func typedWireGuardInterfaceSpec() typedSpec {
 			if name == "" {
 				return router.Section{}, fmt.Errorf("name is required")
 			}
-			options := map[string]string{"proto": "wireguard", "listen_port": strconv.FormatInt(int64Of(values, "listen_port"), 10), "disabled": boolString(!boolOf(values, "enabled", true))}
+			options := map[string]string{"mtu": "", "nohostroute": boolString(boolOf(values, "no_host_route", false)), "proto": "wireguard", "listen_port": strconv.FormatInt(int64Of(values, "listen_port"), 10), "disabled": boolString(!boolOf(values, "enabled", true))}
 			if mtu := int64Of(values, "mtu"); mtu > 0 {
 				options["mtu"] = strconv.FormatInt(mtu, 10)
 			}
-			if mark := stringOf(values, "fwmark"); mark != "" {
-				options["fwmark"] = mark
-			}
-			if boolOf(values, "no_host_route", false) {
-				options["nohostroute"] = "1"
-			}
+			mark := stringOf(values, "fwmark")
+			options["fwmark"] = mark
+
 			section := router.Section{Package: "network", Type: "interface", Name: name, Options: options}
-			if addresses := stringsOf(values, "addresses"); len(addresses) > 0 {
-				section.Lists = map[string][]string{"addresses": addresses}
-			}
+			addresses := stringsOf(values, "addresses")
+			section.Lists = map[string][]string{"addresses": addresses}
 			return section, nil
 		},
 		ReadSelector: func(values map[string]attr.Value) (router.Section, error) {
@@ -133,26 +129,21 @@ func typedWireGuardPeerSpec() typedSpec {
 			if section == "" || interfaceName == "" {
 				return router.Section{}, fmt.Errorf("section and interface are required")
 			}
-			options := map[string]string{"public_key": stringOf(values, "public_key")}
-			if host := stringOf(values, "endpoint_host"); host != "" {
-				options["endpoint_host"] = host
-			}
+			options := map[string]string{"public_key": stringOf(values, "public_key"), "endpoint_port": "", "persistent_keepalive": "", "route_allowed_ips": boolString(boolOf(values, "route_allowed_ips", true))}
+			host := stringOf(values, "endpoint_host")
+			options["endpoint_host"] = host
 			if port := int64Of(values, "endpoint_port"); port > 0 {
 				options["endpoint_port"] = strconv.FormatInt(port, 10)
 			}
 			if keepalive := int64Of(values, "persistent_keepalive"); keepalive > 0 {
 				options["persistent_keepalive"] = strconv.FormatInt(keepalive, 10)
 			}
-			if !boolOf(values, "route_allowed_ips", true) {
-				options["route_allowed_ips"] = "0"
-			}
-			if description := stringOf(values, "description"); description != "" {
-				options["description"] = description
-			}
+
+			description := stringOf(values, "description")
+			options["description"] = description
 			item := router.Section{Package: "network", Type: "wireguard_" + interfaceName, Name: section, Options: options}
-			if allowed := stringsOf(values, "allowed_ips"); len(allowed) > 0 {
-				item.Lists = map[string][]string{"allowed_ips": allowed}
-			}
+			allowed := stringsOf(values, "allowed_ips")
+			item.Lists = map[string][]string{"allowed_ips": allowed}
 			return item, nil
 		},
 		ReadSelector: func(values map[string]attr.Value) (router.Section, error) {

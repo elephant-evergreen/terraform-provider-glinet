@@ -39,9 +39,7 @@ func NewFirewallRedirectResource() resource.Resource {
 				"dest": stringOf(values, "dest"), "dest_ip": stringOf(values, "dest_ip"), "dest_port": stringOf(values, "dest_port"),
 				"proto": stringOf(values, "proto"), "target": stringOf(values, "target"), "enabled": boolString(boolOf(values, "enabled", true)),
 			}
-			if boolOf(values, "reflection", false) {
-				options["reflection"] = "1"
-			}
+			options["reflection"] = boolString(boolOf(values, "reflection", false))
 			return router.Section{Package: "firewall", Type: "redirect", Name: "@redirect[0]", Match: map[string]string{"name": name}, Options: options}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {

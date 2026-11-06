@@ -212,7 +212,7 @@ func TestIPv6AndUPnPPreconditions(t *testing.T) {
 
 func TestDNSProviderAndStockIncludeChecks(t *testing.T) {
 	config := Configuration{{Package: "gl-dns-v2", Name: "@dns[0]", Type: "dns", Options: map[string]string{"provider": "quad9", "proto": "doh"}, Lists: map[string][]string{"servers_list": {"Recommended"}}}}
-	client := NewClient(runnerFunc(func(_ context.Context, script string) ([]byte, error) {
+	client := newFixtureClient(runnerFunc(func(_ context.Context, script string) ([]byte, error) {
 		return []byte(`{"server_list":[{"name":"Recommended","url_doh":"https://dns.quad9.net/dns-query"}]}`), nil
 	}))
 	if err := checkDNSProviders(context.Background(), client, config); err != nil {
@@ -223,7 +223,7 @@ func TestDNSProviderAndStockIncludeChecks(t *testing.T) {
 		t.Fatal("Missing DNS provider server was accepted")
 	}
 	state := uciState{"firewall": {{Name: "stock", Type: "include", Options: map[string]string{"path": "/etc/firewall.user"}}}}
-	includeClient := NewClient(runnerFunc(func(_ context.Context, script string) ([]byte, error) {
+	includeClient := newFixtureClient(runnerFunc(func(_ context.Context, script string) ([]byte, error) {
 		return []byte("a  /etc/firewall.user\na  /rom/etc/firewall.user\n"), nil
 	}))
 	if err := checkIncludes(context.Background(), includeClient, state); err != nil {

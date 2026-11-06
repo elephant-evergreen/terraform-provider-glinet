@@ -3,6 +3,7 @@ module github.com/elephant-evergreen/terraform-provider-glinet
 go 1.27.3
 
 require (
+	filippo.io/age v1.3.2
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-testing v1.16.0
@@ -10,6 +11,8 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.2.0 // indirect
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/Kunde21/markdownfmt/v3 v3.1.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect

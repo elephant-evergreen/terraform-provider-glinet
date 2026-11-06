@@ -13,15 +13,25 @@ import (
 var sectionName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 
 type Client struct {
-	runner Runner
-	mu     sync.Mutex
+	runner     Runner
+	mu         sync.Mutex
+	protection ChangeProtection
 }
 
-func NewClient(runner Runner) *Client { return &Client{runner: runner} }
+type ChangeProtection interface {
+	Protect(context.Context, Runner, bool) error
+}
+
+func NewClient(runner Runner, protection ChangeProtection) *Client {
+	return &Client{runner: runner, protection: protection}
+}
 
 func (c *Client) Verify(ctx context.Context) error {
 	_, err := c.runner.Run(ctx, preflight)
-	return operationError(err)
+	if err != nil {
+		return operationError(err)
+	}
+	return c.verifyRuntimeFirewall(ctx)
 }
 
 func ValidSection(section string) bool {

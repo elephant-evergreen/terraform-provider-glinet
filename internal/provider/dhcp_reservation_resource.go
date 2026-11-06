@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -23,7 +24,7 @@ func NewDHCPReservationResource() resource.Resource {
 			"section":  schema.StringAttribute{Required: true, MarkdownDescription: "UCI host section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"mac":      schema.StringAttribute{Required: true, MarkdownDescription: "Client MAC address."},
 			"ip":       schema.StringAttribute{Required: true, MarkdownDescription: "Reserved IPv4 address."},
-			"hostname": schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "DHCP hostname."},
+			"hostname": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "DHCP hostname."},
 			"dns":      schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Per-host DNS servers."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
@@ -32,13 +33,11 @@ func NewDHCPReservationResource() resource.Resource {
 				return router.Section{}, fmt.Errorf("section is required")
 			}
 			options := map[string]string{"mac": stringOf(values, "mac"), "ip": stringOf(values, "ip")}
-			if name := stringOf(values, "hostname"); name != "" {
-				options["name"] = name
-			}
+			name := stringOf(values, "hostname")
+			options["name"] = name
 			item := router.Section{Package: "dhcp", Type: "host", Name: section, Options: options}
-			if servers := stringsOf(values, "dns"); len(servers) > 0 {
-				item.Lists = map[string][]string{"dns": servers}
-			}
+			servers := stringsOf(values, "dns")
+			item.Lists = map[string][]string{"dns": servers}
 			return item, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {

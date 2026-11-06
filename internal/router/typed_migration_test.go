@@ -6,7 +6,7 @@ import (
 )
 
 func TestReadSectionResolvesSingletonAnonymousType(t *testing.T) {
-	client := NewClient(runnerFunc(func(context.Context, string) ([]byte, error) {
+	client := newFixtureClient(runnerFunc(func(context.Context, string) ([]byte, error) {
 		return []byte(`{"gl-dns-v2":[{"name":"cfg123","type":"dns","options":{"provider":"quad9"}}]}`), nil
 	}))
 	actual, found, err := client.ReadSection(context.Background(), Section{Package: "gl-dns-v2", Type: "dns", Name: "@dns[0]"})
@@ -19,7 +19,7 @@ func TestReadSectionResolvesSingletonAnonymousType(t *testing.T) {
 }
 
 func TestReadSectionUsesFullFirewallPackageForPosition(t *testing.T) {
-	client := NewClient(runnerFunc(func(context.Context, string) ([]byte, error) {
+	client := newFixtureClient(runnerFunc(func(context.Context, string) ([]byte, error) {
 		return []byte(`{"firewall":[{"name":"@defaults[0]","type":"defaults"},{"name":"@zone[0]","type":"zone"},{"name":"@forwarding[0]","type":"forwarding"},{"name":"@rule[0]","type":"rule","options":{"name":"First"}},{"name":"@rule[1]","type":"rule","options":{"name":"Second"}}]}`), nil
 	}))
 	actual, found, err := client.ReadSection(context.Background(), Section{Package: "firewall", Type: "rule", Name: "@rule[0]", Match: map[string]string{"name": "First"}})
@@ -35,5 +35,16 @@ func TestReadSectionUsesFullFirewallPackageForPosition(t *testing.T) {
 	}
 	if !found || actual.Position == nil || *actual.Position != 4 {
 		t.Fatalf("second rule position = %+v, want 4", actual)
+	}
+}
+
+func TestReadSectionRejectsAmbiguousAnonymousIdentity(t *testing.T) {
+	for _, match := range []map[string]string{nil, {"name": "duplicate"}} {
+		client := NewClient(runnerFunc(func(context.Context, string) ([]byte, error) {
+			return []byte(`{"firewall":[{"name":"one","type":"zone","options":{"name":"duplicate"}},{"name":"two","type":"zone","options":{"name":"duplicate"}}]}`), nil
+		}), nil)
+		if _, _, err := client.ReadSection(context.Background(), Section{Package: "firewall", Name: "@zone[0]", Type: "zone", Match: match}); err == nil {
+			t.Fatal("ambiguous identity was accepted")
+		}
 	}
 }

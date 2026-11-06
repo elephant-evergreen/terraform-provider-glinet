@@ -1,3 +1,9 @@
 #!/bin/sh
 set -eu
-exec mise run check
+export TF_ACC_TERRAFORM_PATH="$(command -v terraform)"
+test -z "$(gofmt -l main.go internal)"
+go mod verify
+go vet ./...
+go test -race -p 2 ./...
+go build -o /dev/null .
+terraform fmt -check -recursive examples

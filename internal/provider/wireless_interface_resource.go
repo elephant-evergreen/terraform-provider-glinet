@@ -47,13 +47,11 @@ func typedWirelessInterfaceSpec() typedSpec {
 				"disabled":   boolString(boolOf(values, "disabled", false)),
 				"encryption": stringOf(values, "encryption"), "hidden": boolString(boolOf(values, "hidden", false)), "isolate": boolString(boolOf(values, "isolate", true)),
 			}
-			if ssid := stringOf(values, "ssid"); ssid != "" {
-				options["ssid"] = ssid
-			}
+			ssid := stringOf(values, "ssid")
+			options["ssid"] = ssid
 			for _, field := range []struct{ attrName, option string }{{"device", "device"}, {"network", "network"}, {"mode", "mode"}, {"ifname", "ifname"}} {
-				if value := stringOf(values, field.attrName); value != "" {
-					options[field.option] = value
-				}
+				value := stringOf(values, field.attrName)
+				options[field.option] = value
 			}
 			return router.Section{Package: "wireless", Type: "wifi-iface", Name: section, Options: options}, nil
 		},

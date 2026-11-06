@@ -7,3 +7,6 @@ to the Mozilla Public License, version 2.0. A copy of the license is in LICENSE.
 GL.iNet, OpenWrt, Terraform, and HashiCorp names identify the products with
 which this project is intended to interoperate. Their respective owners
 retain their rights. No affiliation or endorsement is claimed.
+
+Release executables include the third-party software and license notices
+listed in THIRD_PARTY_LICENSES.txt.

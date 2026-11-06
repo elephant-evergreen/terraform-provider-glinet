@@ -16,6 +16,8 @@ const ManagedOption = "home_iac_owner"
 // anonymous selector with a unique match map. The returned bool is false when
 // the section is absent.
 func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if selector.Package == "" || selector.Type == "" || selector.Name == "" {
 		return Section{}, false, errors.New("A section selector requires package, type and name.")
 	}
@@ -33,12 +35,17 @@ func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bo
 				singleton = actual
 			}
 		}
+		if count > 1 {
+			return Section{}, false, errors.New("The anonymous selector matches multiple UCI sections. Use a unique identity.")
+		}
 		if count == 1 {
 			result := Section{Package: selector.Package, Name: singleton.Name, Type: singleton.Type, Options: copyOptions(singleton.Options), Lists: copyLists(singleton.Lists)}
 			return result, true, nil
 		}
 	}
 	position := 0
+	var result Section
+	found := false
 	for _, actual := range state[selector.Package] {
 		matched := false
 		if actual.Type == selector.Type {
@@ -58,24 +65,32 @@ func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bo
 			}
 		}
 		if matched {
-			result := Section{Package: selector.Package, Name: actual.Name, Type: actual.Type, Options: copyOptions(actual.Options), Lists: copyLists(actual.Lists)}
+			if found {
+				return Section{}, false, errors.New("The section identity matches multiple UCI sections.")
+			}
+			result = Section{Package: selector.Package, Name: actual.Name, Type: actual.Type, Options: copyOptions(actual.Options), Lists: copyLists(actual.Lists)}
 			if selector.Package == "firewall" && selector.Type == "rule" {
 				value := position
 				result.Position = &value
 			}
-			return result, true, nil
+			found = true
 		}
 		if selector.Package == "firewall" {
 			position++
 		}
 	}
-	return Section{}, false, nil
+	return result, found, nil
 }
 
 // ApplySections writes the given sections as one recovery-protected UCI
 // transaction. The full managed configuration (all sections carrying
 // ManagedOption, plus the change set) is validated before mutation.
 func (c *Client) ApplySections(ctx context.Context, changes Configuration, secrets map[string]string) error {
+	if err := ValidateConfiguration(changes); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for _, section := range changes {
 		if section.Absent {
 			continue
