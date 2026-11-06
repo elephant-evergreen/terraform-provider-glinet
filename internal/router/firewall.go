@@ -222,36 +222,31 @@ func verifyRuntimeFirewall(generated, running string) error {
 	if expected.policies[firewallChain{table: "filter", name: "FORWARD"}] != "DROP" || actual.policies[firewallChain{table: "filter", name: "FORWARD"}] != "DROP" {
 		return errors.New("Cannot verify the FORWARD default policy.")
 	}
-	for chain, rules := range actual.chains {
-		if chain.table != "nat" {
-			continue
-		}
-		for _, rule := range rules {
-			if containsRule(rule, "-j") {
-				target := ruleTarget(rule)
-				if target == "DNAT" || target == "REDIRECT" || target == "NETMAP" {
-					return errors.New("An unsupported destination NAT rule is active.")
-				}
-			}
-		}
-	}
 	if expected.policies[firewallChain{table: "filter", name: "INPUT"}] == "" || actual.policies[firewallChain{table: "filter", name: "INPUT"}] != expected.policies[firewallChain{table: "filter", name: "INPUT"}] {
 		return errors.New("The INPUT default policy differs from the generated policy.")
 	}
-	pending := []string{"INPUT", "FORWARD"}
+	if err := verifyTable(expected, actual, "filter", "INPUT", "FORWARD"); err != nil {
+		return err
+	}
+	return verifyTable(expected, actual, "nat", "PREROUTING")
+}
+
+func verifyTable(expected, actual firewallRules, table string, roots ...string) error {
+	pending := append([]string{}, roots...)
 	seen := map[string]bool{}
 	for len(pending) > 0 {
-		chain := pending[len(pending)-1]
+		name := pending[len(pending)-1]
 		pending = pending[:len(pending)-1]
-		if seen[chain] {
+		if seen[name] {
 			continue
 		}
-		seen[chain] = true
-		desired := expected.chains[firewallChain{table: "filter", name: chain}]
+		seen[name] = true
+		chain := firewallChain{table: table, name: name}
+		desired := expected.chains[chain]
 		position := 0
-		for _, rule := range actual.chains[firewallChain{table: "filter", name: chain}] {
+		for _, rule := range actual.chains[chain] {
 			target := ruleTarget(rule)
-			child, childExists := actual.chains[firewallChain{table: "filter", name: target}]
+			child, childExists := actual.chains[firewallChain{table: table, name: target}]
 			if target != "" && childExists {
 				pending = append(pending, target)
 			}
@@ -261,14 +256,14 @@ func verifyRuntimeFirewall(generated, running string) error {
 			}
 			counterOnly := !containsRule(rule, "-g", "--goto", "--jump") && target == ""
 			harmlessChain := target != "" && childExists && allRulesHarmless(child)
-			stockDNAT := stockDNATChains[chain] && position == 0 && equalRule(rule, []string{"-m", "conntrack", "--ctstate", "DNAT", "-j", "ACCEPT"})
-			stockICMP := chain == "INPUT" && equalRule(rule, []string{"-p", "1", "-i", "br-lan", "--icmp-type", "8", "-m", "limit", "--limit", "25/sec", "-j", "ACCEPT"})
+			stockDNAT := table == "filter" && stockDNATChains[name] && position == 0 && equalRule(rule, []string{"-m", "conntrack", "--ctstate", "DNAT", "-j", "ACCEPT"})
+			stockICMP := table == "filter" && name == "INPUT" && equalRule(rule, []string{"-p", "1", "-i", "br-lan", "--icmp-type", "8", "-m", "limit", "--limit", "25/sec", "-j", "ACCEPT"})
 			if !(counterOnly || harmlessChain || stockDNAT || stockICMP || target == "DROP" || target == "REJECT" || target == "LOG") {
-				return fmt.Errorf("The running firewall contains an undeclared ACCEPT or chain branch: %s", chain)
+				return fmt.Errorf("The running %s table contains an undeclared rule: %s", table, name)
 			}
 		}
 		if position != len(desired) {
-			return fmt.Errorf("Generated forwarding rules are missing or out of order: %s", chain)
+			return fmt.Errorf("Generated rules are missing or out of order in the %s table: %s", table, name)
 		}
 	}
 	return nil

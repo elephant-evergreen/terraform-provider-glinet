@@ -74,7 +74,7 @@ func TestRuntimeFirewallRejectsUnexpectedInputAccept(t *testing.T) {
 	}
 }
 
-func TestRuntimeFirewallRejectsDestinationNATAndInputStateAccept(t *testing.T) {
+func TestRuntimeFirewallRejectsUndeclaredDestinationNAT(t *testing.T) {
 	for _, target := range []string{
 		"DNAT --to-destination 192.168.11.10:22",
 		"REDIRECT --to-ports 22",
@@ -82,9 +82,21 @@ func TestRuntimeFirewallRejectsDestinationNATAndInputStateAccept(t *testing.T) {
 	} {
 		running := strings.Replace(runningFirewall, ":PREROUTING ACCEPT [0:0]", ":PREROUTING ACCEPT [0:0]\n-A PREROUTING -i br-guest -p tcp --dport 9999 -j "+target, 1)
 		running = strings.Replace(running, "-A FORWARD -j parental_control", "-A INPUT -m conntrack --ctstate DNAT -j ACCEPT\n-A FORWARD -j parental_control", 1)
-		if err := verifyRuntimeFirewall(generatedFirewall, running); err == nil || !strings.Contains(err.Error(), "destination NAT") {
-			t.Fatalf("Expected destination NAT rejection for %s: %v", target, err)
+		if err := verifyRuntimeFirewall(generatedFirewall, running); err == nil || !strings.Contains(err.Error(), "undeclared") {
+			t.Fatalf("Expected an undeclared rule rejection for %s: %v", target, err)
 		}
+	}
+}
+
+func TestRuntimeFirewallAcceptsDeclaredDestinationNAT(t *testing.T) {
+	redirect := "-A PREROUTING -p tcp -m tcp --dport 8080 -j DNAT --to-destination 192.168.8.50:80"
+	generated := generatedFirewall + "iptables -t nat " + redirect + "\n"
+	running := strings.Replace(runningFirewall, ":PREROUTING ACCEPT [0:0]", ":PREROUTING ACCEPT [0:0]\n"+redirect, 1)
+	if err := verifyRuntimeFirewall(generated, running); err != nil {
+		t.Fatalf("declared redirect was rejected: %v", err)
+	}
+	if err := verifyRuntimeFirewall(generated, runningFirewall); err == nil {
+		t.Fatal("a generated redirect missing from the running table was accepted")
 	}
 }
 
