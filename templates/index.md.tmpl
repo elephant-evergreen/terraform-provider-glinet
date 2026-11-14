@@ -9,19 +9,29 @@ description: |-
 
 {{ .Description | trimspace }}
 
-Start by checking the router model, firmware, and operating mode with the [glinet_system data source](https://registry.terraform.io/providers/elephant-evergreen/glinet/latest/docs/data-sources/system). See the [testing scope](https://github.com/elephant-evergreen/terraform-provider-glinet/blob/main/docs/testing.md) before managing a router.
+## Check the router
 
-To adopt existing settings, open **Import existing configuration** on the resource page.
+Set these environment variables before you run Terraform.
 
-Before upgrading, read the [release notes for your target version](https://github.com/elephant-evergreen/terraform-provider-glinet/releases).
+| Variable | Value |
+| --- | --- |
+| `GLINET_HOST` | The router's hostname or private LAN IP address. |
+| `GLINET_PRIVATE_KEY_FILE` | The path to an unencrypted OpenSSH Ed25519 or RSA key authorized for `root` on the router. |
+| `GLINET_KNOWN_HOSTS_FILE` | The path to a known-hosts file with the router's host key. Verify the key through a trusted channel before adding it. |
 
-{{ if .HasExamples -}}
-## Example Usage
+Save this example as `main.tf` in an empty directory.
 
-{{- range .ExampleFiles }}
+{{ tffile .ExampleFile }}
 
-{{ tffile . }}
-{{- end }}
-{{- end }}
+1. Run `terraform init`.
+2. Run `terraform plan`. In the planned `router` output, look for model `GL.iNet GL-MT6000`, firmware `4.11.0`, and mode `router`. This check reads the router over SSH without an apply.
+
+If the plan cannot connect, confirm SSH is enabled and check the host, root key and verified host-key entry.
+
+## Adopt existing settings
+
+In the **Resources** sidebar, choose the setting you want to manage and follow **Import existing configuration**. See the [hardware testing scope](https://github.com/elephant-evergreen/terraform-provider-glinet/blob/main/docs/testing.md) before making a change.
+
+Keep `.terraform.lock.hcl` in version control. Before upgrading, read the [release notes for your target version](https://github.com/elephant-evergreen/terraform-provider-glinet/releases), then run `terraform init -upgrade` and review the lock file and plan.
 
 {{ .SchemaMarkdown | trimspace }}
