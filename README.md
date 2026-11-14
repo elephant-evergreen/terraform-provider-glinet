@@ -4,38 +4,7 @@ Manage network interfaces, Wi-Fi, DHCP, DNS, and firewall settings on GL.iNet Fl
 
 ## Check the router
 
-Set `GLINET_HOST`, `GLINET_PRIVATE_KEY_FILE`, and `GLINET_KNOWN_HOSTS_FILE`. Generate or use an existing Ed25519 or RSA SSH key authorized for root, and verify the router's host key through a trusted channel before adding it to your known-hosts file.
-
-Save this as `main.tf` in an empty directory. The example reads the router over SSH.
-
-```hcl
-terraform {
-  required_providers {
-    glinet = {
-      source  = "elephant-evergreen/glinet"
-      version = "~> 0.1.0"
-    }
-  }
-}
-
-provider "glinet" {}
-
-data "glinet_system" "router" {}
-
-output "router" {
-  value = {
-    model    = data.glinet_system.router.model
-    firmware = data.glinet_system.router.firmware
-    mode     = data.glinet_system.router.mode
-  }
-}
-```
-
-1. Run `terraform init` to install the provider.
-2. Run `terraform plan` to read the router.
-3. In the planned `router` output, check for the Flint 2 model (`GL.iNet GL-MT6000`), firmware `4.11.0`, and mode `router`.
-
-Keep `.terraform.lock.hcl` in version control. To pick up a compatible patch, read its release notes, run `terraform init -upgrade`, and review the lockfile and plan.
+Follow [Check the router in Terraform Registry](https://registry.terraform.io/providers/elephant-evergreen/glinet/latest/docs#check-the-router) to verify SSH access and read the model, firmware, and operating mode.
 
 ## Adopt configuration
 
