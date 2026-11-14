@@ -1,0 +1,16 @@
+[tools]
+go = "1.27.3"
+terraform = "1.17.1"
+
+[tasks.check]
+description = "Check formatting, modules, tests, build, and generated documentation"
+run = [
+  'test -z "$(gofmt -l main.go internal)"',
+  "go mod verify",
+  "go vet ./...",
+  'TF_ACC_TERRAFORM_PATH="$(command -v terraform)" go test -race -p 2 ./...',
+  "go build -o /dev/null .",
+  "terraform fmt -check -recursive examples",
+  "go tool tfplugindocs generate --provider-name glinet",
+  "git diff --exit-code -- docs",
+]

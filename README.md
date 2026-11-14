@@ -1,6 +1,12 @@
 # Terraform Provider for GL.iNet
 
-Manage Flint 2 (GL-MT6000), stock firmware 4.11.0 in router mode through typed Terraform resources. Install [elephant-evergreen/glinet from Terraform Registry](https://registry.terraform.io/providers/elephant-evergreen/glinet/0.1.0).
+Manage network interfaces, Wi-Fi, DHCP, DNS, and firewall settings on GL.iNet Flint 2 (GL-MT6000) running stock firmware 4.11.0 in router mode. Start with the [Terraform Registry reference](https://registry.terraform.io/providers/elephant-evergreen/glinet/0.1.0/docs) or check the [release notes](https://github.com/elephant-evergreen/terraform-provider-glinet/releases) before changing versions.
+
+## Check the router
+
+Set `GLINET_HOST`, `GLINET_PRIVATE_KEY_FILE`, and `GLINET_KNOWN_HOSTS_FILE`. Generate or use an existing Ed25519 or RSA SSH key authorized for root, and verify the router's host key through a trusted channel before adding it to your known-hosts file.
+
+Save the following as `main.tf` in an empty directory, then run `terraform init` and `terraform plan`. The plan reads the router model, firmware, and operating mode over SSH without changing configuration.
 
 ```hcl
 terraform {
@@ -13,23 +19,21 @@ terraform {
 }
 
 provider "glinet" {}
+
+data "glinet_system" "router" {}
+
+output "firmware" {
+  value = data.glinet_system.router.firmware
+}
 ```
 
-```sh
-terraform init
-terraform plan
-terraform apply
-```
+## Adopt configuration
 
-Provide `GLINET_HOST`, `GLINET_PRIVATE_KEY_FILE`, and `GLINET_KNOWN_HOSTS_FILE`, or set the corresponding provider arguments. Use an Ed25519 or RSA SSH private key for root and host keys verified through a trusted channel. Host-key verification cannot be disabled. Terraform installs versioned provider packages and verifies their checksums using its dependency lock file.
-
-Before a mutation, the provider checks configuration ownership and conflicts, verifies an age-encrypted full router configuration backup, and requires a direct active wired management path for network, port, or Wi-Fi changes. Each resource uses a persistent router-side recovery transaction. Unconfirmed changes roll back after 300 seconds, including after SSH disconnection or a router reboot. External encrypted backups and transaction snapshots serve different recovery needs.
-
-Resources own network interfaces, bridges, Ethernet ports, Wi-Fi interfaces, DHCP pools and reservations, DNS, dnsmasq, firewall zones, forwardings, rules and redirects. WireGuard resources remain experimental. Resources support import, refresh, and drift detection; secret inputs are write-only. See [typed resources](docs/typed-resources.md) and the [provider reference](docs/index.md).
+Import existing objects before changing their settings and review the resulting plan. The provider verifies an age-encrypted full configuration backup before the first change in an apply. Network, port, and Wi-Fi changes also require an active wired management path. Router-side recovery rolls back unconfirmed changes after 300 seconds, including after an SSH disconnection or router reboot. See [typed resources and import IDs](docs/typed-resources.md) and the [scope of hardware testing](docs/testing.md). WireGuard remains experimental.
 
 ## Development
 
-The provider owns compilation, tests, documentation, and releases. See [development](docs/development.md), [verification boundaries](docs/testing.md), and [contributing](CONTRIBUTING.md).
+See [development](docs/development.md), [contributing](CONTRIBUTING.md), and the [release procedure](docs/releases.md).
 
 ## License
 
