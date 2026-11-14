@@ -14,7 +14,7 @@ Wi-Fi keys enter the wireless resource only through sensitive write-only argumen
 
 | Dependency | Fixed version | Responsibility and rationale |
 | --- | --- | --- |
-| [Go](https://go.dev/dl/) | 1.27.3 | Official compiler and standard library; pinned in go.mod. |
+| [Go](https://go.dev/dl/) | 1.27.4 | Official compiler and standard library; pinned in go.mod. |
 | [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework/tree/v1.19.0) | v1.19.0 | HashiCorp's provider protocol and schema implementation; avoids implementing a Terraform runtime. MPL-2.0. |
 | [Go SSH](https://pkg.go.dev/golang.org/x/crypto/ssh@v0.58.0) | v0.58.0 | Go project's SSH and known_hosts implementation; avoids implementing cryptography or disabling host verification. BSD-3-Clause. |
 | [Terraform Plugin Testing](https://github.com/hashicorp/terraform-plugin-testing/tree/v1.16.0) | v1.16.0 | Development dependency for actual Terraform protocol, plan, state, refresh, and import tests. MPL-2.0. |
