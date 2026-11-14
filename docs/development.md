@@ -1,10 +1,10 @@
 # Development
 
-Use the Go version in `go.mod` and Terraform 1.17.1. These tools are needed to develop the provider; installed provider packages do not require them at runtime.
+Install the Go and Terraform versions pinned in `mise.toml`. These tools are needed to develop the provider; installed provider packages do not require them at runtime.
 
 ```sh
-bin/check-for-agent
-go tool tfplugindocs generate --provider-name glinet
+mise install
+mise run check
 ```
 
 The check runs formatting, module verification, vet, race-enabled tests, compilation, and Terraform example formatting. Terraform protocol tests use the shipping resource implementation with local router fixtures. Ordinary checks never require router credentials or change a live network.
