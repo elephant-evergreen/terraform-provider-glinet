@@ -8,13 +8,16 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/sync/singleflight"
 )
 
 var sectionName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 
 type Client struct {
 	runner     Runner
-	mu         sync.Mutex
+	mu         sync.RWMutex
+	refresh    singleflight.Group
 	protection ChangeProtection
 }
 
