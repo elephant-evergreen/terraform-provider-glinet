@@ -7,4 +7,5 @@
 - Use Go and the official Terraform Plugin Framework. Use the Go and Terraform versions in mise.toml, and run mise run check for required checks.
 - Keep examples synthetic. Ordinary tests must use local test fixtures and must not change a real router. Hardware acceptance testing requires an explicitly authorized dedicated device.
 - Record unverified hardware behavior in the issue or pull request. Do not equate fixture tests with hardware compatibility.
+- Follow the [compatibility checks](CONTRIBUTING.md#changes) before designing or merging changes that affect existing installations.
 - Include the reason for a change and a Co-Authored-By trailer identifying the AI tool and model in AI-assisted commits.
