@@ -2,6 +2,8 @@
 
 Manage Flint 2 (GL-MT6000), stock firmware 4.11.0 in router mode through typed Terraform resources. Install [elephant-evergreen/glinet from Terraform Registry](https://registry.terraform.io/providers/elephant-evergreen/glinet/0.1.0).
 
+See [release notes and upgrade instructions](https://github.com/elephant-evergreen/terraform-provider-glinet/releases) before changing the pinned version.
+
 ```hcl
 terraform {
   required_providers {
@@ -29,7 +31,7 @@ Resources own network interfaces, bridges, Ethernet ports, Wi-Fi interfaces, DHC
 
 ## Development
 
-The provider owns compilation, tests, documentation, and releases. See [development](docs/development.md), [verification boundaries](docs/testing.md), and [contributing](CONTRIBUTING.md).
+See [development](docs/development.md), [verification boundaries](docs/testing.md), [contributing](CONTRIBUTING.md), and the [release procedure](docs/releases.md).
 
 ## License
 
