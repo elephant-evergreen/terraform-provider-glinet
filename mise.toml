@@ -1,5 +1,5 @@
 [tools]
-go = "1.27.3"
+go = "1.27.4"
 terraform = "1.17.1"
 
 [tasks.check]
@@ -11,6 +11,7 @@ run = [
   'TF_ACC_TERRAFORM_PATH="$(command -v terraform)" go test -race -p 2 ./...',
   "go build -o /dev/null .",
   "terraform fmt -check -recursive examples",
+  "go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...",
   "go tool tfplugindocs generate --provider-name glinet",
   "git diff --exit-code -- docs",
 ]
