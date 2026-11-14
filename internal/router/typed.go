@@ -16,12 +16,12 @@ const ManagedOption = "home_iac_owner"
 // anonymous selector with a unique match map. The returned bool is false when
 // the section is absent.
 func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bool, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	if selector.Package == "" || selector.Type == "" || selector.Name == "" {
 		return Section{}, false, errors.New("A section selector requires package, type and name.")
 	}
-	state, err := c.readSafetyState(ctx)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	state, err := c.readRefreshState(ctx)
 	if err != nil {
 		return Section{}, false, err
 	}
@@ -80,6 +80,29 @@ func (c *Client) ReadSection(ctx context.Context, selector Section) (Section, bo
 		}
 	}
 	return result, found, nil
+}
+
+func (c *Client) readRefreshState(ctx context.Context) (uciState, error) {
+	for ctx.Err() == nil {
+		value, err, shared := c.refresh.Do("uci", func() (any, error) {
+			state, err := c.readSafetyState(ctx)
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return state, err
+		})
+		if ctx.Err() != nil {
+			break
+		}
+		if shared && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		return value.(uciState), nil
+	}
+	return nil, ctx.Err()
 }
 
 // ApplySections writes the given sections as one recovery-protected UCI
