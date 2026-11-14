@@ -26,7 +26,7 @@ func NewWireGuardInterfaceResource() resource.Resource {
 func typedWireGuardInterfaceSpec() typedSpec {
 	return typedSpec{
 		TypeName:    "wireguard_interface",
-		Description: "Manage one OpenWrt WireGuard interface. The private key is a write-only argument; it is never stored in plan or state.",
+		Description: "Manage one OpenWrt WireGuard interface. Hardware operation is experimental. Keep a direct wired management path for changes. For adoption, omit `private_key_wo` and `private_key_version` to keep the existing key.",
 		Attributes: map[string]schema.Attribute{
 			"name":                schema.StringAttribute{Required: true, MarkdownDescription: "WireGuard interface name, such as `wg0`.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"addresses":           schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Interface addresses in CIDR notation."},
@@ -110,7 +110,7 @@ func NewWireGuardPeerResource() resource.Resource {
 func typedWireGuardPeerSpec() typedSpec {
 	return typedSpec{
 		TypeName:    "wireguard_peer",
-		Description: "Manage one WireGuard peer section on a managed interface. Preshared keys are write-only.",
+		Description: "Manage one peer on a WireGuard interface. Hardware operation is experimental. Keep a direct wired management path for changes and omit `preshared_key_wo` and `preshared_key_version` during adoption.",
 		Attributes: map[string]schema.Attribute{
 			"section":               schema.StringAttribute{Required: true, MarkdownDescription: "UCI wireguard peer section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"interface":             schema.StringAttribute{Required: true, MarkdownDescription: "WireGuard interface name, such as `wg0`."},

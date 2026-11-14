@@ -17,7 +17,7 @@ import (
 func NewEthernetPortResource() resource.Resource {
 	return newTypedResource(typedSpec{
 		TypeName:    "ethernet_port",
-		Description: "Manage one GL.iNet `eth_ports_config_map` port role and PVID.",
+		Description: "Manage the LAN or WAN role and VLAN ID of one Ethernet port. For a port change, connect directly to the router’s private LAN address over a wired path that remains available during the change.",
 		Attributes: map[string]schema.Attribute{
 			"port":      schema.StringAttribute{Required: true, MarkdownDescription: "Port name, such as `lan2`.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"mode":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("lan"), MarkdownDescription: "Port mode: `lan` or `wan`."},

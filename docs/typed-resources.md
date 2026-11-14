@@ -60,7 +60,7 @@ The external file is a standard age-encrypted `sysupgrade` `.tar.gz` configurati
 
 ## Import
 
-Each resource exposes a stable import ID, listed in the table above. Anonymous stock sections are resolved by a stable unique option. Use `terraform import` or an `import` block, then review the generated configuration with `terraform plan -generate-config-out`.
+Each resource exposes a stable import ID, listed in the table above. Anonymous stock sections are resolved by a stable unique option. Use the import block from the resource page and match your HCL to the router’s current values. If you start with only the import block, `terraform plan -generate-config-out=generated.tf` can draft the resource configuration. Review the draft before running a fresh plan. For one adoption, expect `1 to import, 0 to add, 0 to change, 0 to destroy` before applying.
 
 The provider is the only owner of the sections it manages. Do not overlap typed resources with manual UCI edits or a second management tool.
 
