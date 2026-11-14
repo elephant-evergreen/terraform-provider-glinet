@@ -3,21 +3,33 @@
 page_title: "glinet_wireguard_interface Resource - glinet"
 subcategory: ""
 description: |-
-  Manage one OpenWrt WireGuard interface. The private key is a write-only argument; it is never stored in plan or state.
+  Manage one OpenWrt WireGuard interface. Hardware operation is experimental. Keep a direct wired management path for changes. For adoption, omit private_key_wo and private_key_version to keep the existing key.
 ---
 
 # glinet_wireguard_interface (Resource)
 
-Manage one OpenWrt WireGuard interface. The private key is a write-only argument; it is never stored in plan or state.
+Manage one OpenWrt WireGuard interface. Hardware operation is experimental. Keep a direct wired management path for changes. For adoption, omit `private_key_wo` and `private_key_version` to keep the existing key.
 
-## Example Usage
+## Import existing configuration
+
+1. Use the example’s resource block and match its arguments to the current router settings. Explicitly set values that differ from the defaults.
+2. Add the import block below with your resource address and the existing object’s ID.
+3. Run `terraform plan`. For one import, apply only when it reports `1 to import, 0 to add, 0 to change, 0 to destroy`.
+
+```terraform
+import {
+  to = glinet_wireguard_interface.wg0
+  id = "wg0"
+}
+```
+
+## Example configuration
 
 ```terraform
 resource "glinet_wireguard_interface" "wg0" {
-  name           = "wg0"
-  addresses      = ["10.8.0.1/24"]
-  listen_port    = 51820
-  private_key_wo = var.wireguard_private_key
+  name        = "wg0"
+  addresses   = ["10.8.0.1/24"]
+  listen_port = 51820
 }
 ```
 

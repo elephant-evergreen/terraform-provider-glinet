@@ -25,7 +25,7 @@ func NewNetworkInterfaceResource() resource.Resource {
 func typedNetworkInterfaceSpec() typedSpec {
 	return typedSpec{
 		TypeName:    "network_interface",
-		Description: "Manage one OpenWrt `network` interface section (including static addresses, VLAN interfaces, and DHCP clients). Destroy forgets ownership by default; set `delete_behavior = \"delete\"` to remove a named section.",
+		Description: "Manage an OpenWrt network interface, including static addresses, VLANs, and DHCP clients. Keep a direct wired management path when changing an interface.",
 		Attributes: map[string]schema.Attribute{
 			"name":         schema.StringAttribute{Required: true, MarkdownDescription: "UCI interface name, such as `lan`, `guest`, or `vlan11`. Changing it replaces the resource.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"device":       schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Underlying device or bridge, such as `br-lan`."},

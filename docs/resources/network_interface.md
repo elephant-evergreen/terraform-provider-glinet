@@ -3,14 +3,27 @@
 page_title: "glinet_network_interface Resource - glinet"
 subcategory: ""
 description: |-
-  Manage one OpenWrt network interface section (including static addresses, VLAN interfaces, and DHCP clients). Destroy forgets ownership by default; set delete_behavior = "delete" to remove a named section.
+  Manage an OpenWrt network interface, including static addresses, VLANs, and DHCP clients. Keep a direct wired management path when changing an interface.
 ---
 
 # glinet_network_interface (Resource)
 
-Manage one OpenWrt `network` interface section (including static addresses, VLAN interfaces, and DHCP clients). Destroy forgets ownership by default; set `delete_behavior = "delete"` to remove a named section.
+Manage an OpenWrt network interface, including static addresses, VLANs, and DHCP clients. Keep a direct wired management path when changing an interface.
 
-## Example Usage
+## Import existing configuration
+
+1. Use the example’s resource block and match its arguments to the current router settings. Explicitly set values that differ from the defaults.
+2. Add the import block below with your resource address and the existing object’s ID.
+3. Run `terraform plan`. For one import, apply only when it reports `1 to import, 0 to add, 0 to change, 0 to destroy`.
+
+```terraform
+import {
+  to = glinet_network_interface.nas
+  id = "vlan11"
+}
+```
+
+## Example configuration
 
 ```terraform
 resource "glinet_network_interface" "nas" {

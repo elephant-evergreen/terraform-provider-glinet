@@ -23,7 +23,7 @@ func NewWirelessInterfaceResource() resource.Resource {
 func typedWirelessInterfaceSpec() typedSpec {
 	return typedSpec{
 		TypeName:    "wireless_interface",
-		Description: "Manage one OpenWrt `wireless` wifi-iface section. Wi-Fi passphrases use a write-only argument and never enter plan or state; omit it to preserve the existing key.",
+		Description: "Manage one OpenWrt Wi-Fi access point. Keep a direct wired management path for changes. For adoption, omit `key_wo` and `key_version` to keep the current passphrase.",
 		Attributes: map[string]schema.Attribute{
 			"section":     schema.StringAttribute{Required: true, MarkdownDescription: "UCI wifi-iface section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"ssid":        schema.StringAttribute{Required: true, MarkdownDescription: "SSID (1–32 UTF-8 bytes)."},

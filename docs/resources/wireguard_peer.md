@@ -3,24 +3,40 @@
 page_title: "glinet_wireguard_peer Resource - glinet"
 subcategory: ""
 description: |-
-  Manage one WireGuard peer section on a managed interface. Preshared keys are write-only.
+  Manage one peer on a WireGuard interface. Hardware operation is experimental. Keep a direct wired management path for changes and omit preshared_key_wo and preshared_key_version during adoption.
 ---
 
 # glinet_wireguard_peer (Resource)
 
-Manage one WireGuard peer section on a managed interface. Preshared keys are write-only.
+Manage one peer on a WireGuard interface. Hardware operation is experimental. Keep a direct wired management path for changes and omit `preshared_key_wo` and `preshared_key_version` during adoption.
 
-## Example Usage
+## Import existing configuration
+
+1. Use the example’s resource block and match its arguments to the current router settings. Explicitly set values that differ from the defaults.
+2. Add the import block below with your resource address and the existing object’s ID.
+3. Run `terraform plan`. For one import, apply only when it reports `1 to import, 0 to add, 0 to change, 0 to destroy`.
 
 ```terraform
+import {
+  to = glinet_wireguard_peer.peer
+  id = "wg0:peer1"
+}
+```
+
+## Example configuration
+
+```terraform
+variable "wireguard_peer_public_key" {
+  type = string
+}
+
 resource "glinet_wireguard_peer" "peer" {
-  section          = "peer1"
-  interface        = "wg0"
-  public_key       = var.wireguard_peer_public_key
-  allowed_ips      = ["10.8.0.2/32"]
-  endpoint_host    = "vpn.example"
-  endpoint_port    = 51820
-  preshared_key_wo = var.wireguard_preshared_key
+  section       = "peer1"
+  interface     = "wg0"
+  public_key    = var.wireguard_peer_public_key
+  allowed_ips   = ["10.8.0.2/32"]
+  endpoint_host = "vpn.example"
+  endpoint_port = 51820
 }
 ```
 

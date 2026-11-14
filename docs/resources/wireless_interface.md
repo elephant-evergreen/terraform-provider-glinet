@@ -3,26 +3,37 @@
 page_title: "glinet_wireless_interface Resource - glinet"
 subcategory: ""
 description: |-
-  Manage one OpenWrt wireless wifi-iface section. Wi-Fi passphrases use a write-only argument and never enter plan or state; omit it to preserve the existing key.
+  Manage one OpenWrt Wi-Fi access point. Keep a direct wired management path for changes. For adoption, omit key_wo and key_version to keep the current passphrase.
 ---
 
 # glinet_wireless_interface (Resource)
 
-Manage one OpenWrt `wireless` wifi-iface section. Wi-Fi passphrases use a write-only argument and never enter plan or state; omit it to preserve the existing key.
+Manage one OpenWrt Wi-Fi access point. Keep a direct wired management path for changes. For adoption, omit `key_wo` and `key_version` to keep the current passphrase.
 
-## Example Usage
+## Import existing configuration
+
+1. Use the example’s resource block and match its arguments to the current router settings. Explicitly set values that differ from the defaults.
+2. Add the import block below with your resource address and the existing object’s ID.
+3. Run `terraform plan`. For one import, apply only when it reports `1 to import, 0 to add, 0 to change, 0 to destroy`.
+
+```terraform
+import {
+  to = glinet_wireless_interface.private_2g
+  id = "wifi2g"
+}
+```
+
+## Example configuration
 
 ```terraform
 resource "glinet_wireless_interface" "private_2g" {
-  section     = "wifi2g"
-  ssid        = "Example"
-  device      = "mt798611"
-  network     = "lan"
-  mode        = "ap"
-  encryption  = "psk2"
-  isolate     = false
-  key_wo      = var.wifi_private_key
-  key_version = 1
+  section    = "wifi2g"
+  ssid       = "Example"
+  device     = "mt798611"
+  network    = "lan"
+  mode       = "ap"
+  encryption = "psk2"
+  isolate    = false
 }
 ```
 

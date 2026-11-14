@@ -17,7 +17,7 @@ import (
 func NewNetworkBridgeResource() resource.Resource {
 	return newTypedResource(typedSpec{
 		TypeName:    "network_bridge",
-		Description: "Manage an OpenWrt bridge device and its port membership. The resource resolves a bridge by its `name` option, so stock bridges such as `br-lan` can be imported without knowing their anonymous UCI indices.",
+		Description: "Manage an OpenWrt bridge and its member ports. Keep a direct wired management path for changes. When adopting a bridge, list its existing member ports explicitly. Omitting `ports` plans to remove its members. Import by the bridge name, such as `br-lan`.",
 		Attributes: map[string]schema.Attribute{
 			"name":          schema.StringAttribute{Required: true, MarkdownDescription: "Bridge device name, such as `br-lan` or `br-vlan11`.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"ports":         schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Bridge member ports. Omitted or empty membership removes all member ports, subject to management-path safety checks."},
