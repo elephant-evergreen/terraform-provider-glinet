@@ -91,6 +91,7 @@ func typedNetworkInterfaceSpec() typedSpec {
 			if metric := int64Of(values, "metric"); metric > 0 {
 				options["metric"] = strconv.FormatInt(metric, 10)
 			}
+			options["sourcefilter"] = boolString(boolOf(values, "sourcefilter", true))
 			if mtu := int64Of(values, "mtu"); mtu > 0 {
 				options["mtu"] = strconv.FormatInt(mtu, 10)
 			}
