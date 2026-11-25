@@ -8,6 +8,10 @@ Keep changes focused on the documented device and firmware scope. Model resource
 
 Contributions are provided under the project's MPL-2.0 license. Preserve copyright and license notices when adapting third-party material, and record its source and version in NOTICE. Do not copy code or documentation whose redistribution terms are unclear.
 
+## Public information
+
+Do not include private repository names, internal project names, hostnames, LAN addresses, SSIDs, or per-device update and verification history in public documentation, examples, diagnostics, issues, pull requests (including descriptions and comments), commit messages, or release notes. Use synthetic values such as RFC 5737 addresses in examples and fixtures. Document supported and tested firmware versions separately from any per-device history.
+
 ## Test data
 
 Use synthetic values in fixtures and examples. Do not commit router backups, configuration exports, credentials, private keys, Terraform state, plan files, or personal network identifiers.

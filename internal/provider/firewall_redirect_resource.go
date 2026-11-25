@@ -16,7 +16,7 @@ import (
 func NewFirewallRedirectResource() resource.Resource {
 	return newTypedResource(typedSpec{
 		TypeName:    "firewall_redirect",
-		Description: "Manage one firewall redirect (destination NAT). The home-network policy rejects unmanaged redirects; a redirect declared by this resource is treated as managed. Destroy releases ownership by default.",
+		Description: "Manage one firewall redirect (destination NAT). Unmanaged redirects are rejected by the provider's safety checks; a redirect declared by this resource is treated as managed. Destroy releases ownership by default.",
 		Attributes: map[string]schema.Attribute{
 			"name":       schema.StringAttribute{Required: true, MarkdownDescription: "Unique redirect name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"src":        schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Source zone."},
