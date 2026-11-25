@@ -20,6 +20,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_network_interface` | `network` interface | interface name (`lan`, `vlan11`) | forget |
 | `glinet_network_bridge` | `network` bridge device | bridge name (`br-lan`) | forget |
 | `glinet_network_route` | `network` static route | route section name | forget |
+| `glinet_network_rule` | `network` policy routing rule | rule section name | forget |
 | `glinet_ethernet_port` | `eth_ports_config_map` port | port name (`lan2`) | forget |
 | `glinet_wireless_interface` | `wireless` wifi-iface | section name (`wifi2g`) | forget |
 | `glinet_wireless_radio` | `wireless` wifi-device | section name (`mt798611`) | forget (adopt-only) |
