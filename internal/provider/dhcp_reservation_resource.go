@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -21,11 +22,14 @@ func NewDHCPReservationResource() resource.Resource {
 		TypeName:    "dhcp_reservation",
 		Description: "Manage one OpenWrt `dhcp` host reservation. Static reservations may use an address inside the dynamic pool; UCI gives the reservation precedence.",
 		Attributes: map[string]schema.Attribute{
-			"section":  schema.StringAttribute{Required: true, MarkdownDescription: "UCI host section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
-			"mac":      schema.StringAttribute{Required: true, MarkdownDescription: "Client MAC address."},
-			"ip":       schema.StringAttribute{Required: true, MarkdownDescription: "Reserved IPv4 address."},
-			"hostname": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "DHCP hostname."},
-			"dns":      schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Per-host DNS servers."},
+			"section":   schema.StringAttribute{Required: true, MarkdownDescription: "UCI host section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"mac":       schema.StringAttribute{Required: true, MarkdownDescription: "Client MAC address."},
+			"ip":        schema.StringAttribute{Required: true, MarkdownDescription: "Reserved IPv4 address."},
+			"hostname":  schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "DHCP hostname."},
+			"dns":       schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Per-host DNS servers."},
+			"duid":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "DHCPv6 DUID."},
+			"leasetime": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Per-host lease time."},
+			"ignore":    schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Ignore this host."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			section := stringOf(values, "section")
@@ -35,6 +39,9 @@ func NewDHCPReservationResource() resource.Resource {
 			options := map[string]string{"mac": stringOf(values, "mac"), "ip": stringOf(values, "ip")}
 			name := stringOf(values, "hostname")
 			options["name"] = name
+			options["duid"] = stringOf(values, "duid")
+			options["leasetime"] = stringOf(values, "leasetime")
+			options["ignore"] = boolString(boolOf(values, "ignore", false))
 			item := router.Section{Package: "dhcp", Type: "host", Name: section, Options: options}
 			servers := stringsOf(values, "dns")
 			item.Lists = map[string][]string{"dns": servers}
@@ -42,11 +49,14 @@ func NewDHCPReservationResource() resource.Resource {
 		},
 		Load: func(section router.Section) map[string]attr.Value {
 			return map[string]attr.Value{
-				"section":  stringValue(section.Name),
-				"mac":      stringValue(section.Options["mac"]),
-				"ip":       stringValue(section.Options["ip"]),
-				"hostname": stringValue(section.Options["name"]),
-				"dns":      stringSet(section.Lists["dns"]),
+				"section":   stringValue(section.Name),
+				"mac":       stringValue(section.Options["mac"]),
+				"ip":        stringValue(section.Options["ip"]),
+				"hostname":  stringValue(section.Options["name"]),
+				"dns":       stringSet(section.Lists["dns"]),
+				"duid":      stringValue(section.Options["duid"]),
+				"leasetime": stringValue(section.Options["leasetime"]),
+				"ignore":    boolValue(section.Options["ignore"] == "1"),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
