@@ -271,7 +271,7 @@ func (c *Client) ApplyFirewallRules(ctx context.Context, desired, removed Config
 	}
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, changes)
-	return c.writeConfiguration(ctx, changes, nil, full)
+	return c.writeConfiguration(ctx, changes, nil, full, nil)
 }
 
 func firewallRuleIdentity(section Section) string {
