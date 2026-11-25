@@ -63,7 +63,7 @@ resource "glinet_firewall_rules" "main" {
 
 Required:
 
-- `name` (String) Unique firewall rule name. The name is the stable identity in the ordered policy.
+- `name` (String) Firewall rule name. Managed rules use a unique name; stock rules with duplicate names are distinguished by `src` and `dest`.
 
 Optional:
 

@@ -131,3 +131,38 @@ func TestFirewallRulesExistingReferenceProtocol(t *testing.T) {
 		}},
 	})
 }
+
+func TestFirewallRulesDuplicateStockNamesProtocol(t *testing.T) {
+	remote := &typedFixtureRunner{actual: router.Configuration{
+		{Package: "firewall", Name: "stock_guest", Type: "rule", Options: map[string]string{"name": "Allow-DHCP", "src": "guest", "target": "ACCEPT"}},
+		{Package: "firewall", Name: "stock_iot", Type: "rule", Options: map[string]string{"name": "Allow-DHCP", "src": "iot", "target": "ACCEPT"}},
+	}}
+	client := router.NewClient(remote, fixtureProtection{})
+	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
+	config := `resource "glinet_firewall_rules" "test" {
+  rules = [
+    { name = "Allow-DHCP", existing = true, src = "guest" },
+    { name = "Allow-DHCP", existing = true, src = "iot" },
+    {
+      name       = "example-block-management"
+      src        = "wan"
+      protocols  = ["tcp"]
+      dest_ports = ["22"]
+      target     = "DROP"
+    },
+  ]
+}`
+	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{{
+			Config: config,
+			Check: func(state *terraform.State) error {
+				remote.mu.Lock()
+				defer remote.mu.Unlock()
+				if len(remote.actual) != 3 || remote.actual[0].Options["src"] != "guest" || remote.actual[1].Options["src"] != "iot" {
+					t.Fatalf("duplicate stock rules were not preserved by source: %+v", remote.actual)
+				}
+				return nil
+			},
+		}},
+	})
+}

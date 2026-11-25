@@ -88,7 +88,7 @@ func firewallRulesSchema() schema.Schema {
 	attributes := map[string]schema.Attribute{
 		"name": schema.StringAttribute{
 			Required:            true,
-			MarkdownDescription: "Unique firewall rule name. The name is the stable identity in the ordered policy.",
+			MarkdownDescription: "Firewall rule name. Managed rules use a unique name; stock rules with duplicate names are distinguished by `src` and `dest`.",
 		},
 		"existing": schema.BoolAttribute{
 			Optional: true, Computed: true, Default: booldefault.StaticBool(false),
@@ -245,7 +245,7 @@ func (r *firewallRulesResource) apply(ctx context.Context, planRules, stateRules
 	}
 	actualByName := map[string]router.Section{}
 	for _, actual := range actualRules {
-		actualByName[firewallRuleInputFromSection(actual).Name] = actual
+		actualByName[firewallRuleInputKey(firewallRuleInputFromSection(actual))] = actual
 	}
 	desired := router.Configuration{}
 	planNames := map[string]bool{}
@@ -253,12 +253,13 @@ func (r *firewallRulesResource) apply(ctx context.Context, planRules, stateRules
 		if input.Name == "" {
 			return fmt.Errorf("firewall rule name is required")
 		}
-		if planNames[input.Name] {
+		key := firewallRuleInputKey(input)
+		if planNames[key] {
 			return fmt.Errorf("firewall rule %s is listed more than once", input.Name)
 		}
-		planNames[input.Name] = true
+		planNames[key] = true
 		if input.Existing {
-			actual, ok := actualByName[input.Name]
+			actual, ok := actualByName[key]
 			if !ok {
 				return fmt.Errorf("existing firewall rule %s is not present; import it or remove the entry", input.Name)
 			}
@@ -282,13 +283,14 @@ func (r *firewallRulesResource) apply(ctx context.Context, planRules, stateRules
 			return fmt.Errorf("invalid prior firewall rules")
 		}
 		for _, input := range stateInputs {
-			if planNames[input.Name] {
+			key := firewallRuleInputKey(input)
+			if planNames[key] {
 				continue
 			}
 			if input.Existing {
 				return fmt.Errorf("existing firewall rule %s cannot be removed from the ordered policy; keep it listed", input.Name)
 			}
-			actual, ok := actualByName[input.Name]
+			actual, ok := actualByName[key]
 			if !ok {
 				return fmt.Errorf("firewall rule %s is already absent", input.Name)
 			}
@@ -313,13 +315,13 @@ func (r *firewallRulesResource) read(ctx context.Context, model *firewallRulesMo
 			return diagnostics
 		}
 		for _, input := range inputs {
-			existing[input.Name] = input.Existing
+			existing[firewallRuleInputKey(input)] = input.Existing
 		}
 	}
 	elements := make([]attr.Value, 0, len(actualRules))
 	for _, actual := range actualRules {
 		input := firewallRuleInputFromSection(actual)
-		if value, ok := existing[input.Name]; ok {
+		if value, ok := existing[firewallRuleInputKey(input)]; ok {
 			input.Existing = value
 		} else {
 			input.Existing = true
@@ -422,6 +424,10 @@ func firewallRuleInputFromSection(section router.Section) firewallRuleInput {
 		input.Name = section.Name
 	}
 	return input
+}
+
+func firewallRuleInputKey(input firewallRuleInput) string {
+	return input.Name + "\x00" + input.Src + "\x00" + input.Dest
 }
 
 func firewallRuleObject(input firewallRuleInput) (types.Object, diag.Diagnostics) {
