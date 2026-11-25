@@ -55,8 +55,10 @@ resource "glinet_firewall_redirect" "example" {
 - `dest_ip` (String) Internal destination address.
 - `dest_port` (String) Internal destination port.
 - `enabled` (Boolean) Whether the redirect is active.
+- `helper` (String) Optional firewall helper.
 - `proto` (String) Protocol.
 - `reflection` (Boolean) Enable NAT reflection.
+- `reflection_src` (String) Reflection source: `internal`, `external`, or empty.
 - `src` (String) Source zone.
 - `src_dport` (String) Source destination port.
 - `target` (String) Target, normally DNAT.
