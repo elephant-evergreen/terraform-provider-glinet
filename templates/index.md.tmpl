@@ -33,7 +33,7 @@ If the plan cannot connect, confirm SSH is enabled and check the host, root key 
 
 In the **Resources** sidebar, choose the setting you want to manage and follow **Import existing configuration**. See the [hardware testing scope](https://github.com/elephant-evergreen/terraform-provider-glinet/blob/main/docs/testing.md) before making a change.
 
-Keep `.terraform.lock.hcl` in version control. Before upgrading, read the [release notes for your target version](https://github.com/elephant-evergreen/terraform-provider-glinet/releases), then run `terraform init -upgrade` and review the lock file and plan.
+Before upgrading, read the [release notes for your target version](https://github.com/elephant-evergreen/terraform-provider-glinet/releases), then review the plan for changes to existing objects.
 
 Before upgrading, ensure the router offers an Ed25519, ECDSA, or RSA host key and that `GLINET_KNOWN_HOSTS_FILE` contains the verified key. If you use a host certificate, it must contain a nonempty principal matching `GLINET_HOST`.
 
