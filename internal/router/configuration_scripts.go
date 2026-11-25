@@ -18,11 +18,14 @@ printf '%s' "$dns_result" | lua -e 'local v=require("cjson").decode(io.read("*a"
 `
 
 type reloadPlan struct {
-	Reboot   bool
-	Wireless bool
-	DNS      bool
-	DHCP     bool
-	Firewall bool
+	Reboot          bool
+	Wireless        bool
+	DNS             bool
+	DHCP            bool
+	Firewall        bool
+	Cloud           bool
+	CloudEnabled    bool
+	ServiceSnapshot bool
 }
 
 func configurationReload(plan reloadPlan) string {
@@ -42,6 +45,98 @@ func configurationReload(plan reloadPlan) string {
 		script += "/etc/init.d/firewall restart\n"
 	}
 	return script
+}
+
+func cloudSetConfigScript(enabled bool) string {
+	value := "false"
+	if enabled {
+		value = "true"
+	}
+	return "ubus call gl-session call " + quote(`{"module":"cloud","func":"set_config","params":{"cloud_enable":`+value+`}}`) + "\n"
+}
+
+func cloudVerifyScript(enabled bool) string {
+	value := "false"
+	if enabled {
+		value = "true"
+	}
+	script := "test \"$(ubus call gl-session call " + quote(`{"module":"cloud","func":"get_config"}`) + " | jsonfilter -e '@.result.cloud_enable')\" = '" + value + "'\n"
+	if !enabled {
+		for _, name := range []string{"gl-cloud", "rtty"} {
+			script += "for _ in 1 2 3 4 5 6 7 8 9 10; do\n if ! pidof " + name + " >/dev/null 2>&1; then break; fi\n sleep 1\ndone\nif pidof " + name + " >/dev/null 2>&1; then exit 75; fi\n"
+		}
+	}
+	return script
+}
+
+func cloudSnapshotScript() string {
+	return `printf 'gl_cloud_running=%s\n' "$(if pidof gl-cloud >/dev/null 2>&1; then echo 1; else echo 0; fi)"
+printf 'gl_cloud_registered=%s\n' "$(if ubus call service list '{"name":"gl-cloud"}' 2>/dev/null | grep -q '"gl-cloud"'; then echo 1; else echo 0; fi)"
+printf 'rtty_running=%s\n' "$(if pidof rtty >/dev/null 2>&1; then echo 1; else echo 0; fi)"
+printf 'rtty_registered=%s\n' "$(if ubus call service list '{"name":"rtty"}' 2>/dev/null | grep -q '"rtty"'; then echo 1; else echo 0; fi)"
+printf 'mptun_running=%s\n' "$(if pidof mptun >/dev/null 2>&1; then echo 1; else echo 0; fi)"
+printf 'mptun_registered=%s\n' "$(if ubus call service list '{"name":"mptun"}' 2>/dev/null | grep -q '"mptun"'; then echo 1; else echo 0; fi)"
+printf 'mpifd_running=%s\n' "$(if pidof mpifd >/dev/null 2>&1; then echo 1; else echo 0; fi)"
+printf 'mpifd_registered=%s\n' "$(if ubus call service list '{"name":"mpifd"}' 2>/dev/null | grep -q '"mpifd"'; then echo 1; else echo 0; fi)"
+`
+}
+
+func cloudRestoreScript() string {
+	return `restore_service() {
+ name=$1
+ running=$2
+ registered=$3
+ init=$4
+ if [ "$running" = 1 ]; then
+  "$init" start >/dev/null 2>&1 || restore_failed=1
+  for _ in 1 2 3; do
+   if pidof "$name" >/dev/null 2>&1; then break; fi
+   sleep 1
+  done
+  if ! pidof "$name" >/dev/null 2>&1; then restore_failed=1; fi
+ elif [ "$registered" = 1 ]; then
+  ubus call service add "{\"name\":\"$name\",\"instances\":{}}" >/dev/null 2>&1 || restore_failed=1
+  if pidof "$name" >/dev/null 2>&1; then restore_failed=1; fi
+ else
+  "$init" stop >/dev/null 2>&1 || true
+  for _ in 1 2 3; do
+   if ! pidof "$name" >/dev/null 2>&1; then break; fi
+   sleep 1
+  done
+  if pidof "$name" >/dev/null 2>&1; then restore_failed=1; fi
+  ubus call service delete "{\"name\":\"$name\"}" >/dev/null 2>&1 || true
+ fi
+ if [ "$registered" = 1 ]; then
+  ubus call service list "{\"name\":\"$name\"}" 2>/dev/null | grep -q "\"$name\"" || restore_failed=1
+ else
+  if ubus call service list "{\"name\":\"$name\"}" 2>/dev/null | grep -q "\"$name\""; then restore_failed=1; fi
+ fi
+}
+restore_failed=0
+. ./service-before
+restore_service gl-cloud "$gl_cloud_running" "$gl_cloud_registered" /etc/init.d/gl-cloud
+restore_service rtty "$rtty_running" "$rtty_registered" /etc/init.d/rtty
+restore_service mptun "$mptun_running" "$mptun_registered" /etc/init.d/mptun
+restore_service mpifd "$mpifd_running" "$mpifd_registered" /etc/init.d/mpifd
+printf '%s' "$restore_failed" > service-restore
+if [ "$restore_failed" != 0 ]; then
+ exit 1
+fi
+`
+}
+
+func cloudCommitPackages(plan reloadPlan) string {
+	if plan.ServiceSnapshot {
+		return " gl-cloud"
+	}
+	return ""
+}
+
+func cloudRequest(plan reloadPlan) string {
+	if plan.Cloud {
+		return cloudSetConfigScript(plan.CloudEnabled) + cloudVerifyScript(plan.CloudEnabled)
+	}
+	return ""
 }
 
 func configurationOutcome(token, outcome string) string {
@@ -72,11 +167,29 @@ func configurationStableReadScript(config Configuration, secrets ...map[string]s
 
 func configurationApplyScript(config Configuration, token string, plan reloadPlan, secrets ...map[string]string) string {
 	dir := transactionDir
+	serviceSnapshot := ""
+	servicePackages := ""
+	if plan.Cloud {
+		serviceSnapshot = "{ " + cloudSnapshotScript() + "} > service-before\n"
+	}
+	if plan.ServiceSnapshot {
+		servicePackages = "cp /etc/config/gl-cloud " + quote(dir) + "/gl-cloud\nprintf '%s\\n' gl-cloud > " + quote(dir) + "/packages.extra\n"
+		if plan.Cloud {
+			servicePackages += "if [ -f /etc/config/mptun ] && [ \"$(uci -q get mptun.global.enable)\" = 1 ]; then cp /etc/config/mptun " + quote(dir) + "/mptun\nprintf '%s\\n' mptun >> " + quote(dir) + "/packages.extra\nfi\n"
+		}
+	}
 	restore := "#!/bin/sh\nset -eu\nexec >> " + quote(dir+"/rollback.log") + " 2>&1\n" + configurationOutcome(token, "rollback")
 	if plan.Reboot {
 		restore += "if [ -f " + quote(dir+"/restored_boot") + " ] && [ \"$(cat /proc/sys/kernel/random/boot_id)\" != \"$(cat " + quote(dir+"/restored_boot") + ")\" ]; then\n" + configurationCleanup(token, "rollback") + "exit 0\nfi\n"
 	}
-	restore += "for package in " + configurationPackages + "; do\ncp " + quote(dir) + "/\"$package\" /etc/config/\"$package\"\nuci -q revert \"$package\"\ndone\n" + configurationReload(plan)
+	restore += "for package in " + configurationPackages + "; do\ncp " + quote(dir) + "/\"$package\" /etc/config/\"$package\"\nuci -q revert \"$package\"\ndone\n"
+	if plan.ServiceSnapshot {
+		restore += "if [ -f " + quote(dir) + "/packages.extra ]; then\nwhile read package; do cp " + quote(dir) + "/\"$package\" /etc/config/\"$package\"; uci -q revert \"$package\"; done < " + quote(dir) + "/packages.extra\nfi\n"
+	}
+	restore += configurationReload(plan)
+	if plan.Cloud {
+		restore += cloudRestoreScript()
+	}
 	if plan.Reboot {
 		restore += "cat /proc/sys/kernel/random/boot_id > " + quote(dir+"/restored_boot") + "\nsync\nreboot\n"
 	} else {
@@ -129,7 +242,7 @@ esac
 `
 
 	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nset -eu\numask 077\nmkdir " + quote(configurationLock) + " 2>/dev/null || test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || return 73\nprintf '%s' " + quote(token) + " > " + quote(configurationLock+"/token") + "\nif [ ! -d " + quote(dir) + " ]; then\nmkdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || return 73\n" + configurationCleanup(token, "") + "return 0\nfi\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
-	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, secrets...) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + "; do uci commit \"$package\"; done\n" + configurationReload(plan)
+	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, secrets...) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + cloudCommitPackages(plan) + "; do uci commit \"$package\"; done\n" + configurationReload(plan) + cloudRequest(plan)
 	if plan.Reboot {
 		request += "touch awaiting_boot\nsync\nreboot\n"
 	} else {
@@ -151,12 +264,12 @@ trap 'if [ "$transferred" = 0 ]; then if [ "$prepared" = 1 ]; then ` + recoveryS
 mkdir ` + quote(dir) + ` 2>/dev/null || exit 73
 prepared=1
 cd ` + quote(dir) + `
-printf '%s' ` + quote(token) + ` > ` + quote(dir+"/token") + `
+` + serviceSnapshot + `printf '%s' ` + quote(token) + ` > ` + quote(dir+"/token") + `
 printf confirm > ` + quote(dir+"/confirm") + `
 printf rollback > ` + quote(dir+"/recover") + `
 cat /proc/sys/kernel/random/boot_id > ` + quote(dir+"/boot") + `
 for package in ` + configurationPackages + `; do cp /etc/config/"$package" ` + quote(dir) + `/"$package"; done
-printf '%s' ` + quote(restore) + ` > ` + quote(dir+"/restore") + `
+` + servicePackages + `printf '%s' ` + quote(restore) + ` > ` + quote(dir+"/restore") + `
 printf '%s' ` + quote(watchdog) + ` > ` + quote(dir+"/rollback") + `
 cat > ` + quote(dir+"/request") + ` <<'GLINET_REQUEST'
 ` + request + `GLINET_REQUEST
@@ -175,6 +288,10 @@ touch activate
 }
 
 func configurationConfirmScript(token string, config Configuration, secrets ...map[string]string) string {
+	return configurationConfirmScriptWithPlan(token, config, reloadPlan{}, secrets...)
+}
+
+func configurationConfirmScriptWithPlan(token string, config Configuration, plan reloadPlan, secrets ...map[string]string) string {
 	result := resultDir + "/" + token
 	ack := "if [ -f " + quote(result) + " ]; then\ncase \"$(cat " + quote(result) + ")\" in\nconfirm)\nif [ ! -d " + quote(configurationLock+"-actor-"+token) + " ] && [ ! -d " + quote(transactionDir+"-retired-"+token) + " ] && [ \"$(cat " + quote(transactionDir+"/token") + " 2>/dev/null || true)\" != " + quote(token) + " ] && ! grep -F " + quote(token) + " " + quote(recoveryService) + " >/dev/null 2>&1; then exit 0; fi\n;;\nrollback|cancel) exit 77 ;;\n*) exit 75 ;;\nesac\nfi\n"
 	script := preflight + ack + "cd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest \"$(cat ready)\" = \"$(cat /proc/sys/kernel/random/boot_id)\" || exit 75\ntest \"$(cat token)\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
@@ -206,6 +323,9 @@ func configurationConfirmScript(token string, config Configuration, secrets ...m
 			}
 			script += "test \"$(uci -q get " + quote(parts[0]+"."+parts[1]+"."+parts[2]) + ")\" = " + quote(value) + " || exit 75\n"
 		}
+	}
+	if plan.Cloud {
+		script += cloudVerifyScript(plan.CloudEnabled)
 	}
 	return script + "ln confirm decision 2>/dev/null || test \"$(cat decision)\" = confirm || exit 75\nsync\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n" + ack + "sleep 1\ndone\nexit 75\n"
 }

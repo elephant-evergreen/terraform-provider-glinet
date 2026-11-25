@@ -8,6 +8,7 @@
 | Recovery worker fixtures | Durable decision arbitration, cancellation, lost confirmation responses, restoration, reboot resumption, and cleanup behavior in a local command world |
 | Firewall fixtures and mutation controls | All filter and nat entry chains, declared/missing/reordered rules, nested counter-only branches, and rejection of undeclared actions or branch cycles |
 | Native UCI fixture on a dedicated router | Actual libuci behavior in isolated temporary configuration; this does not demonstrate network activation or physical recovery |
+| GoodCloud service fixtures | Stock `cloud.set_config` invocation, stop verification, service snapshot and restore, configuration/runtime mismatch detection, rollback failure retention, and rollback outcomes in a local command world |
 
 Ordinary `terraform plan` reads the router and checks its generated and active firewall. Each write checks ownership and conflicts, creates a verified encrypted backup, protects the wired management route when needed, and confirms the managed interfaces, bridges, DNS process and firewall before committing the transaction outcome. These are configuration and activation checks, not a traffic acceptance suite.
 

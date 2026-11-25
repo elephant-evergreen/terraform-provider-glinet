@@ -137,7 +137,7 @@ func (c *Client) ApplySections(ctx context.Context, changes Configuration, secre
 	}
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, changes)
-	return c.writeConfiguration(ctx, changes, secrets, full)
+	return c.writeConfiguration(ctx, changes, secrets, full, nil)
 }
 
 // ForgetSection releases Terraform ownership while preserving the section.

@@ -72,6 +72,9 @@ func (f *configurationWorld) run(script string) ([]byte, error) {
 	script = strings.ReplaceAll(script, "/etc/init.d/gl-vlan-port-map", filepath.Join(root, "service"))
 	script = strings.ReplaceAll(script, "/etc/init.d/dnsmasq", filepath.Join(root, "service"))
 	script = strings.ReplaceAll(script, "/etc/init.d/firewall", filepath.Join(root, "service"))
+	for _, name := range []string{"gl-cloud", "rtty", "mptun", "mpifd"} {
+		script = strings.ReplaceAll(script, "/etc/init.d/"+name, filepath.Join(root, "service-"+name))
+	}
 	script = strings.ReplaceAll(script, filepath.Join(root, "recovery")+" enable", "true")
 	script = strings.ReplaceAll(script, filepath.Join(root, "recovery")+" disable", "true")
 	binary, _ := os.Executable()
