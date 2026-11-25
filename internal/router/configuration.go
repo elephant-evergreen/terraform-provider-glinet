@@ -341,7 +341,47 @@ func ValidSecretOptions(config Configuration, secrets map[string]string) bool {
 	return true
 }
 
+func migrateLegacyMarkers(changes, full Configuration) Configuration {
+	migrated := append(Configuration{}, changes...)
+	for _, section := range full {
+		if section.Absent || !IsManaged(section.Options) {
+			continue
+		}
+		matched := false
+		for i := range migrated {
+			if !sectionMatches(migrated[i], section) {
+				continue
+			}
+			matched = true
+			if migrated[i].Absent {
+				break
+			}
+			if migrated[i].Options == nil {
+				migrated[i].Options = map[string]string{}
+			}
+			if migrated[i].Options[ManagedOption] == "0" {
+				break
+			}
+			MarkManaged(migrated[i].Options)
+			break
+		}
+		if matched {
+			continue
+		}
+		target := section
+		target.Options = copyOptions(section.Options)
+		if target.Options == nil {
+			target.Options = map[string]string{}
+		}
+		MarkManaged(target.Options)
+		target.Position = nil
+		migrated = append(migrated, target)
+	}
+	return migrated
+}
+
 func (c *Client) writeConfiguration(ctx context.Context, config Configuration, secrets map[string]string, safetyConfig Configuration) error {
+	config = migrateLegacyMarkers(config, safetyConfig)
 	if !ValidSecretOptions(config, secrets) {
 		return errors.New("Secret options must reference managed sections and supported secret names.")
 	}
@@ -446,9 +486,11 @@ func sameSectionExceptManagedMarker(a, b Section) bool {
 	right.Options = copyOptions(b.Options)
 	if left.Options != nil {
 		delete(left.Options, ManagedOption)
+		delete(left.Options, LegacyManagedOption)
 	}
 	if right.Options != nil {
 		delete(right.Options, ManagedOption)
+		delete(right.Options, LegacyManagedOption)
 	}
 	return reflect.DeepEqual(left, right)
 }
@@ -480,7 +522,7 @@ var allowedOptions = func() map[string]map[string]bool {
 	definitions := map[string]string{
 		"network.device":            "name type bridge_empty ports stp igmp_snooping",
 		"network.wireguard":         "public_key allowed_ips endpoint_host endpoint_port persistent_keepalive route_allowed_ips description",
-		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate",
+		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner home_iac_owner force_link delegate",
 		"wireless.wifi-iface":       "disabled ssid encryption hidden isolate ifname device network mode macaddr wds ieee80211w wpa_group_rekey",
 		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force ignore dynamicdhcp instance",
 		"dhcp.host":                 "mac ip name dns leasetime duid",
@@ -494,7 +536,7 @@ var allowedOptions = func() map[string]map[string]bool {
 	}
 	result := map[string]map[string]bool{}
 	for scope, names := range definitions {
-		result[scope] = map[string]bool{ManagedOption: true}
+		result[scope] = map[string]bool{ManagedOption: true, LegacyManagedOption: true}
 		for _, name := range strings.Fields(names) {
 			result[scope][name] = true
 		}
