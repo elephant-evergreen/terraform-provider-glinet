@@ -2,8 +2,10 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -35,7 +37,7 @@ func (p *glinetProvider) Metadata(_ context.Context, _ provider.MetadataRequest,
 
 func (p *glinetProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manage network interfaces, Wi-Fi, DHCP, DNS, and firewall settings on GL.iNet Flint 2 (GL-MT6000) running stock firmware 4.11.0 in router mode. The provider connects over verified SSH.",
+		MarkdownDescription: "Manage network interfaces, Wi-Fi, DHCP, DNS, and firewall settings on GL.iNet Flint 2 (GL-MT6000) running stock firmware 4.11.x in router mode. The provider connects over verified SSH; stable 4.11.x builds outside the verified set are allowed with a warning.",
 		Attributes: map[string]schema.Attribute{
 			"host":             schema.StringAttribute{Optional: true, MarkdownDescription: "Router hostname or IP address. Falls back to `GLINET_HOST`."},
 			"port":             schema.Int64Attribute{Optional: true, MarkdownDescription: "SSH port. Falls back to `GLINET_PORT`, then `22`."},
@@ -104,9 +106,16 @@ func (p *glinetProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		return
 	}
 	client := router.NewClient(transport, protection)
-	if err := client.Verify(ctx); err != nil {
+	info, err := client.VerifyFirmware(ctx)
+	if err != nil {
 		resp.Diagnostics.AddError("Cannot verify router", err.Error())
 		return
+	}
+	if !router.FirmwareTested(info.Firmware) {
+		resp.Diagnostics.AddWarning(
+			"Untested router firmware",
+			fmt.Sprintf("Firmware %s is not in the verified set (%s). The provider allows stable 4.11.x builds but has not verified this build. Take an encrypted backup and keep a wired management path before applying.", info.Firmware, strings.Join(router.TestedFirmwares(), ", ")),
+		)
 	}
 	resp.ResourceData = client
 	resp.DataSourceData = client

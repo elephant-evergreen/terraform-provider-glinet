@@ -1,6 +1,6 @@
 # Terraform Provider for GL.iNet
 
-Manage network interfaces, Wi-Fi, DHCP, DNS, and firewall settings on GL.iNet Flint 2 (GL-MT6000) running stock firmware 4.11.0 in router mode. See the [Terraform Registry reference](https://registry.terraform.io/providers/elephant-evergreen/glinet/latest/docs) or check the [release notes](https://github.com/elephant-evergreen/terraform-provider-glinet/releases) before changing versions.
+Manage network interfaces, Wi-Fi, DHCP, DNS, and firewall settings on GL.iNet Flint 2 (GL-MT6000) running stock firmware 4.11.x in router mode. Firmware 4.11.0 is the verified build; stable 4.11.x patches are allowed with a warning until they pass the hardware checks. See the [Terraform Registry reference](https://registry.terraform.io/providers/elephant-evergreen/glinet/latest/docs) or check the [release notes](https://github.com/elephant-evergreen/terraform-provider-glinet/releases) before changing versions.
 
 ## Check the router
 

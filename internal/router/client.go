@@ -3,7 +3,9 @@ package router
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"unicode"
@@ -30,11 +32,40 @@ func NewClient(runner Runner, protection ChangeProtection) *Client {
 }
 
 func (c *Client) Verify(ctx context.Context) error {
-	_, err := c.runner.Run(ctx, preflight)
-	if err != nil {
-		return operationError(err)
+	_, err := c.VerifyFirmware(ctx)
+	return err
+}
+
+func (c *Client) VerifyFirmware(ctx context.Context) (SystemInfo, error) {
+	if _, err := c.runner.Run(ctx, preflight); err != nil {
+		return SystemInfo{}, operationError(err)
 	}
-	return c.verifyRuntimeFirewall(ctx)
+	if err := c.verifyRuntimeFirewall(ctx); err != nil {
+		return SystemInfo{}, err
+	}
+	info, err := c.System(ctx)
+	if err != nil {
+		return SystemInfo{}, err
+	}
+	return info, nil
+}
+
+const supportedFirmwareMinor = "4.11"
+
+var testedFirmwares = []string{"4.11.0"}
+
+var supportedFirmware = regexp.MustCompile(`^4\.11\.[0-9]{1,2}$`)
+
+func FirmwareAllowed(version string) bool {
+	return supportedFirmware.MatchString(version)
+}
+
+func FirmwareTested(version string) bool {
+	return slices.Contains(testedFirmwares, version)
+}
+
+func TestedFirmwares() []string {
+	return slices.Clone(testedFirmwares)
 }
 
 func ValidSection(section string) bool {
@@ -47,11 +78,15 @@ func ValidSSID(ssid string) bool {
 
 func quote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }
 
-const preflight = `set -eu
-test "$(cat /etc/glversion)" = '4.11.0' || exit 65
+var preflight = fmt.Sprintf(`set -eu
+firmware="$(cat /etc/glversion)"
+case "$firmware" in
+  %s.[0-9]|%s.[0-9][0-9]) ;;
+  *) exit 65 ;;
+esac
 test "$(ubus call system board | jsonfilter -e '@.model')" = 'GL.iNet GL-MT6000' || exit 65
 test "$(uci -q get glconfig.general.mode)" = 'router' || exit 65
-`
+`, supportedFirmwareMinor, supportedFirmwareMinor)
 
 func operationError(err error) error {
 	var exit *ExitError
@@ -60,7 +95,7 @@ func operationError(err error) error {
 		case 44:
 			return errors.New("The named UCI section does not exist.")
 		case 65:
-			return errors.New("Unsupported router configuration. Use Flint 2 (GL-MT6000), stock firmware 4.11.0 in router mode and the documented UCI section identities.")
+			return errors.New("Unsupported router configuration. Use Flint 2 (GL-MT6000), stock firmware 4.11.x in router mode and the documented UCI section identities.")
 		case 73:
 			return errors.New("Another change or recovery is pending. Wait for it to finish before applying again.")
 		case 74:
