@@ -497,7 +497,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"wireless.wifi-device":      "channel htmode txpower country disabled",
 		"wireless.wifi-iface":       "disabled ssid encryption hidden isolate ifname device network mode macaddr wds ieee80211w wps_pushbutton wpa_group_rekey",
 		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force ignore dynamicdhcp instance",
-		"dhcp.host":                 "mac ip name dns leasetime duid",
+		"dhcp.host":                 "mac ip name dns leasetime duid ignore instance tag broadcast set_tag",
 		"dhcp.dnsmasq":              "noresolv server domain local rebind_domain cachesize domain_needed bogus_priv strictorder",
 		"firewall.defaults":         "input output forward syn_flood synflood_protect synflood_rate synflood_burst drop_invalid tcp_syncookies flow_offloading flow_offloading_hw",
 		"firewall.zone":             "name network input output forward enabled masq mtu_fix log log_limit conntrack device subnet extra_src extra_dest",

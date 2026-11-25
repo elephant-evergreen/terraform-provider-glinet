@@ -51,7 +51,10 @@ resource "glinet_dhcp_reservation" "printer" {
 
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `dns` (Set of String) Per-host DNS servers.
+- `duid` (String) DHCPv6 DUID.
 - `hostname` (String) DHCP hostname.
+- `ignore` (Boolean) Ignore this host.
+- `leasetime` (String) Per-host lease time.
 
 ### Read-Only
 
