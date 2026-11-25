@@ -13,7 +13,7 @@ Ordinary `terraform plan` reads the router and checks its generated and active f
 
 ## Independent hardware acceptance
 
-Use an explicitly authorized dedicated Flint 2 with stock firmware 4.11.0, an external encrypted recovery backup, and a tested wired recovery connection. Keep credentials and router exports outside Git and public logs.
+Use an explicitly authorized dedicated Flint 2 with stock firmware 4.11.x, an external encrypted recovery backup, and a tested wired recovery connection. Record the exact build; 4.11.0 is currently the verified build, and 4.11.1 remains pending hardware verification. Keep credentials and router exports outside Git and public logs.
 
 Verify an actual CRUD/import/drift cycle, clean plans after apply, an intentional failed confirmation and rollback, and recovery across SSH disconnection and reboot. Check default policies and generated/running firewall differences with one declared redirect. Archive sanitized results against the exact provider version.
 

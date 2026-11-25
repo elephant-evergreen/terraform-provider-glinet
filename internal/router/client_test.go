@@ -36,3 +36,22 @@ func TestValidationAndShellQuoting(t *testing.T) {
 		t.Fatalf("Invalid shell syntax: %v: %s", err, output)
 	}
 }
+
+func TestFirmwarePolicy(t *testing.T) {
+	for _, version := range []string{"4.11.0", "4.11.1", "4.11.10"} {
+		if !FirmwareAllowed(version) {
+			t.Fatalf("Firmware %q should be allowed", version)
+		}
+	}
+	for _, version := range []string{"", "4.10.4", "4.12.0", "4.11.1-beta", "4.11", "4.11.100"} {
+		if FirmwareAllowed(version) {
+			t.Fatalf("Firmware %q should be rejected", version)
+		}
+	}
+	if !FirmwareTested("4.11.0") {
+		t.Fatal("4.11.0 is the verified build")
+	}
+	if FirmwareTested("4.11.1") {
+		t.Fatal("4.11.1 becomes verified only after the hardware checks")
+	}
+}
