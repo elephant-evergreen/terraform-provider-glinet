@@ -65,6 +65,8 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | EAP/enterprise Wi-Fi | None | Planned |
 | Wi-Fi 6/radio advanced options | None | Planned |
 
+The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa2`, `wpa-mixed`, `owe`) so existing configurations continue to plan. The next compatible release adds `ieee80211w` and `wps_pushbutton` without changing existing defaults. The next minor release will restrict `encryption` to the five stock modes (`none`, `psk2`, `psk-mixed`, `sae`, `sae-mixed`) and default `wps_pushbutton` to disabled. The release before that restriction will warn in the plan and document the migration.
+
 ## Firewall and security
 
 | Admin Panel setting | Current provider | Status |
