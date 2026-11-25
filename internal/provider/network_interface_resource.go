@@ -27,24 +27,36 @@ func typedNetworkInterfaceSpec() typedSpec {
 		TypeName:    "network_interface",
 		Description: "Manage an OpenWrt network interface, including static addresses, VLANs, and DHCP clients. Keep a direct wired management path when changing an interface.",
 		Attributes: map[string]schema.Attribute{
-			"name":         schema.StringAttribute{Required: true, MarkdownDescription: "UCI interface name, such as `lan`, `guest`, or `vlan11`. Changing it replaces the resource.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
-			"device":       schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Underlying device or bridge, such as `br-lan`."},
-			"protocol":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("static"), MarkdownDescription: "UCI `proto`, normally `static`, `dhcp`, or `none`."},
-			"address":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "IPv4 CIDR address, such as `192.168.8.1/24`."},
-			"gateway":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional IPv4 gateway."},
-			"dns":          schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "DNS servers for this interface."},
-			"vlan_id":      schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "802.1Q VLAN ID for an interface. Zero means unset."},
-			"display_name": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "GL.iNet display name."},
-			"force_link":   schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Bring up the interface even without a carrier."},
-			"delegate":     schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Delegate IPv6 prefix handling."},
-			"enabled":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Whether the interface is enabled."},
+			"name":             schema.StringAttribute{Required: true, MarkdownDescription: "UCI interface name, such as `lan`, `guest`, or `vlan11`. Changing it replaces the resource.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"device":           schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Underlying device or bridge, such as `br-lan`."},
+			"protocol":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("static"), MarkdownDescription: "UCI `proto`: `static`, `dhcp`, `pppoe`, or `none`."},
+			"address":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "IPv4 CIDR address, such as `192.168.8.1/24`."},
+			"gateway":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional IPv4 gateway."},
+			"dns":              schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "DNS servers for this interface."},
+			"vlan_id":          schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "802.1Q VLAN ID for an interface. Zero means unset."},
+			"display_name":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "GL.iNet display name."},
+			"force_link":       schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Bring up the interface even without a carrier."},
+			"delegate":         schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Delegate IPv6 prefix handling."},
+			"ipv6":             schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable IPv6 on this interface."},
+			"ip6assign":        schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "IPv6 prefix assignment length; zero leaves it unset."},
+			"ip6hint":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "IPv6 prefix assignment hint."},
+			"peerdns":          schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Use peer-advertised DNS servers."},
+			"defaultroute":     schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Install the peer-advertised default route."},
+			"metric":           schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Interface route metric; zero leaves it unset."},
+			"mtu":              schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Interface MTU; zero leaves it unset."},
+			"macaddr":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional MAC address override."},
+			"hostname":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional DHCP hostname."},
+			"username":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "PPPoE username."},
+			"password_wo":      schema.StringAttribute{Optional: true, Sensitive: true, WriteOnly: true, MarkdownDescription: "Write-only PPPoE password. It is not stored in plan or state."},
+			"password_version": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1), MarkdownDescription: "Client-managed password generation. Increase it when rotating `password_wo`."},
+			"enabled":          schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Whether the interface is enabled."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			name := stringOf(values, "name")
 			if name == "" {
 				return router.Section{}, fmt.Errorf("name is required")
 			}
-			options := map[string]string{"proto": stringOf(values, "protocol"), "ipaddr": "", "netmask": "", "vlan_id": "", "force_link": boolString(boolOf(values, "force_link", false)), "delegate": boolString(boolOf(values, "delegate", false))}
+			options := map[string]string{"proto": stringOf(values, "protocol"), "ipaddr": "", "netmask": "", "vlan_id": "", "force_link": boolString(boolOf(values, "force_link", false)), "delegate": boolString(boolOf(values, "delegate", false)), "ipv6": boolString(boolOf(values, "ipv6", true)), "peerdns": boolString(boolOf(values, "peerdns", true)), "defaultroute": boolString(boolOf(values, "defaultroute", true))}
 			if options["proto"] == "" {
 				options["proto"] = "static"
 			}
@@ -70,6 +82,18 @@ func typedNetworkInterfaceSpec() typedSpec {
 			}
 			display := stringOf(values, "display_name")
 			options["display_name"] = display
+			for _, field := range []struct{ attrName, option string }{{"ip6hint", "ip6hint"}, {"macaddr", "macaddr"}, {"hostname", "hostname"}, {"username", "username"}} {
+				options[field.option] = stringOf(values, field.attrName)
+			}
+			if ip6assign := int64Of(values, "ip6assign"); ip6assign > 0 {
+				options["ip6assign"] = strconv.FormatInt(ip6assign, 10)
+			}
+			if metric := int64Of(values, "metric"); metric > 0 {
+				options["metric"] = strconv.FormatInt(metric, 10)
+			}
+			if mtu := int64Of(values, "mtu"); mtu > 0 {
+				options["mtu"] = strconv.FormatInt(mtu, 10)
+			}
 
 			section := router.Section{Package: "network", Type: "interface", Name: name, Options: options}
 			dns := stringsOf(values, "dns")
@@ -93,17 +117,29 @@ func typedNetworkInterfaceSpec() typedSpec {
 			}
 			vlan, _ := strconv.ParseInt(section.Options["vlan_id"], 10, 64)
 			return map[string]attr.Value{
-				"name":         stringValue(section.Name),
-				"device":       stringValue(section.Options["device"]),
-				"protocol":     stringValue(defaultString(section.Options["proto"], "static")),
-				"address":      stringValue(address),
-				"gateway":      stringValue(section.Options["gateway"]),
-				"dns":          stringSet(section.Lists["dns"]),
-				"vlan_id":      int64Value(vlan),
-				"display_name": stringValue(section.Options["display_name"]),
-				"force_link":   boolValue(section.Options["force_link"] == "1"),
-				"delegate":     boolValue(section.Options["delegate"] == "1"),
-				"enabled":      boolValue(section.Options["disabled"] != "1"),
+				"name":             stringValue(section.Name),
+				"device":           stringValue(section.Options["device"]),
+				"protocol":         stringValue(defaultString(section.Options["proto"], "static")),
+				"address":          stringValue(address),
+				"gateway":          stringValue(section.Options["gateway"]),
+				"dns":              stringSet(section.Lists["dns"]),
+				"vlan_id":          int64Value(vlan),
+				"display_name":     stringValue(section.Options["display_name"]),
+				"force_link":       boolValue(section.Options["force_link"] == "1"),
+				"delegate":         boolValue(section.Options["delegate"] == "1"),
+				"enabled":          boolValue(section.Options["disabled"] != "1"),
+				"ipv6":             boolValue(section.Options["ipv6"] != "0"),
+				"ip6assign":        int64Value(parseOptionInt64(section.Options["ip6assign"])),
+				"ip6hint":          stringValue(section.Options["ip6hint"]),
+				"peerdns":          boolValue(section.Options["peerdns"] != "0"),
+				"defaultroute":     boolValue(section.Options["defaultroute"] != "0"),
+				"metric":           int64Value(parseOptionInt64(section.Options["metric"])),
+				"mtu":              int64Value(parseOptionInt64(section.Options["mtu"])),
+				"macaddr":          stringValue(section.Options["macaddr"]),
+				"hostname":         stringValue(section.Options["hostname"]),
+				"username":         stringValue(section.Options["username"]),
+				"password_wo":      types.StringNull(),
+				"password_version": int64Value(1),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
@@ -112,6 +148,15 @@ func typedNetworkInterfaceSpec() typedSpec {
 			}
 			return map[string]attr.Value{"name": stringValue(id)}, nil
 		},
+		Secrets: func(values map[string]attr.Value) map[string]string {
+			password := stringOf(values, "password_wo")
+			name := stringOf(values, "name")
+			if password == "" || name == "" {
+				return nil
+			}
+			return map[string]string{"network." + name + ".password": password}
+		},
+		WriteOnly: []string{"password_wo"},
 		ID: func(values map[string]attr.Value) (string, error) {
 			name := stringOf(values, "name")
 			if name == "" {
@@ -147,4 +192,9 @@ func defaultString(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func parseOptionInt64(value string) int64 {
+	parsed, _ := strconv.ParseInt(value, 10, 64)
+	return parsed
 }

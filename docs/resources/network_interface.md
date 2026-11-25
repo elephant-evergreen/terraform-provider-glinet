@@ -50,7 +50,10 @@ resource "glinet_network_interface" "nas" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `address` (String) IPv4 CIDR address, such as `192.168.8.1/24`.
+- `defaultroute` (Boolean) Install the peer-advertised default route.
 - `delegate` (Boolean) Delegate IPv6 prefix handling.
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `device` (String) Underlying device or bridge, such as `br-lan`.
@@ -59,7 +62,18 @@ resource "glinet_network_interface" "nas" {
 - `enabled` (Boolean) Whether the interface is enabled.
 - `force_link` (Boolean) Bring up the interface even without a carrier.
 - `gateway` (String) Optional IPv4 gateway.
-- `protocol` (String) UCI `proto`, normally `static`, `dhcp`, or `none`.
+- `hostname` (String) Optional DHCP hostname.
+- `ip6assign` (Number) IPv6 prefix assignment length; zero leaves it unset.
+- `ip6hint` (String) IPv6 prefix assignment hint.
+- `ipv6` (Boolean) Enable IPv6 on this interface.
+- `macaddr` (String) Optional MAC address override.
+- `metric` (Number) Interface route metric; zero leaves it unset.
+- `mtu` (Number) Interface MTU; zero leaves it unset.
+- `password_version` (Number) Client-managed password generation. Increase it when rotating `password_wo`.
+- `password_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only PPPoE password. It is not stored in plan or state.
+- `peerdns` (Boolean) Use peer-advertised DNS servers.
+- `protocol` (String) UCI `proto`: `static`, `dhcp`, `pppoe`, or `none`.
+- `username` (String) PPPoE username.
 - `vlan_id` (Number) 802.1Q VLAN ID for an interface. Zero means unset.
 
 ### Read-Only

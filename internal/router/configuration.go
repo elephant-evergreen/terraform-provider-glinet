@@ -295,7 +295,7 @@ func SameConfiguration(a, b Configuration) bool { return reflect.DeepEqual(a, b)
 
 var secretOptions = map[string]map[string]bool{
 	"network.device":      nil,
-	"network.interface":   {"private_key": true},
+	"network.interface":   {"private_key": true, "password": true},
 	"wireless.wifi-iface": {"key": true, "key1": true, "key2": true, "key3": true, "wpa_psk": true, "password": true, "psk": true},
 	"network.wireguard":   {"preshared_key": true},
 	"openvpn.openvpn":     {"auth_user_pass": true, "key": true},
@@ -491,7 +491,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"network.device":            "name type bridge_empty ports stp igmp_snooping",
 		"network.wireguard":         "public_key allowed_ips endpoint_host endpoint_port persistent_keepalive route_allowed_ips description",
 		"network.route":             "interface target netmask gateway metric table source onlink mtu type",
-		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate",
+		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate ipv6 ip6assign ip6hint macaddr hostname username",
 		"wireless.wifi-device":      "channel htmode txpower country disabled",
 		"wireless.wifi-iface":       "disabled ssid encryption hidden isolate ifname device network mode macaddr wds ieee80211w wps_pushbutton wpa_group_rekey",
 		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force ignore dynamicdhcp instance",

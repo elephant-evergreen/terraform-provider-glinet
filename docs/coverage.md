@@ -31,13 +31,13 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | Admin Panel setting | Current provider | Status |
 | --- | --- | --- |
 | Ethernet WAN/LAN roles and port mapping | `glinet_ethernet_port`, `glinet_network_interface` | Partial: port roles and interfaces, but not every WAN mode |
-| WAN protocol: DHCP, static, PPPoE | `glinet_network_interface` | Partial: DHCP/static/none; PPPoE credentials and options are absent |
+| WAN protocol: DHCP, static, PPPoE | `glinet_network_interface` | Managed: DHCP/static/PPPoE with write-only credentials |
 | LAN address and subnet | `glinet_network_interface`, `glinet_network_bridge` | Partial: address/subnet and bridge, not all DHCP/subnet options |
 | Guest network | `glinet_network_interface`, `glinet_dhcp_pool`, `glinet_wireless_interface` | Partial: interfaces, pool, SSID; no dedicated guest-network resource |
 | IoT network | `glinet_network_interface`, `glinet_dhcp_pool`, `glinet_wireless_interface` | Partial: interfaces, pool, SSID; no dedicated IoT resource |
 | DNS | `glinet_dns`, `glinet_dnsmasq` | Partial: stock DNS mode/dnsmasq; AdGuard Home is separate |
 | Ethernet port and VLAN | `glinet_ethernet_port`, `glinet_network_interface` | Managed |
-| IPv6 | `glinet_network_interface` (`delegate`) | Partial: delegation only; no address/mode/RA coverage |
+| IPv6 | `glinet_network_interface` | Partial: delegation, `ipv6`, `ip6assign`, `ip6hint`; no full address/RA coverage |
 | MAC address clone | None | Planned |
 | IGMP snooping | `glinet_network_bridge` | Managed |
 | Network mode | None | Planned |
