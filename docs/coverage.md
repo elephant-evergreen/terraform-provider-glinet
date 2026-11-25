@@ -44,7 +44,7 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | Drop-in gateway | None | Planned |
 | Hardware/network acceleration | None | Planned |
 | NAT settings | None | Planned |
-| Static routes | None | Planned |
+| Static routes | `glinet_network_route` | Managed |
 | Policy routing | None | Planned |
 | Multi-WAN, failover, load balancing | None | Planned |
 | Repeater/WISP | None | Planned |
@@ -145,6 +145,7 @@ The matrix is backed by these resources and data sources:
 
 - `glinet_network_interface`
 - `glinet_network_bridge`
+- `glinet_network_route`
 - `glinet_ethernet_port`
 - `glinet_wireless_interface`
 - `glinet_dhcp_pool`

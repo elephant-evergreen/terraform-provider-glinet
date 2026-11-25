@@ -125,6 +125,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewNetworkInterfaceResource,
 		NewNetworkBridgeResource,
+		NewNetworkRouteResource,
 		NewEthernetPortResource,
 		NewWirelessInterfaceResource,
 		NewDHCPPoolResource,
