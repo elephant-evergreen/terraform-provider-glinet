@@ -25,6 +25,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_dhcp_reservation` | `dhcp` host | section name (`example_admin_lease`) | forget |
 | `glinet_dns` | `gl-dns-v2` DNS singleton | `dns` | forget |
 | `glinet_dnsmasq` | `dhcp` dnsmasq singleton | `dnsmasq` | forget |
+| `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
 | `glinet_firewall_forwarding` | firewall forwarding | `src:dest` | forget |
 | `glinet_firewall_rules` | ordered firewall rule policy | `firewall_rules` | forget |
@@ -43,7 +44,7 @@ Every typed write:
 2. Builds the full managed configuration and runs the existing preflight checks (bridge port ownership, unmanaged Wi-Fi/zone/forwarding/ACCEPT conflicts, DHCP conflicts, private LAN, IPv6, UPnP, include hashes, DNS provider metadata).
 3. Requires a direct active wired management route for disruptive changes and creates a verified external encrypted backup.
 4. Acquires the router transaction lock and rechecks pending UCI changes and section identities.
-5. Snapshots the six UCI packages, stages the change, commits, reloads the affected service or reboots, and confirms managed activation and the generated firewall.
+5. Snapshots the managed UCI packages, stages the change, commits, reloads the affected service or reboots, and confirms managed activation and the generated firewall. GoodCloud changes use the stock `cloud.set_config` operation after the ownership marker is written; the enable switch is not written before the RPC. Their snapshot also records the `gl-cloud`, `rtty`, `mptun`, and `mpifd` runtime states, and the rollback restores configuration files and the recorded service states separately. A service that was stopped but still registered is re-registered through procd without starting a process.
 6. On failure, the router-side watchdog restores the previous packages.
 
 A provider ownership marker is written in the same transaction. It is how the provider distinguishes its own sections from firmware sections without a separate registry. Marker-only changes do not trigger a service reload or reboot.

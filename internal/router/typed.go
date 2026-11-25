@@ -137,7 +137,7 @@ func (c *Client) ApplySections(ctx context.Context, changes Configuration, secre
 	}
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, changes)
-	return c.writeConfiguration(ctx, changes, secrets, full)
+	return c.writeConfiguration(ctx, changes, secrets, full, nil)
 }
 
 // ForgetSection releases Terraform ownership while preserving the section.
@@ -271,7 +271,7 @@ func (c *Client) ApplyFirewallRules(ctx context.Context, desired, removed Config
 	}
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, changes)
-	return c.writeConfiguration(ctx, changes, nil, full)
+	return c.writeConfiguration(ctx, changes, nil, full, nil)
 }
 
 func firewallRuleIdentity(section Section) string {

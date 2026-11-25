@@ -341,7 +341,7 @@ func ValidSecretOptions(config Configuration, secrets map[string]string) bool {
 	return true
 }
 
-func (c *Client) writeConfiguration(ctx context.Context, config Configuration, secrets map[string]string, safetyConfig Configuration) error {
+func (c *Client) writeConfiguration(ctx context.Context, config Configuration, secrets map[string]string, safetyConfig Configuration, service *ServiceChange) error {
 	if !ValidSecretOptions(config, secrets) {
 		return errors.New("Secret options must reference managed sections and supported secret names.")
 	}
@@ -363,7 +363,7 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 			return errors.New("Changing managed firewall rule order requires explicit positions for all managed rules.")
 		}
 	}
-	if SameConfiguration(actual, config) && len(secrets) == 0 {
+	if SameConfiguration(actual, config) && len(secrets) == 0 && service == nil {
 		return nil
 	}
 	tokenBytes := make([]byte, 16)
@@ -372,6 +372,13 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 	}
 	token := hex.EncodeToString(tokenBytes)
 	plan := reloadPlan{}
+	if service != nil {
+		plan.ServiceSnapshot = service.Snapshot
+		if service.Cloud != nil {
+			plan.Cloud = true
+			plan.CloudEnabled = *service.Cloud
+		}
+	}
 	for i, s := range config {
 		if reflect.DeepEqual(s, actual[i]) || sameSectionExceptManagedMarker(s, actual[i]) {
 			continue
@@ -408,12 +415,15 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 	if c.protection == nil {
 		return errors.New("Router changes require encrypted backup and management-path protection.")
 	}
-	if err := c.protection.Protect(ctx, c.runner, plan.Reboot || plan.Wireless); err != nil {
+	if err := c.protection.Protect(ctx, c.runner, plan.Reboot || plan.Wireless || plan.Cloud); err != nil {
 		return err
 	}
 	_, err = c.runner.Run(ctx, configurationApplyScript(config, token, plan, secrets))
 	var exit *ExitError
 	if errors.As(err, &exit) {
+		if service != nil && service.Cloud != nil {
+			return fmt.Errorf("%w The GoodCloud rollback restores the configuration and the recorded service states on the router; if a service cannot be restored, the transaction snapshot and failure record remain for inspection. Confirm the final service state before retrying.", operationError(err))
+		}
 		return operationError(err)
 	}
 	wait, cancel := context.WithTimeout(ctx, 240*time.Second)
@@ -424,7 +434,7 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 			if runtimeErr := c.verifyRuntimeFirewall(wait); runtimeErr != nil {
 				return runtimeErr
 			}
-			_, confirmErr := c.runner.Run(wait, configurationConfirmScript(token, safetyConfig, secrets))
+			_, confirmErr := c.runner.Run(wait, configurationConfirmScriptWithPlan(token, safetyConfig, plan, secrets))
 			if confirmErr == nil {
 				return nil
 			}
@@ -490,6 +500,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"firewall.redirect":         "name src src_dport dest dest_ip dest_port proto target enabled reflection reflection_src helper",
 		"firewall.rule":             "name src dest src_ip dest_ip proto src_port dest_port family target enabled src_mac icmp_type limit limit_burst weekdays start_date stop_date utc_time mark set_mark set_xmark helper log log_limit",
 		"gl-dns-v2.dns":             "provider proto servers_list mode manual_enable manual_type manual_local_dns override_vpn force_dns",
+		"gl-cloud.cloud":            "enable",
 		"eth_ports_config_map.port": "mode vlan_mode pvid port",
 	}
 	result := map[string]map[string]bool{}

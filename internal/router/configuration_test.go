@@ -89,14 +89,14 @@ func TestConfigurationAdoptionDoesNotWriteAndCancellationDoesNotArm(t *testing.T
 	config := configurationFixture()
 	remote := &configurationReader{config: config}
 	client := newFixtureClient(remote)
-	if err := client.writeConfiguration(context.Background(), config, nil, config); err != nil {
+	if err := client.writeConfiguration(context.Background(), config, nil, config, nil); err != nil {
 		t.Fatal(err)
 	}
 	if remote.calls != 1 || strings.Contains(remote.script, "uci commit") {
 		t.Fatal("Matching configuration was mutated")
 	}
 	remote.err = context.Canceled
-	if err := client.writeConfiguration(context.Background(), config, nil, config); !errors.Is(err, context.Canceled) {
+	if err := client.writeConfiguration(context.Background(), config, nil, config, nil); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if strings.Contains(remote.script, "uci commit") {
@@ -140,7 +140,7 @@ func TestPortMappingOnlyChangeSynchronizesRuntime(t *testing.T) {
 	before := Configuration{{Package: "eth_ports_config_map", Name: "lan2", Type: "port", Options: map[string]string{"pvid": "1"}}}
 	after := Configuration{{Package: "eth_ports_config_map", Name: "lan2", Type: "port", Options: map[string]string{"pvid": "11"}}}
 	remote := &configurationMutationRunner{current: before, wanted: after}
-	if err := newFixtureClient(remote).writeConfiguration(context.Background(), after, nil, after); err != nil {
+	if err := newFixtureClient(remote).writeConfiguration(context.Background(), after, nil, after, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(remote.apply, "gl-vlan-port-map sync") || !strings.Contains(remote.apply, "reboot") {
@@ -173,7 +173,7 @@ func TestSSIDChangeReloadsOnlyWireless(t *testing.T) {
 	before := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Before"}}}
 	after := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "After"}}}
 	remote := &configurationMutationRunner{current: before, wanted: after}
-	if err := newFixtureClient(remote).writeConfiguration(context.Background(), after, nil, after); err != nil {
+	if err := newFixtureClient(remote).writeConfiguration(context.Background(), after, nil, after, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(remote.apply, "wifi reload") || strings.Contains(remote.apply, "/etc/init.d/network reload") || strings.Contains(remote.apply, "module\\\":\\\"dns") {
@@ -186,7 +186,7 @@ func TestMissingWiFiRequiresExplicitCredentialRestoration(t *testing.T) {
 	actual := configurationFixture()
 	actual[0].Missing = true
 	remote := &configurationReader{config: actual}
-	err := newFixtureClient(remote).writeConfiguration(context.Background(), desired, nil, desired)
+	err := newFixtureClient(remote).writeConfiguration(context.Background(), desired, nil, desired, nil)
 	if err == nil || !strings.Contains(err.Error(), "write-only key") || remote.calls != 1 {
 		t.Fatalf("Missing Wi-Fi was recreated without a key: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestMutationRequiresSuccessfulProtection(t *testing.T) {
 			if missing {
 				client.protection = nil
 			}
-			err := client.writeConfiguration(context.Background(), after, nil, after)
+			err := client.writeConfiguration(context.Background(), after, nil, after, nil)
 			if err == nil || remote.apply != "" || !SameConfiguration(remote.current, before) {
 				t.Fatalf("mutation bypassed protection: %v", err)
 			}

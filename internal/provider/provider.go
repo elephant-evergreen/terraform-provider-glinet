@@ -131,6 +131,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewDHCPReservationResource,
 		NewDNSResource,
 		NewDNSMasqResource,
+		NewGoodCloudResource,
 		NewFirewallZoneResource,
 		NewFirewallForwardingResource,
 		NewFirewallRulesResource,

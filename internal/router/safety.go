@@ -15,12 +15,18 @@ import (
 // The safety state is read with UCI's own cursor instead of parsing shell
 // output. Wi-Fi secrets are removed before the state leaves the router.
 const safetyStateLua = `local uci=require('uci').cursor()
-local packages={'network','wireless','dhcp','firewall','gl-dns-v2','eth_ports_config_map'}
+local packages={'network','wireless','dhcp','firewall','gl-dns-v2','eth_ports_config_map','gl-cloud'}
 local function secret(pkg,key)
  if pkg=='wireless' and (key=='key' or key:match('^key%d$') or key=='wpa_psk' or key=='password' or key=='psk') then return true end
  if pkg=='network' and (key=='private_key' or key=='preshared_key') then return true end
  if pkg=='openvpn' and (key=='auth_user_pass' or key=='key' or key=='password') then return true end
  return false
+end
+local managed={['gl-cloud']={enable=true, home_iac_owner=true}}
+local function allowed(pkg,key)
+ local m=managed[pkg]
+ if m then return m[key]==true end
+ return not secret(pkg,key)
 end
 local result={}
 for _,pkg in ipairs(packages) do
@@ -28,7 +34,7 @@ for _,pkg in ipairs(packages) do
  uci:foreach(pkg,nil,function(section)
   local item={name=section['.name'],type=section['.type'],options={},lists={}}
   for key,value in pairs(section) do
-   if key:sub(1,1)~='.' and not secret(pkg,key) then
+   if key:sub(1,1)~='.' and allowed(pkg,key) then
     if type(value)=='table' then item.lists[key]=value else item.options[key]=value end
    end
   end
