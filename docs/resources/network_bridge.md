@@ -48,6 +48,7 @@ resource "glinet_network_bridge" "lan" {
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `empty` (Boolean) Set `bridge_empty` so the bridge can exist without ports.
 - `igmp_snooping` (Boolean) Enable IGMP snooping.
+- `macaddr` (String) Optional bridge MAC address override.
 - `ports` (Set of String) Bridge member ports. Omitted or empty membership removes all member ports, subject to management-path safety checks.
 - `stp` (Boolean) Enable spanning tree protocol.
 
