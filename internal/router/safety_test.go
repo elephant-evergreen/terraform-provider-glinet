@@ -84,8 +84,8 @@ func topologyState() uciState {
 		"network": {
 			{Name: "lan", Type: "interface", Options: map[string]string{"device": "br-lan"}},
 			{Name: "guest", Type: "interface", Options: map[string]string{"device": "br-guest"}},
-			{Name: "vlan11", Type: "interface", Options: map[string]string{"device": "br-vlan11", "home_iac_owner": "1"}},
-			{Name: "vlan12", Type: "interface", Options: map[string]string{"device": "br-vlan12", "home_iac_owner": "1"}},
+			{Name: "vlan11", Type: "interface", Options: map[string]string{"device": "br-vlan11", ManagedOption: "1"}},
+			{Name: "vlan12", Type: "interface", Options: map[string]string{"device": "br-vlan12", ManagedOption: "1"}},
 			{Name: "nas_alias", Type: "interface", Options: map[string]string{"device": "@vlan11"}},
 		},
 		"wireless": {
