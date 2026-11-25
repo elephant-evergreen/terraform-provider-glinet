@@ -48,14 +48,21 @@ resource "glinet_firewall_zone" "guest" {
 
 ### Optional
 
+- `conntrack` (Boolean) Enable connection tracking for this zone.
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
+- `device` (Set of String) Devices assigned to this zone.
 - `enabled` (Boolean) Whether the zone is enabled.
+- `extra_dest` (String) Extra destination match.
+- `extra_src` (String) Extra source match.
 - `forward` (String) Forward policy.
 - `input` (String) Input policy: ACCEPT, REJECT, DROP.
+- `log` (Boolean) Log forwarded traffic for this zone.
+- `log_limit` (String) Log rate limit.
 - `masq` (Boolean) Enable masquerading.
 - `mtu_fix` (Boolean) Enable MSS clamping.
 - `networks` (Set of String) Interfaces classified into this zone.
 - `output` (String) Output policy.
+- `subnet` (Set of String) Subnets assigned to this zone.
 
 ### Read-Only
 
