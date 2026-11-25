@@ -490,6 +490,7 @@ var allowedOptions = func() map[string]map[string]bool {
 	definitions := map[string]string{
 		"network.device":            "name type bridge_empty ports stp igmp_snooping",
 		"network.wireguard":         "public_key allowed_ips endpoint_host endpoint_port persistent_keepalive route_allowed_ips description",
+		"network.route":             "interface target netmask gateway metric table source onlink mtu type",
 		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate",
 		"wireless.wifi-iface":       "disabled ssid encryption hidden isolate ifname device network mode macaddr wds ieee80211w wpa_group_rekey",
 		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force ignore dynamicdhcp instance",
