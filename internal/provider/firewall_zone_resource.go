@@ -20,14 +20,21 @@ func NewFirewallZoneResource() resource.Resource {
 		TypeName:    "firewall_zone",
 		Description: "Manage one OpenWrt firewall zone. Zones are resolved by their `name` option, so stock anonymous zones can be imported safely. Destroy releases ownership by default.",
 		Attributes: map[string]schema.Attribute{
-			"name":     schema.StringAttribute{Required: true, MarkdownDescription: "Zone name, such as `lan` or `wan`.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
-			"networks": schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Interfaces classified into this zone."},
-			"input":    schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("REJECT"), MarkdownDescription: "Input policy: ACCEPT, REJECT, DROP."},
-			"output":   schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("ACCEPT"), MarkdownDescription: "Output policy."},
-			"forward":  schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("REJECT"), MarkdownDescription: "Forward policy."},
-			"masq":     schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable masquerading."},
-			"mtu_fix":  schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable MSS clamping."},
-			"enabled":  schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Whether the zone is enabled."},
+			"name":       schema.StringAttribute{Required: true, MarkdownDescription: "Zone name, such as `lan` or `wan`.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"networks":   schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Interfaces classified into this zone."},
+			"input":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("REJECT"), MarkdownDescription: "Input policy: ACCEPT, REJECT, DROP."},
+			"output":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("ACCEPT"), MarkdownDescription: "Output policy."},
+			"forward":    schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("REJECT"), MarkdownDescription: "Forward policy."},
+			"masq":       schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable masquerading."},
+			"mtu_fix":    schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable MSS clamping."},
+			"enabled":    schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Whether the zone is enabled."},
+			"log":        schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Log forwarded traffic for this zone."},
+			"log_limit":  schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Log rate limit."},
+			"conntrack":  schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable connection tracking for this zone."},
+			"device":     schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Devices assigned to this zone."},
+			"subnet":     schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Subnets assigned to this zone."},
+			"extra_src":  schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Extra source match."},
+			"extra_dest": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Extra destination match."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			name := stringOf(values, "name")
@@ -37,9 +44,11 @@ func NewFirewallZoneResource() resource.Resource {
 			section := router.Section{Package: "firewall", Type: "zone", Name: "@zone[0]", Match: map[string]string{"name": name}, Options: map[string]string{
 				"name": name, "input": stringOf(values, "input"), "output": stringOf(values, "output"), "forward": stringOf(values, "forward"),
 				"masq": boolString(boolOf(values, "masq", false)), "mtu_fix": boolString(boolOf(values, "mtu_fix", false)), "enabled": boolString(boolOf(values, "enabled", true)),
+				"log": boolString(boolOf(values, "log", false)), "log_limit": stringOf(values, "log_limit"), "conntrack": boolString(boolOf(values, "conntrack", false)),
+				"extra_src": stringOf(values, "extra_src"), "extra_dest": stringOf(values, "extra_dest"),
 			}}
 			networks := stringsOf(values, "networks")
-			section.Lists = map[string][]string{"network": networks}
+			section.Lists = map[string][]string{"network": networks, "device": stringsOf(values, "device"), "subnet": stringsOf(values, "subnet")}
 			return section, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
@@ -52,6 +61,10 @@ func NewFirewallZoneResource() resource.Resource {
 				"masq":     boolValue(section.Options["masq"] == "1"),
 				"mtu_fix":  boolValue(section.Options["mtu_fix"] == "1"),
 				"enabled":  boolValue(section.Options["enabled"] != "0"),
+				"log":      boolValue(section.Options["log"] == "1"), "log_limit": stringValue(section.Options["log_limit"]),
+				"conntrack": boolValue(section.Options["conntrack"] == "1"), "device": stringSet(section.Lists["device"]),
+				"subnet": stringSet(section.Lists["subnet"]), "extra_src": stringValue(section.Options["extra_src"]),
+				"extra_dest": stringValue(section.Options["extra_dest"]),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
