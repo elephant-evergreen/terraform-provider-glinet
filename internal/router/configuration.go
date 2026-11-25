@@ -496,7 +496,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate ipv6 ip6assign ip6hint macaddr hostname username",
 		"wireless.wifi-device":      "channel htmode txpower country disabled",
 		"wireless.wifi-iface":       "disabled ssid encryption hidden isolate ifname device network mode macaddr wds ieee80211w wps_pushbutton wpa_group_rekey",
-		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force ignore dynamicdhcp instance",
+		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force ignore dynamicdhcp instance tag",
 		"dhcp.host":                 "mac ip name dns leasetime duid ignore instance tag broadcast set_tag",
 		"dhcp.dnsmasq":              "noresolv server domain local rebind_domain cachesize domain_needed bogus_priv strictorder",
 		"firewall.defaults":         "input output forward syn_flood synflood_protect synflood_rate synflood_burst drop_invalid tcp_syncookies flow_offloading flow_offloading_hw",

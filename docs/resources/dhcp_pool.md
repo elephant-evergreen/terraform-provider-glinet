@@ -60,6 +60,7 @@ resource "glinet_dhcp_pool" "lan" {
 - `limit` (Number) Number of dynamic leases.
 - `ra` (String) Router advertisement mode.
 - `start` (Number) First host offset.
+- `tag` (String) Optional dnsmasq tag.
 
 ### Read-Only
 
