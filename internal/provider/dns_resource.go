@@ -84,32 +84,46 @@ func NewDNSMasqResource() resource.Resource {
 		TypeName:    "dnsmasq",
 		Description: "Manage the singleton OpenWrt `dhcp` dnsmasq forwarding section. Destroy releases ownership and preserves the firmware section.",
 		Attributes: map[string]schema.Attribute{
-			"no_resolv": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Set `noresolv` so WAN-provided DNS is not used."},
-			"servers":   schema.SetAttribute{Required: true, ElementType: types.StringType, MarkdownDescription: "dnsmasq upstream servers, such as `127.0.0.1#5453`."},
-			"domain":    schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional local domain."},
-			"local":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional local service path."},
+			"no_resolv":     schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Set `noresolv` so WAN-provided DNS is not used."},
+			"servers":       schema.SetAttribute{Required: true, ElementType: types.StringType, MarkdownDescription: "dnsmasq upstream servers, such as `127.0.0.1#5453`."},
+			"domain":        schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional local domain."},
+			"local":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional local service path."},
+			"domain_needed": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Only forward fully qualified domain names."},
+			"bogus_priv":    schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Reject private reverse DNS upstream requests."},
+			"strictorder":   schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Respect the order of upstream servers."},
+			"cachesize":     schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(150), MarkdownDescription: "DNS cache size."},
+			"rebind_domain": schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Domains allowed to resolve to private addresses."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			servers := stringsOf(values, "servers")
 			if len(servers) == 0 {
 				return router.Section{}, fmt.Errorf("at least one upstream server is required")
 			}
-			options := map[string]string{"noresolv": boolString(boolOf(values, "no_resolv", true))}
+			options := map[string]string{"noresolv": boolString(boolOf(values, "no_resolv", true)),
+				"domain_needed": boolString(boolOf(values, "domain_needed", false)),
+				"bogus_priv":    boolString(boolOf(values, "bogus_priv", true)),
+				"strictorder":   boolString(boolOf(values, "strictorder", false)),
+				"cachesize":     fmt.Sprintf("%d", int64Of(values, "cachesize"))}
 			domain := stringOf(values, "domain")
 			options["domain"] = domain
 			local := stringOf(values, "local")
 			options["local"] = local
-			return router.Section{Package: "dhcp", Type: "dnsmasq", Name: "@dnsmasq[0]", Options: options, Lists: map[string][]string{"server": servers}}, nil
+			return router.Section{Package: "dhcp", Type: "dnsmasq", Name: "@dnsmasq[0]", Options: options, Lists: map[string][]string{"server": servers, "rebind_domain": stringsOf(values, "rebind_domain")}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
 			return router.Section{Package: "dhcp", Type: "dnsmasq", Name: "@dnsmasq[0]"}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
 			return map[string]attr.Value{
-				"no_resolv": boolValue(section.Options["noresolv"] == "1"),
-				"servers":   stringSet(section.Lists["server"]),
-				"domain":    stringValue(section.Options["domain"]),
-				"local":     stringValue(section.Options["local"]),
+				"no_resolv":     boolValue(section.Options["noresolv"] == "1"),
+				"servers":       stringSet(section.Lists["server"]),
+				"domain":        stringValue(section.Options["domain"]),
+				"local":         stringValue(section.Options["local"]),
+				"domain_needed": boolValue(section.Options["domain_needed"] == "1"),
+				"bogus_priv":    boolValue(section.Options["bogus_priv"] != "0"),
+				"strictorder":   boolValue(section.Options["strictorder"] == "1"),
+				"cachesize":     int64Value(parseOptionInt64(section.Options["cachesize"])),
+				"rebind_domain": stringSet(section.Lists["rebind_domain"]),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
