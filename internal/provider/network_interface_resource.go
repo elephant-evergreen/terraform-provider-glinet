@@ -82,7 +82,7 @@ func typedNetworkInterfaceSpec() typedSpec {
 			}
 			display := stringOf(values, "display_name")
 			options["display_name"] = display
-			for _, field := range []struct{ attrName, option string }{{"ip6hint", "ip6hint"}, {"macaddr", "macaddr"}, {"hostname", "hostname"}, {"username", "username"}} {
+			for _, field := range []struct{ attrName, option string }{{"ip6hint", "ip6hint"}, {"ip6ifaceid", "ip6ifaceid"}, {"macaddr", "macaddr"}, {"hostname", "hostname"}, {"username", "username"}} {
 				options[field.option] = stringOf(values, field.attrName)
 			}
 			if ip6assign := int64Of(values, "ip6assign"); ip6assign > 0 {
