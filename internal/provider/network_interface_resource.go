@@ -97,7 +97,7 @@ func typedNetworkInterfaceSpec() typedSpec {
 
 			section := router.Section{Package: "network", Type: "interface", Name: name, Options: options}
 			dns := stringsOf(values, "dns")
-			section.Lists = map[string][]string{"dns": dns}
+			section.Lists = map[string][]string{"dns": dns, "ip6class": stringsOf(values, "ip6class"), "ip6prefix": stringsOf(values, "ip6prefix")}
 			return section, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
