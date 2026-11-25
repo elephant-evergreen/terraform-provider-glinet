@@ -43,7 +43,7 @@ func TestFirmwarePolicy(t *testing.T) {
 			t.Fatalf("Firmware %q should be allowed", version)
 		}
 	}
-	for _, version := range []string{"", "4.10.4", "4.12.0", "4.11.2-beta", "4.11", "4.11.100"} {
+	for _, version := range []string{"", "4.10.4", "4.12.0", "4.11.2-beta", "4.11", "4.11.200"} {
 		if FirmwareAllowed(version) {
 			t.Fatalf("Firmware %q should be rejected", version)
 		}
