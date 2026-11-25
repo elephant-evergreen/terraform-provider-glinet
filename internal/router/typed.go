@@ -13,17 +13,12 @@ import (
 // without a separate registry.
 const ManagedOption = "terraform_owner"
 
-// LegacyManagedOption is read during migration and removed when a managed
-// section is next written.
-const LegacyManagedOption = "home_iac_owner"
-
 func IsManaged(options map[string]string) bool {
-	return options[ManagedOption] == "1" || options[LegacyManagedOption] == "1"
+	return options[ManagedOption] == "1"
 }
 
 func MarkManaged(options map[string]string) {
 	options[ManagedOption] = "1"
-	options[LegacyManagedOption] = ""
 }
 
 // ReadSection reads one section. A selector may be a named section or an
@@ -153,7 +148,6 @@ func (c *Client) ForgetSection(ctx context.Context, selector Section) error {
 		selector.Options = map[string]string{}
 	}
 	selector.Options[ManagedOption] = "0"
-	selector.Options[LegacyManagedOption] = ""
 	selector.Absent = false
 	return c.ApplySections(ctx, Configuration{selector}, nil)
 }
