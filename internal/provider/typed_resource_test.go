@@ -83,7 +83,13 @@ func (r *typedFixtureRunner) Run(_ context.Context, script string) ([]byte, erro
 			}
 		}
 		if strings.Contains(script, "keys_match") {
-			return json.Marshal(map[string]any{"configuration": observed, "keys_match": true})
+			keysMatch := true
+			for _, section := range observed {
+				if section.Missing {
+					keysMatch = false
+				}
+			}
+			return json.Marshal(map[string]any{"configuration": observed, "keys_match": keysMatch})
 		}
 		return json.Marshal(observed)
 	}
@@ -215,3 +221,104 @@ func TestPreserveWriteOnlyVersion(t *testing.T) {
 type fixtureProtection struct{}
 
 func (fixtureProtection) Protect(context.Context, router.Runner, bool) error { return nil }
+
+func TestTypedWirelessInterfaceProtocol(t *testing.T) {
+	remote := &typedFixtureRunner{}
+	client := router.NewClient(remote, fixtureProtection{})
+	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
+	config := func(encryption string) string {
+		return `resource "glinet_wireless_interface" "test" {
+  section = "wifi2g"
+  ssid = "Example"
+  device = "mt798611"
+  network = "lan"
+  mode = "ap"
+  encryption = "` + encryption + `"
+  key_wo = "example-passphrase"
+  key_version = 1
+}`
+	}
+	checkOptions := func(encryption, pmf string) func(*terraform.State) error {
+		return func(*terraform.State) error {
+			remote.mu.Lock()
+			defer remote.mu.Unlock()
+			for _, section := range remote.actual {
+				if section.Package != "wireless" || section.Name != "wifi2g" {
+					continue
+				}
+				if section.Options["encryption"] != encryption {
+					t.Fatalf("encryption = %q", section.Options["encryption"])
+				}
+				if section.Options["ieee80211w"] != pmf {
+					t.Fatalf("ieee80211w = %q", section.Options["ieee80211w"])
+				}
+				if section.Options["wps_pushbutton"] != "0" {
+					t.Fatalf("wps_pushbutton = %q", section.Options["wps_pushbutton"])
+				}
+				return nil
+			}
+			t.Fatal("wireless section was not applied")
+			return nil
+		}
+	}
+	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{Config: config("sae"), Check: checkOptions("sae", "2")},
+			{Config: config("psk2"), Check: checkOptions("psk2", "0")},
+			{ResourceName: "glinet_wireless_interface.test", ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"key_wo", "key_version", "delete_behavior"}},
+		}})
+}
+
+func TestTypedWirelessRadioProtocol(t *testing.T) {
+	remote := &typedFixtureRunner{actual: router.Configuration{{Package: "wireless", Name: "mt798611", Type: "wifi-device", Options: map[string]string{"band": "2g", "channel": "6", "htmode": "HE40", "txpower": "80", "country": "JP", "disabled": "0"}}}}
+	client := router.NewClient(remote, fixtureProtection{})
+	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
+	config := `resource "glinet_wireless_radio" "test" {
+  device = "mt798611"
+  channel = "11"
+  htmode = "HE40"
+}`
+	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		CheckDestroy: func(*terraform.State) error {
+			remote.mu.Lock()
+			defer remote.mu.Unlock()
+			for _, section := range remote.actual {
+				if section.Package == "wireless" && section.Name == "mt798611" {
+					return nil
+				}
+			}
+			t.Fatal("Destroy removed the radio section")
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{Config: config, Check: func(*terraform.State) error {
+				remote.mu.Lock()
+				defer remote.mu.Unlock()
+				for _, section := range remote.actual {
+					if section.Package != "wireless" || section.Name != "mt798611" {
+						continue
+					}
+					if section.Options["channel"] != "11" || section.Options["htmode"] != "HE40" {
+						t.Fatalf("radio options = %+v", section.Options)
+					}
+					return nil
+				}
+				t.Fatal("radio section was not applied")
+				return nil
+			}},
+			{Config: config, PlanOnly: true},
+		}})
+}
+
+func TestTypedWirelessRadioRequiresExisting(t *testing.T) {
+	remote := &typedFixtureRunner{}
+	client := router.NewClient(remote, fixtureProtection{})
+	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
+	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{Config: `resource "glinet_wireless_radio" "test" {
+  device = "mt798611"
+  channel = "auto"
+}`, ExpectError: regexp.MustCompile("Section not found")},
+		}})
+}

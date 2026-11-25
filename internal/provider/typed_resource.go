@@ -7,25 +7,32 @@ import (
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 type typedSpec struct {
-	TypeName     string
-	Description  string
-	Attributes   map[string]schema.Attribute
-	Selector     func(map[string]attr.Value) (router.Section, error)
-	ReadSelector func(map[string]attr.Value) (router.Section, error)
-	Load         func(router.Section) map[string]attr.Value
-	Import       func(string) (map[string]attr.Value, error)
-	ID           func(map[string]attr.Value) (string, error)
-	Validate     func(map[string]attr.Value) error
-	Secrets      func(map[string]attr.Value) map[string]string
-	WriteOnly    []string
+	TypeName                  string
+	Description               string
+	Attributes                map[string]schema.Attribute
+	Selector                  func(map[string]attr.Value) (router.Section, error)
+	ReadSelector              func(map[string]attr.Value) (router.Section, error)
+	Load                      func(router.Section) map[string]attr.Value
+	Import                    func(string) (map[string]attr.Value, error)
+	ID                        func(map[string]attr.Value) (string, error)
+	Validate                  func(map[string]attr.Value) error
+	ValidateConfig            func(map[string]attr.Value) error
+	ModifyPlan                func(plan, config, state map[string]attr.Value, creating bool) (map[string]attr.Value, error)
+	Secrets                   func(map[string]attr.Value) map[string]string
+	WriteOnly                 []string
+	RequireExisting           bool
+	NoDelete                  bool
+	DeleteBehaviorDescription string
 }
 
 type typedResource struct {
@@ -36,9 +43,11 @@ type typedResource struct {
 }
 
 var (
-	_ resource.Resource                = &typedResource{}
-	_ resource.ResourceWithConfigure   = &typedResource{}
-	_ resource.ResourceWithImportState = &typedResource{}
+	_ resource.Resource                   = &typedResource{}
+	_ resource.ResourceWithConfigure      = &typedResource{}
+	_ resource.ResourceWithImportState    = &typedResource{}
+	_ resource.ResourceWithValidateConfig = &typedResource{}
+	_ resource.ResourceWithModifyPlan     = &typedResource{}
 )
 
 func newTypedResource(spec typedSpec) resource.Resource {
@@ -48,9 +57,13 @@ func newTypedResource(spec typedSpec) resource.Resource {
 	}
 	attributes["id"] = schema.StringAttribute{Computed: true, MarkdownDescription: "Stable import identifier."}
 	attributes["uci_section"] = schema.StringAttribute{Computed: true, MarkdownDescription: "Resolved UCI section name on the router."}
+	description := spec.DeleteBehaviorDescription
+	if description == "" {
+		description = "Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved."
+	}
 	attributes["delete_behavior"] = schema.StringAttribute{
 		Optional: true, Computed: true, Default: stringdefault.StaticString("forget"),
-		MarkdownDescription: "Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.",
+		MarkdownDescription: description,
 		Validators:          []validator.String{deleteBehaviorValidator{}},
 	}
 	attrTypes := map[string]attr.Type{
@@ -94,6 +107,73 @@ func (r *typedResource) Configure(_ context.Context, req resource.ConfigureReque
 	r.client = client
 }
 
+func (r *typedResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var object types.Object
+	resp.Diagnostics.Append(req.Config.Get(ctx, &object)...)
+	if resp.Diagnostics.HasError() || object.IsNull() || object.IsUnknown() {
+		return
+	}
+	values := object.Attributes()
+	if r.spec.NoDelete {
+		behavior := stringOf(values, "delete_behavior")
+		if behavior == "" {
+			behavior = "forget"
+		}
+		if behavior != "forget" {
+			resp.Diagnostics.AddAttributeError(path.Root("delete_behavior"), "Invalid delete behavior", "This resource preserves the router section; delete_behavior must be forget.")
+		}
+	}
+	if r.spec.ValidateConfig == nil {
+		return
+	}
+	if err := r.spec.ValidateConfig(values); err != nil {
+		resp.Diagnostics.AddError("Invalid configuration", err.Error())
+	}
+}
+
+func (r *typedResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if r.spec.ModifyPlan == nil || req.Plan.Raw.IsNull() {
+		return
+	}
+	var plan types.Object
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() || plan.IsNull() || plan.IsUnknown() {
+		return
+	}
+	var config types.Object
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() || config.IsNull() || config.IsUnknown() {
+		return
+	}
+	values := map[string]attr.Value{}
+	for name, value := range plan.Attributes() {
+		values[name] = value
+	}
+	stateValues := map[string]attr.Value{}
+	if !req.State.Raw.IsNull() {
+		var state types.Object
+		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if !state.IsNull() && !state.IsUnknown() {
+			for name, value := range state.Attributes() {
+				stateValues[name] = value
+			}
+		}
+	}
+	updated, err := r.spec.ModifyPlan(values, config.Attributes(), stateValues, req.State.Raw.IsNull())
+	if err != nil {
+		resp.Diagnostics.AddError("Cannot plan configuration", err.Error())
+		return
+	}
+	object, diagnostics := types.ObjectValue(r.attrTypes, updated)
+	resp.Diagnostics.Append(diagnostics...)
+	if !resp.Diagnostics.HasError() {
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, object)...)
+	}
+}
+
 func (r *typedResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var object types.Object
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &object)...)
@@ -101,6 +181,10 @@ func (r *typedResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	values := object.Attributes()
+	resp.Diagnostics.Append(r.mergeWriteOnly(ctx, req.Config, values)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	if err := r.validate(values); err != nil {
 		resp.Diagnostics.AddError("Invalid configuration", err.Error())
 		return
@@ -109,6 +193,17 @@ func (r *typedResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if err != nil {
 		resp.Diagnostics.AddError("Cannot build section", err.Error())
 		return
+	}
+	if r.spec.RequireExisting {
+		_, found, err := r.client.ReadSection(ctx, section)
+		if err != nil {
+			resp.Diagnostics.AddError("Cannot read section before adoption", err.Error())
+			return
+		}
+		if !found {
+			resp.Diagnostics.AddError("Section not found", "This resource adopts an existing router section; "+section.Package+"."+section.Name+" does not exist.")
+			return
+		}
 	}
 	if section.Options == nil {
 		section.Options = map[string]string{}
@@ -164,6 +259,10 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 	values := object.Attributes()
+	resp.Diagnostics.Append(r.mergeWriteOnly(ctx, req.Config, values)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	if err := r.validate(values); err != nil {
 		resp.Diagnostics.AddError("Invalid configuration", err.Error())
 		return
@@ -210,6 +309,12 @@ func (r *typedResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 	if !found {
+		return
+	}
+	if r.spec.NoDelete {
+		if err := r.client.ForgetSection(ctx, section); err != nil {
+			resp.Diagnostics.AddError("Cannot release section ownership", err.Error())
+		}
 		return
 	}
 	deleteBehavior := "forget"
@@ -310,6 +415,20 @@ func (r *typedResource) preserveWriteOnlyVersions(planned, values map[string]att
 		}
 		values[version] = value
 	}
+}
+
+func (r *typedResource) mergeWriteOnly(ctx context.Context, config tfsdk.Config, values map[string]attr.Value) diag.Diagnostics {
+	var object types.Object
+	diagnostics := config.Get(ctx, &object)
+	if diagnostics.HasError() || object.IsNull() || object.IsUnknown() {
+		return diagnostics
+	}
+	for _, name := range r.spec.WriteOnly {
+		if value, ok := object.Attributes()[name]; ok && !value.IsNull() && !value.IsUnknown() {
+			values[name] = value
+		}
+	}
+	return diagnostics
 }
 
 func (r *typedResource) secrets(values map[string]attr.Value) map[string]string {

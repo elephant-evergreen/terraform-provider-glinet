@@ -56,7 +56,7 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | Admin Panel setting | Current provider | Status |
 | --- | --- | --- |
 | SSID, security, hidden SSID, client isolation | `glinet_wireless_interface` | Managed |
-| Radio channel, width, transmit power, country | None | Planned |
+| Radio channel, width, transmit power, country | `glinet_wireless_radio` | Managed |
 | Guest/IoT Wi-Fi | `glinet_wireless_interface` | Partial: SSID-level only; no dedicated network workflow |
 | Wireless schedule | None | Planned |
 | MAC filter/access control | None | Planned |
@@ -65,7 +65,7 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | EAP/enterprise Wi-Fi | None | Planned |
 | Wi-Fi 6/radio advanced options | None | Planned |
 
-The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa2`, `wpa-mixed`, `owe`) so existing configurations continue to plan. The next compatible release adds `ieee80211w` and `wps_pushbutton` without changing existing defaults. The next minor release will restrict `encryption` to the five stock modes (`none`, `psk2`, `psk-mixed`, `sae`, `sae-mixed`) and default `wps_pushbutton` to disabled. The release before that restriction will warn in the plan and document the migration.
+The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa2`, `wpa-mixed`, `owe`) so existing configurations continue to plan. The next compatible release adds `ieee80211w` and `wps_pushbutton` without changing existing defaults. The next minor release will restrict `encryption` to the five stock modes (`none`, `psk2`, `psk-mixed`, `sae`, `sae-mixed`) and default `wps_pushbutton` to disabled. The release before that restriction will warn in the plan and document the migration. Radio settings are covered by schema, fixture, and protocol tests; a representative channel or width change still needs the hardware acceptance run before the provider claims 100%.
 
 ## Firewall and security
 
@@ -150,6 +150,7 @@ The matrix is backed by these resources and data sources:
 - `glinet_network_route`
 - `glinet_ethernet_port`
 - `glinet_wireless_interface`
+- `glinet_wireless_radio`
 - `glinet_dhcp_pool`
 - `glinet_dhcp_reservation`
 - `glinet_dns`
