@@ -2,7 +2,8 @@
 
 - Write public documentation, examples, diagnostics, issues, pull requests, and commit messages in English.
 - Preserve MPL-2.0 and third-party copyright notices. Do not add code comments unless explicitly requested.
-- Never commit credentials, router exports, backups, Terraform state, personal network identifiers, or machine-specific paths. Do not include private repository names, internal project names, hostnames, LAN addresses, SSIDs, or per-device update and verification history in public documentation, examples, diagnostics, issues, pull requests (including descriptions and comments), commit messages, or release notes. Use synthetic values such as RFC 5737 addresses in examples and fixtures. Document supported and tested firmware versions separately from any per-device history.
+- Never commit credentials, router exports, backups, Terraform state, personal network identifiers, or machine-specific paths.
+- Follow the [public information rules](CONTRIBUTING.md#public-information) for documentation, examples, issues, pull requests, commit messages, and release notes.
 - Support existing Wi-Fi AP settings and coordinated UCI configuration for network, wireless, DHCP, firewall, stock DNS and Ethernet port mapping on Flint 2 stock firmware 4.11.0 in router mode. Do not broaden hardware or firmware support without evidence.
 - Use Go and the official Terraform Plugin Framework. Use the Go and Terraform versions in mise.toml, and run mise run check for required checks.
 - Keep examples synthetic. Ordinary tests must use local test fixtures and must not change a real router. Hardware acceptance testing requires an explicitly authorized dedicated device.
