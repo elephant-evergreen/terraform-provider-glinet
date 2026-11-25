@@ -488,7 +488,7 @@ func (c *Client) stableConfiguration(ctx context.Context, config Configuration, 
 
 var allowedOptions = func() map[string]map[string]bool {
 	definitions := map[string]string{
-		"network.device":            "name type bridge_empty ports stp igmp_snooping",
+		"network.device":            "name type bridge_empty ports stp igmp_snooping macaddr",
 		"network.wireguard":         "public_key allowed_ips endpoint_host endpoint_port persistent_keepalive route_allowed_ips description",
 		"network.route":             "interface target netmask gateway metric table source onlink mtu type",
 		"network.route6":            "interface target gateway metric table source onlink mtu type",

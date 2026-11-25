@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -24,6 +25,7 @@ func NewNetworkBridgeResource() resource.Resource {
 			"empty":         schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Set `bridge_empty` so the bridge can exist without ports."},
 			"stp":           schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable spanning tree protocol."},
 			"igmp_snooping": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable IGMP snooping."},
+			"macaddr":       schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional bridge MAC address override."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			name := stringOf(values, "name")
@@ -43,6 +45,7 @@ func NewNetworkBridgeResource() resource.Resource {
 				"empty":         boolValue(section.Options["bridge_empty"] == "1"),
 				"stp":           boolValue(section.Options["stp"] == "1"),
 				"igmp_snooping": boolValue(section.Options["igmp_snooping"] == "1"),
+				"macaddr":       stringValue(section.Options["macaddr"]),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
