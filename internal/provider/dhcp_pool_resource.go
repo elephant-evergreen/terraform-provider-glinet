@@ -20,16 +20,18 @@ func NewDHCPPoolResource() resource.Resource {
 		TypeName:    "dhcp_pool",
 		Description: "Manage one OpenWrt `dhcp` pool section. The UCI section name is the stable identity; stock pools such as `lan` can be imported directly.",
 		Attributes: map[string]schema.Attribute{
-			"section":    schema.StringAttribute{Required: true, MarkdownDescription: "UCI dhcp section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
-			"interface":  schema.StringAttribute{Required: true, MarkdownDescription: "Network interface served by this pool."},
-			"start":      schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(100), MarkdownDescription: "First host offset."},
-			"limit":      schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(150), MarkdownDescription: "Number of dynamic leases."},
-			"lease_time": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("12h"), MarkdownDescription: "UCI `leasetime`."},
-			"dhcpv4":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("server"), MarkdownDescription: "IPv4 DHCP mode."},
-			"dhcpv6":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("disabled"), MarkdownDescription: "IPv6 DHCP mode."},
-			"ra":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("disabled"), MarkdownDescription: "Router advertisement mode."},
-			"force":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Force the DHCP server to start."},
-			"ignore":     schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Disable this pool."},
+			"section":     schema.StringAttribute{Required: true, MarkdownDescription: "UCI dhcp section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"interface":   schema.StringAttribute{Required: true, MarkdownDescription: "Network interface served by this pool."},
+			"start":       schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(100), MarkdownDescription: "First host offset."},
+			"limit":       schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(150), MarkdownDescription: "Number of dynamic leases."},
+			"lease_time":  schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("12h"), MarkdownDescription: "UCI `leasetime`."},
+			"dhcpv4":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("server"), MarkdownDescription: "IPv4 DHCP mode."},
+			"dhcpv6":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("disabled"), MarkdownDescription: "IPv6 DHCP mode."},
+			"ra":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("disabled"), MarkdownDescription: "Router advertisement mode."},
+			"force":       schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Force the DHCP server to start."},
+			"ignore":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Disable this pool."},
+			"instance":    schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional dnsmasq instance name."},
+			"dynamicdhcp": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable dynamic DHCP leases."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			section := stringOf(values, "section")
@@ -47,22 +49,26 @@ func NewDHCPPoolResource() resource.Resource {
 				"force":     boolString(boolOf(values, "force", true)),
 			}
 			options["ignore"] = boolString(boolOf(values, "ignore", false))
+			options["instance"] = stringOf(values, "instance")
+			options["dynamicdhcp"] = boolString(boolOf(values, "dynamicdhcp", true))
 			return router.Section{Package: "dhcp", Type: "dhcp", Name: section, Options: options}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
 			start, _ := strconv.ParseInt(section.Options["start"], 10, 64)
 			limit, _ := strconv.ParseInt(section.Options["limit"], 10, 64)
 			return map[string]attr.Value{
-				"section":    stringValue(section.Name),
-				"interface":  stringValue(section.Options["interface"]),
-				"start":      int64Value(start),
-				"limit":      int64Value(limit),
-				"lease_time": stringValue(defaultString(section.Options["leasetime"], "12h")),
-				"dhcpv4":     stringValue(defaultString(section.Options["dhcpv4"], "server")),
-				"dhcpv6":     stringValue(defaultString(section.Options["dhcpv6"], "disabled")),
-				"ra":         stringValue(defaultString(section.Options["ra"], "disabled")),
-				"force":      boolValue(section.Options["force"] != "0"),
-				"ignore":     boolValue(section.Options["ignore"] == "1"),
+				"section":     stringValue(section.Name),
+				"interface":   stringValue(section.Options["interface"]),
+				"start":       int64Value(start),
+				"limit":       int64Value(limit),
+				"lease_time":  stringValue(defaultString(section.Options["leasetime"], "12h")),
+				"dhcpv4":      stringValue(defaultString(section.Options["dhcpv4"], "server")),
+				"dhcpv6":      stringValue(defaultString(section.Options["dhcpv6"], "disabled")),
+				"ra":          stringValue(defaultString(section.Options["ra"], "disabled")),
+				"force":       boolValue(section.Options["force"] != "0"),
+				"ignore":      boolValue(section.Options["ignore"] == "1"),
+				"instance":    stringValue(section.Options["instance"]),
+				"dynamicdhcp": boolValue(section.Options["dynamicdhcp"] != "0"),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {

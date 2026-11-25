@@ -52,8 +52,10 @@ resource "glinet_dhcp_pool" "lan" {
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `dhcpv4` (String) IPv4 DHCP mode.
 - `dhcpv6` (String) IPv6 DHCP mode.
+- `dynamicdhcp` (Boolean) Enable dynamic DHCP leases.
 - `force` (Boolean) Force the DHCP server to start.
 - `ignore` (Boolean) Disable this pool.
+- `instance` (String) Optional dnsmasq instance name.
 - `lease_time` (String) UCI `leasetime`.
 - `limit` (Number) Number of dynamic leases.
 - `ra` (String) Router advertisement mode.
