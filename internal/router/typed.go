@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -141,6 +142,123 @@ func (c *Client) ForgetSection(ctx context.Context, selector Section) error {
 	selector.Options[ManagedOption] = "0"
 	selector.Absent = false
 	return c.ApplySections(ctx, Configuration{selector}, nil)
+}
+
+// FirewallRules returns every firewall rule in UCI package order. Position is
+// the absolute section index, including non-rule sections. The provider keeps
+// this ordering detail behind the ordered firewall rules resource.
+func (c *Client) FirewallRules(ctx context.Context) (Configuration, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	state, err := c.readRefreshState(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rules := Configuration{}
+	position := 0
+	for _, actual := range state["firewall"] {
+		if actual.Type == "rule" {
+			value := position
+			rules = append(rules, Section{
+				Package:  "firewall",
+				Name:     actual.Name,
+				Type:     actual.Type,
+				Options:  copyOptions(actual.Options),
+				Lists:    copyLists(actual.Lists),
+				Position: &value,
+			})
+		}
+		position++
+	}
+	return rules, nil
+}
+
+// ApplyFirewallRules writes the complete ordered rule set in one recovery-
+// protected configuration transaction. Every rule currently on the router must
+// appear in desired or removed; this prevents a stock rule from disappearing
+// silently when the ordered list is incomplete.
+func (c *Client) ApplyFirewallRules(ctx context.Context, desired, removed Configuration) error {
+	if err := ValidateConfiguration(desired); err != nil {
+		return err
+	}
+	for _, section := range desired {
+		if section.Package != "firewall" || section.Type != "rule" || section.Absent {
+			return errors.New("The ordered firewall policy accepts only present firewall rules.")
+		}
+	}
+	for _, section := range removed {
+		if section.Package != "firewall" || section.Type != "rule" || !section.Absent {
+			return errors.New("Removed firewall rules must be absent rule sections.")
+		}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	state, err := c.readSafetyState(ctx)
+	if err != nil {
+		return err
+	}
+	actualRules := Configuration{}
+	position := 0
+	for _, actual := range state["firewall"] {
+		if actual.Type == "rule" {
+			value := position
+			actualRules = append(actualRules, Section{
+				Package:  "firewall",
+				Name:     actual.Name,
+				Type:     actual.Type,
+				Options:  copyOptions(actual.Options),
+				Lists:    copyLists(actual.Lists),
+				Position: &value,
+			})
+		}
+		position++
+	}
+	desiredNames := map[string]bool{}
+	for _, section := range desired {
+		if desiredNames[section.Name] {
+			return errors.New("The ordered firewall policy contains a duplicate rule.")
+		}
+		desiredNames[section.Name] = true
+	}
+	removedNames := map[string]bool{}
+	for _, section := range removed {
+		if removedNames[section.Name] || desiredNames[section.Name] {
+			return errors.New("A firewall rule cannot be both present and removed.")
+		}
+		removedNames[section.Name] = true
+	}
+	for _, actual := range actualRules {
+		if !desiredNames[actual.Name] && !removedNames[actual.Name] {
+			return fmt.Errorf("The ordered firewall policy is missing rule %s. List it as an existing rule or remove it explicitly.", actual.Name)
+		}
+	}
+	actualNames := map[string]bool{}
+	for _, actual := range actualRules {
+		actualNames[actual.Name] = true
+	}
+	for _, section := range removed {
+		if !actualNames[section.Name] {
+			return fmt.Errorf("Cannot remove missing firewall rule %s.", section.Name)
+		}
+	}
+	lastPosition := position
+	for i := range desired {
+		var value int
+		if i < len(actualRules) {
+			value = *actualRules[i].Position
+		} else {
+			value = lastPosition + i - len(actualRules)
+		}
+		desired[i].Position = &value
+	}
+	changes := append(Configuration{}, desired...)
+	changes = append(changes, removed...)
+	if err := ValidateConfiguration(changes); err != nil {
+		return err
+	}
+	full := configurationFromManagedState(state)
+	full = mergeManagedConfiguration(full, changes)
+	return c.writeConfiguration(ctx, changes, nil, full)
 }
 
 func configurationFromManagedState(state uciState) Configuration {
