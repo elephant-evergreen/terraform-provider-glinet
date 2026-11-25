@@ -10,6 +10,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -96,49 +100,59 @@ func firewallRulesSchema() schema.Schema {
 		},
 		"src": schema.StringAttribute{
 			Optional: true, Computed: true,
+			PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			MarkdownDescription: "Source zone, `*`, or empty.",
 		},
 		"dest": schema.StringAttribute{
 			Optional: true, Computed: true,
+			PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			MarkdownDescription: "Destination zone, `*`, or empty.",
 		},
 		"src_ips": schema.SetAttribute{
 			Optional: true, Computed: true, ElementType: types.StringType,
+			PlanModifiers:       []planmodifier.Set{setplanmodifier.UseStateForUnknown()},
 			MarkdownDescription: "Source addresses or CIDRs.",
 		},
 		"dest_ips": schema.SetAttribute{
 			Optional: true, Computed: true, ElementType: types.StringType,
+			PlanModifiers:       []planmodifier.Set{setplanmodifier.UseStateForUnknown()},
 			MarkdownDescription: "Destination addresses or CIDRs.",
 		},
 		"protocols": schema.SetAttribute{
 			Optional: true, Computed: true, ElementType: types.StringType,
+			PlanModifiers:       []planmodifier.Set{setplanmodifier.UseStateForUnknown()},
 			MarkdownDescription: "Protocols, such as `tcp`, `udp`, `icmp`, or `all`.",
 		},
 		"src_ports": schema.SetAttribute{
 			Optional: true, Computed: true, ElementType: types.StringType,
+			PlanModifiers:       []planmodifier.Set{setplanmodifier.UseStateForUnknown()},
 			MarkdownDescription: "Source ports or ranges.",
 		},
 		"dest_ports": schema.SetAttribute{
 			Optional: true, Computed: true, ElementType: types.StringType,
+			PlanModifiers:       []planmodifier.Set{setplanmodifier.UseStateForUnknown()},
 			MarkdownDescription: "Destination ports or ranges.",
 		},
 		"family": schema.StringAttribute{
 			Optional: true, Computed: true,
+			PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			MarkdownDescription: "Address family: `ipv4`, `ipv6`, or `any`.",
 		},
 		"target": schema.StringAttribute{
 			Optional: true, Computed: true,
+			PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			MarkdownDescription: "Target: ACCEPT, REJECT, DROP, or LOG.",
 		},
 		"enabled": schema.BoolAttribute{
 			Optional: true, Computed: true,
+			PlanModifiers:       []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			MarkdownDescription: "Whether the rule is active.",
 		},
 	}
 	return schema.Schema{
 		MarkdownDescription: "Manage the complete ordered firewall rule set. Rule content, membership, and order are written in one recovery-protected transaction. Stock rules are listed with `existing = true` and keep their current content.",
 		Attributes: map[string]schema.Attribute{
-			"id": schema.StringAttribute{Computed: true, MarkdownDescription: "Stable identifier."},
+			"id": schema.StringAttribute{Computed: true, MarkdownDescription: "Stable identifier.", PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 			"rules": schema.ListNestedAttribute{
 				Required:            true,
 				MarkdownDescription: "Firewall rules in UCI order. Every existing rule must appear exactly once.",
@@ -263,10 +277,6 @@ func (r *firewallRulesResource) apply(ctx context.Context, planRules, stateRules
 			if !ok {
 				return fmt.Errorf("existing firewall rule %s is not present; import it or remove the entry", input.Name)
 			}
-			if actual.Options == nil {
-				actual.Options = map[string]string{}
-			}
-			actual.Options[router.ManagedOption] = "1"
 			desired = append(desired, actual)
 			continue
 		}
@@ -307,25 +317,10 @@ func (r *firewallRulesResource) read(ctx context.Context, model *firewallRulesMo
 		diagnostics.AddError("Cannot read firewall rules", err.Error())
 		return diagnostics
 	}
-	existing := map[string]bool{}
-	if !model.Rules.IsNull() && !model.Rules.IsUnknown() {
-		inputs, d := parseFirewallRuleInputs(ctx, model.Rules)
-		diagnostics.Append(d...)
-		if diagnostics.HasError() {
-			return diagnostics
-		}
-		for _, input := range inputs {
-			existing[firewallRuleInputKey(input)] = input.Existing
-		}
-	}
 	elements := make([]attr.Value, 0, len(actualRules))
 	for _, actual := range actualRules {
 		input := firewallRuleInputFromSection(actual)
-		if value, ok := existing[firewallRuleInputKey(input)]; ok {
-			input.Existing = value
-		} else {
-			input.Existing = true
-		}
+		input.Existing = !router.IsManaged(actual.Options)
 		object, d := firewallRuleObject(input)
 		diagnostics.Append(d...)
 		if diagnostics.HasError() {
