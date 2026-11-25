@@ -37,7 +37,7 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | IoT network | `glinet_network_interface`, `glinet_dhcp_pool`, `glinet_wireless_interface` | Partial: interfaces, pool, SSID; no dedicated IoT resource |
 | DNS | `glinet_dns`, `glinet_dnsmasq` | Partial: stock DNS mode/dnsmasq; AdGuard Home is separate |
 | Ethernet port and VLAN | `glinet_ethernet_port`, `glinet_network_interface` | Managed |
-| IPv6 | `glinet_network_interface` | Partial: delegation, `ipv6`, `ip6assign`, `ip6hint`; no full address/RA coverage |
+| IPv6 | `glinet_network_interface`, `glinet_network_route6` | Partial: interface hints and routes; no full address/RA coverage |
 | MAC address clone | None | Planned |
 | IGMP snooping | `glinet_network_bridge` | Managed |
 | Network mode | None | Planned |
