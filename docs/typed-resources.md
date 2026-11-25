@@ -6,11 +6,11 @@ This provider's API is a set of typed Terraform resources that map to OpenWrt UC
 
 The design follows the [HashiCorp provider design principles](https://developer.hashicorp.com/terraform/plugin/best-practices/hashicorp-provider-design-principles):
 
-- A resource represents one UCI object, one firmware singleton, or one ordered policy collection. The Terraform schema uses typed attributes rather than a JSON document.
+- A resource represents one UCI object, or one firmware singleton. The Terraform schema uses typed attributes rather than a JSON document.
 - Identity, import, refresh, update, and destroy are defined per resource. Anonymous stock sections are resolved by a stable unique option instead of by their mutable `@type[index]` name.
 - Secrets use write-only arguments. They are never stored in plan or state.
 - Every create, update, and delete is one recovery-protected transaction. The existing snapshot, watchdog, boot service, and rollback engine is reused.
-- Terraform's dependency graph orders related objects. Use references (`glinet_network_interface.lan.name`, `glinet_firewall_zone.lan.name`) so the graph is explicit. Firewall rule order is a collection-level invariant, so `glinet_firewall_rules` owns the complete ordered rule list instead of relying on independent resources.
+- Terraform's dependency graph, not a provider-side collection resource, orders related objects. Use references (`glinet_network_interface.lan.name`, `glinet_firewall_zone.lan.name`) so the graph is explicit.
 - A failed multi-resource apply leaves each completed resource in a valid committed state. It never leaves a half-written UCI package. Re-running apply converges; the retry boundary is Terraform's normal plan/apply.
 
 ## Resources
@@ -27,7 +27,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_dnsmasq` | `dhcp` dnsmasq singleton | `dnsmasq` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
 | `glinet_firewall_forwarding` | firewall forwarding | `src:dest` | forget |
-| `glinet_firewall_rules` | ordered firewall rule policy | `firewall_rules` | forget |
+| `glinet_firewall_rule` | firewall rule | unique rule name | forget |
 | `glinet_firewall_redirect` | firewall redirect | unique redirect name | forget |
 | `glinet_wireguard_interface` | `network` WireGuard interface | interface name (`wg0`) | forget |
 | `glinet_wireguard_peer` | `network` `wireguard_<iface>` peer | `interface:section` | forget |
