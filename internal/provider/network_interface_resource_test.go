@@ -72,3 +72,42 @@ func TestNetworkInterfaceValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestNetworkInterfacePPPoEAndIPv6(t *testing.T) {
+	spec := typedNetworkInterfaceSpec()
+	values := map[string]attr.Value{
+		"name":             types.StringValue("wan"),
+		"device":           types.StringValue("eth1"),
+		"protocol":         types.StringValue("pppoe"),
+		"address":          types.StringValue(""),
+		"gateway":          types.StringValue(""),
+		"dns":              types.SetValueMust(types.StringType, nil),
+		"vlan_id":          types.Int64Value(0),
+		"display_name":     types.StringValue(""),
+		"force_link":       types.BoolValue(false),
+		"delegate":         types.BoolValue(false),
+		"ipv6":             types.BoolValue(true),
+		"ip6assign":        types.Int64Value(64),
+		"ip6hint":          types.StringValue("1"),
+		"peerdns":          types.BoolValue(true),
+		"defaultroute":     types.BoolValue(true),
+		"metric":           types.Int64Value(10),
+		"mtu":              types.Int64Value(1492),
+		"macaddr":          types.StringValue(""),
+		"hostname":         types.StringValue(""),
+		"username":         types.StringValue("user@example"),
+		"password_wo":      types.StringValue("secret"),
+		"password_version": types.Int64Value(1),
+		"enabled":          types.BoolValue(true),
+	}
+	section, err := spec.Selector(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if section.Options["proto"] != "pppoe" || section.Options["ip6assign"] != "64" || section.Options["mtu"] != "1492" {
+		t.Fatalf("unexpected WAN section: %+v", section)
+	}
+	if spec.Secrets(values)["network.wan.password"] != "secret" {
+		t.Fatal("PPPoE password was not routed through the write-only secret transport")
+	}
+}
