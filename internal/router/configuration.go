@@ -497,6 +497,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"dhcp.dhcp":                 "interface start limit leasetime dhcpv4 dhcpv6 ra force ignore dynamicdhcp instance",
 		"dhcp.host":                 "mac ip name dns leasetime duid",
 		"dhcp.dnsmasq":              "noresolv server domain local rebind_domain cachesize",
+		"firewall.defaults":         "input output forward syn_flood synflood_protect synflood_rate synflood_burst drop_invalid tcp_syncookies flow_offloading flow_offloading_hw",
 		"firewall.zone":             "name network input output forward enabled masq mtu_fix log log_limit conntrack device subnet extra_src extra_dest",
 		"firewall.forwarding":       "src dest enabled",
 		"firewall.redirect":         "name src src_dport dest dest_ip dest_port proto target enabled reflection reflection_src helper",
