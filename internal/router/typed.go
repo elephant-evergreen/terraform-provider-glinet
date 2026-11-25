@@ -11,7 +11,20 @@ import (
 // It is written in the same atomic transaction as the section itself, so the
 // safety checks can distinguish managed sections from firmware-managed ones
 // without a separate registry.
-const ManagedOption = "home_iac_owner"
+const ManagedOption = "terraform_owner"
+
+// LegacyManagedOption is read during migration and removed when a managed
+// section is next written.
+const LegacyManagedOption = "home_iac_owner"
+
+func IsManaged(options map[string]string) bool {
+	return options[ManagedOption] == "1" || options[LegacyManagedOption] == "1"
+}
+
+func MarkManaged(options map[string]string) {
+	options[ManagedOption] = "1"
+	options[LegacyManagedOption] = ""
+}
 
 // ReadSection reads one section. A selector may be a named section or an
 // anonymous selector with a unique match map. The returned bool is false when
@@ -140,6 +153,7 @@ func (c *Client) ForgetSection(ctx context.Context, selector Section) error {
 		selector.Options = map[string]string{}
 	}
 	selector.Options[ManagedOption] = "0"
+	selector.Options[LegacyManagedOption] = ""
 	selector.Absent = false
 	return c.ApplySections(ctx, Configuration{selector}, nil)
 }
@@ -279,7 +293,7 @@ func configurationFromManagedState(state uciState) Configuration {
 	config := Configuration{}
 	for packageName, sections := range state {
 		for _, section := range sections {
-			if section.Options[ManagedOption] != "1" {
+			if !IsManaged(section.Options) {
 				continue
 			}
 			config = append(config, Section{
