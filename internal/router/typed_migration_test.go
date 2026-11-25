@@ -48,3 +48,29 @@ func TestReadSectionRejectsAmbiguousAnonymousIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestFirewallRulesReadOrder(t *testing.T) {
+	client := newFixtureClient(runnerFunc(func(context.Context, string) ([]byte, error) {
+		return []byte(`{"firewall":[{"name":"@defaults[0]","type":"defaults"},{"name":"@zone[0]","type":"zone"},{"name":"@rule[0]","type":"rule","options":{"name":"First"}},{"name":"@rule[1]","type":"rule","options":{"name":"Second"}}]}`), nil
+	}))
+	rules, err := client.FirewallRules(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rules) != 2 || rules[0].Name != "@rule[0]" || rules[1].Name != "@rule[1]" {
+		t.Fatalf("unexpected rules: %+v", rules)
+	}
+	if rules[0].Position == nil || *rules[0].Position != 2 || rules[1].Position == nil || *rules[1].Position != 3 {
+		t.Fatalf("unexpected positions: %+v", rules)
+	}
+}
+
+func TestApplyFirewallRulesRejectsIncompletePolicy(t *testing.T) {
+	client := newFixtureClient(runnerFunc(func(context.Context, string) ([]byte, error) {
+		return []byte(`{"firewall":[{"name":"@rule[0]","type":"rule","options":{"name":"First"}}]}`), nil
+	}))
+	err := client.ApplyFirewallRules(context.Background(), Configuration{}, Configuration{})
+	if err == nil {
+		t.Fatal("incomplete policy was accepted")
+	}
+}
