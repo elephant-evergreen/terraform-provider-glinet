@@ -66,7 +66,7 @@ The provider is the only owner of the sections it manages. Do not overlap typed 
 
 ## VPN status
 
-WireGuard is implemented as an experimental typed resource family; OpenVPN remains specified. Neither is hardware-verified in this change. Do not use Python or shell fallbacks.
+WireGuard is an experimental typed resource family. OpenVPN support is not available yet. Neither is hardware-verified.
 
 WireGuard resources:
 
@@ -75,16 +75,6 @@ WireGuard resources:
 
 The peer resolves the OpenWrt dynamic section type `wireguard_<interface>`. The private key and preshared key use the generic write-only secret transport (`package.section.option`), are checked during stable read, apply, and confirmation, and are redacted from safety-state reads.
 
-OpenVPN remains planned:
-
-| Planned resource | UCI object | Identity / import ID | Secrets |
-| --- | --- | --- | --- |
-| `glinet_openvpn_client` | `openvpn` client section | section name | `private_key_wo`, `auth_password_wo` |
-
-Remaining before OpenVPN can be shipped: add the nonsecret option allowlist, import/mapping tests, secret names, service reload handling, generated docs, and hardware validation.
-
-Do not manage VPN with external scripts.
-
 ## Hardware status
 
-Hardware acceptance evidence must identify the exact provider version; prior hardware results do not prove the new backup and management protections. WireGuard and OpenVPN remain unverified on hardware; do not treat schema or fixture success as hardware verification for them.
+Hardware acceptance evidence must identify the exact provider version; prior hardware results do not prove the new backup and management protections. WireGuard remains unverified on hardware; do not treat schema or fixture success as hardware verification for it.

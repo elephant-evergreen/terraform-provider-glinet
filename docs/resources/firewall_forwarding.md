@@ -22,8 +22,8 @@ import {
 ```
 
 1. Add the example’s resource block with the values already on the router.
-2. Run `terraform plan -out=adopt.tfplan`. For one import, expect `1 to import, 0 to add, 0 to change, 0 to destroy`. If the plan proposes changes, match the differing arguments to the router and save a new plan.
-3. Run `terraform apply adopt.tfplan` once the saved plan contains only the import. The next `terraform plan` should report `No changes`.
+2. Run `terraform plan -out=adopt.tfplan` and keep a plan that contains only the import. If it proposes changes, match the differing arguments to the router and save a new plan.
+3. Apply the saved plan.
 
 If you are unsure what values to use, [generate a draft from the existing object](https://developer.hashicorp.com/terraform/language/import/generating-configuration). Keep the import block, omit the resource block, and run `terraform plan -generate-config-out=generated.tf`. Review the draft before preparing the saved import plan.
 

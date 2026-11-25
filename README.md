@@ -8,7 +8,7 @@ Follow [Check the router in Terraform Registry](https://registry.terraform.io/pr
 
 ## Adopt configuration
 
-Open **Import existing configuration** on the Registry page for the resource you want to adopt. Run `terraform plan` and look for `1 to import, 0 to add, 0 to change, 0 to destroy` when adopting one object. Apply the import-only plan, then run `terraform plan` again and expect `No changes`.
+Open **Import existing configuration** on the Registry page for the resource you want to adopt: add the import block, match the configuration to the router's current values, and apply a plan that contains only the import.
 
 The provider verifies an age-encrypted full configuration backup before the first change in an apply. Network, port, and Wi-Fi changes also require an active wired management path. Router-side recovery rolls back unconfirmed changes after 300 seconds, including after an SSH disconnection or router reboot. See [typed resources and import IDs](docs/typed-resources.md) and the [scope of hardware testing](docs/testing.md). WireGuard remains experimental.
 
