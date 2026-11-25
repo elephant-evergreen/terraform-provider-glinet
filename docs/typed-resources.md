@@ -6,7 +6,7 @@ This provider's API is a set of typed Terraform resources that map to OpenWrt UC
 
 The design follows the [HashiCorp provider design principles](https://developer.hashicorp.com/terraform/plugin/best-practices/hashicorp-provider-design-principles):
 
-- A resource represents one UCI object, one firmware singleton, or one ordered policy collection. The Terraform schema uses typed attributes rather than a JSON document.
+- A resource represents one UCI object, one firmware singleton, or one ordered policy collection. The legacy `glinet_firewall_rule` remains available during the 0.1.x deprecation period. The Terraform schema uses typed attributes rather than a JSON document.
 - Identity, import, refresh, update, and destroy are defined per resource. Anonymous stock sections are resolved by a stable unique option instead of by their mutable `@type[index]` name.
 - Secrets use write-only arguments. They are never stored in plan or state.
 - Every create, update, and delete is one recovery-protected transaction. The existing snapshot, watchdog, boot service, and rollback engine is reused.
@@ -27,6 +27,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_dnsmasq` | `dhcp` dnsmasq singleton | `dnsmasq` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
 | `glinet_firewall_forwarding` | firewall forwarding | `src:dest` | forget |
+| `glinet_firewall_rule` | single firewall rule (deprecated) | unique rule name | forget |
 | `glinet_firewall_rules` | ordered firewall rule policy | `firewall_rules` | forget |
 | `glinet_firewall_redirect` | firewall redirect | unique redirect name | forget |
 | `glinet_wireguard_interface` | `network` WireGuard interface | interface name (`wg0`) | forget |

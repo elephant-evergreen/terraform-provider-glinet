@@ -133,6 +133,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewDNSMasqResource,
 		NewFirewallZoneResource,
 		NewFirewallForwardingResource,
+		NewFirewallRuleResource,
 		NewFirewallRulesResource,
 		NewFirewallRedirectResource,
 		NewWireGuardInterfaceResource,
