@@ -32,6 +32,7 @@ func NewDHCPPoolResource() resource.Resource {
 			"ignore":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Disable this pool."},
 			"instance":    schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional dnsmasq instance name."},
 			"dynamicdhcp": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable dynamic DHCP leases."},
+			"tag":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional dnsmasq tag."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			section := stringOf(values, "section")
@@ -51,6 +52,7 @@ func NewDHCPPoolResource() resource.Resource {
 			options["ignore"] = boolString(boolOf(values, "ignore", false))
 			options["instance"] = stringOf(values, "instance")
 			options["dynamicdhcp"] = boolString(boolOf(values, "dynamicdhcp", true))
+			options["tag"] = stringOf(values, "tag")
 			return router.Section{Package: "dhcp", Type: "dhcp", Name: section, Options: options}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
@@ -69,6 +71,7 @@ func NewDHCPPoolResource() resource.Resource {
 				"ignore":      boolValue(section.Options["ignore"] == "1"),
 				"instance":    stringValue(section.Options["instance"]),
 				"dynamicdhcp": boolValue(section.Options["dynamicdhcp"] != "0"),
+				"tag":         stringValue(section.Options["tag"]),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
