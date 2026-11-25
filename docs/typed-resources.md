@@ -28,6 +28,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_dns` | `gl-dns-v2` DNS singleton | `dns` | forget |
 | `glinet_dnsmasq` | `dhcp` dnsmasq singleton | `dnsmasq` | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
+| `glinet_firewall_defaults` | firewall defaults singleton | `firewall_defaults` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
 | `glinet_firewall_forwarding` | firewall forwarding | `src:dest` | forget |
 | `glinet_firewall_rules` | ordered firewall rule policy | `firewall_rules` | forget |
