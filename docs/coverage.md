@@ -45,7 +45,7 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | Hardware/network acceleration | None | Planned |
 | NAT settings | None | Planned |
 | Static routes | `glinet_network_route` | Managed |
-| Policy routing | None | Planned |
+| Policy routing | `glinet_network_rule` | Managed for basic rules |
 | Multi-WAN, failover, load balancing | None | Planned |
 | Repeater/WISP | None | Planned |
 | USB tethering | None | Planned |
