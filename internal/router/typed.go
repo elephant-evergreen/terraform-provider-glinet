@@ -178,6 +178,10 @@ func (c *Client) FirewallRules(ctx context.Context) (Configuration, error) {
 // appear in desired or removed; this prevents a stock rule from disappearing
 // silently when the ordered list is incomplete.
 func (c *Client) ApplyFirewallRules(ctx context.Context, desired, removed Configuration) error {
+	desired = append(Configuration{}, desired...)
+	for i := range desired {
+		desired[i].Position = nil
+	}
 	if err := ValidateConfiguration(desired); err != nil {
 		return err
 	}
@@ -215,30 +219,33 @@ func (c *Client) ApplyFirewallRules(ctx context.Context, desired, removed Config
 	}
 	desiredNames := map[string]bool{}
 	for _, section := range desired {
-		if desiredNames[section.Name] {
+		name := firewallRuleIdentity(section)
+		if desiredNames[name] {
 			return errors.New("The ordered firewall policy contains a duplicate rule.")
 		}
-		desiredNames[section.Name] = true
+		desiredNames[name] = true
 	}
 	removedNames := map[string]bool{}
 	for _, section := range removed {
-		if removedNames[section.Name] || desiredNames[section.Name] {
+		name := section.Options["name"]
+		if removedNames[name] || desiredNames[name] {
 			return errors.New("A firewall rule cannot be both present and removed.")
 		}
-		removedNames[section.Name] = true
+		removedNames[name] = true
 	}
 	for _, actual := range actualRules {
-		if !desiredNames[actual.Name] && !removedNames[actual.Name] {
-			return fmt.Errorf("The ordered firewall policy is missing rule %s. List it as an existing rule or remove it explicitly.", actual.Name)
+		name := firewallRuleIdentity(actual)
+		if !desiredNames[name] && !removedNames[name] {
+			return fmt.Errorf("The ordered firewall policy is missing rule %s. List it as an existing rule or remove it explicitly.", name)
 		}
 	}
 	actualNames := map[string]bool{}
 	for _, actual := range actualRules {
-		actualNames[actual.Name] = true
+		actualNames[firewallRuleIdentity(actual)] = true
 	}
 	for _, section := range removed {
-		if !actualNames[section.Name] {
-			return fmt.Errorf("Cannot remove missing firewall rule %s.", section.Name)
+		if !actualNames[section.Options["name"]] {
+			return fmt.Errorf("Cannot remove missing firewall rule %s.", section.Options["name"])
 		}
 	}
 	lastPosition := position
@@ -259,6 +266,13 @@ func (c *Client) ApplyFirewallRules(ctx context.Context, desired, removed Config
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, changes)
 	return c.writeConfiguration(ctx, changes, nil, full)
+}
+
+func firewallRuleIdentity(section Section) string {
+	if name := section.Options["name"]; name != "" {
+		return name
+	}
+	return section.Name
 }
 
 func configurationFromManagedState(state uciState) Configuration {

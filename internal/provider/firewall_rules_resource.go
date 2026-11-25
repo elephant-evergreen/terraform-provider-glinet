@@ -10,8 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -97,48 +95,43 @@ func firewallRulesSchema() schema.Schema {
 			MarkdownDescription: "When true, preserve the current rule content and manage only its order. Use this for stock rules that are not fully managed by Terraform.",
 		},
 		"src": schema.StringAttribute{
-			Optional: true, Computed: true, Default: stringdefault.StaticString(""),
+			Optional: true, Computed: true,
 			MarkdownDescription: "Source zone, `*`, or empty.",
 		},
 		"dest": schema.StringAttribute{
-			Optional: true, Computed: true, Default: stringdefault.StaticString(""),
+			Optional: true, Computed: true,
 			MarkdownDescription: "Destination zone, `*`, or empty.",
 		},
 		"src_ips": schema.SetAttribute{
 			Optional: true, Computed: true, ElementType: types.StringType,
-			Default:             setdefault.StaticValue(types.SetValueMust(types.StringType, nil)),
 			MarkdownDescription: "Source addresses or CIDRs.",
 		},
 		"dest_ips": schema.SetAttribute{
 			Optional: true, Computed: true, ElementType: types.StringType,
-			Default:             setdefault.StaticValue(types.SetValueMust(types.StringType, nil)),
 			MarkdownDescription: "Destination addresses or CIDRs.",
 		},
 		"protocols": schema.SetAttribute{
 			Optional: true, Computed: true, ElementType: types.StringType,
-			Default:             setdefault.StaticValue(types.SetValueMust(types.StringType, nil)),
 			MarkdownDescription: "Protocols, such as `tcp`, `udp`, `icmp`, or `all`.",
 		},
 		"src_ports": schema.SetAttribute{
 			Optional: true, Computed: true, ElementType: types.StringType,
-			Default:             setdefault.StaticValue(types.SetValueMust(types.StringType, nil)),
 			MarkdownDescription: "Source ports or ranges.",
 		},
 		"dest_ports": schema.SetAttribute{
 			Optional: true, Computed: true, ElementType: types.StringType,
-			Default:             setdefault.StaticValue(types.SetValueMust(types.StringType, nil)),
 			MarkdownDescription: "Destination ports or ranges.",
 		},
 		"family": schema.StringAttribute{
-			Optional: true, Computed: true, Default: stringdefault.StaticString("ipv4"),
+			Optional: true, Computed: true,
 			MarkdownDescription: "Address family: `ipv4`, `ipv6`, or `any`.",
 		},
 		"target": schema.StringAttribute{
-			Optional: true, Computed: true, Default: stringdefault.StaticString("REJECT"),
+			Optional: true, Computed: true,
 			MarkdownDescription: "Target: ACCEPT, REJECT, DROP, or LOG.",
 		},
 		"enabled": schema.BoolAttribute{
-			Optional: true, Computed: true, Default: booldefault.StaticBool(true),
+			Optional: true, Computed: true,
 			MarkdownDescription: "Whether the rule is active.",
 		},
 	}
@@ -252,7 +245,7 @@ func (r *firewallRulesResource) apply(ctx context.Context, planRules, stateRules
 	}
 	actualByName := map[string]router.Section{}
 	for _, actual := range actualRules {
-		actualByName[actual.Name] = actual
+		actualByName[firewallRuleInputFromSection(actual).Name] = actual
 	}
 	desired := router.Configuration{}
 	planNames := map[string]bool{}
@@ -295,7 +288,11 @@ func (r *firewallRulesResource) apply(ctx context.Context, planRules, stateRules
 			if input.Existing {
 				return fmt.Errorf("existing firewall rule %s cannot be removed from the ordered policy; keep it listed", input.Name)
 			}
-			removed = append(removed, router.Section{Package: "firewall", Name: input.Name, Type: "rule", Absent: true})
+			actual, ok := actualByName[input.Name]
+			if !ok {
+				return fmt.Errorf("firewall rule %s is already absent", input.Name)
+			}
+			removed = append(removed, router.Section{Package: "firewall", Name: actual.Name, Type: "rule", Absent: true})
 		}
 	}
 	return r.client.ApplyFirewallRules(ctx, desired, removed)
@@ -322,7 +319,7 @@ func (r *firewallRulesResource) read(ctx context.Context, model *firewallRulesMo
 	elements := make([]attr.Value, 0, len(actualRules))
 	for _, actual := range actualRules {
 		input := firewallRuleInputFromSection(actual)
-		if value, ok := existing[actual.Name]; ok {
+		if value, ok := existing[input.Name]; ok {
 			input.Existing = value
 		} else {
 			input.Existing = true
@@ -367,23 +364,30 @@ func parseFirewallRuleInputs(ctx context.Context, list types.List) ([]firewallRu
 }
 
 func firewallRuleSection(input firewallRuleInput) (router.Section, error) {
-	switch input.Target {
+	family, target := input.Family, input.Target
+	if family == "" {
+		family = "ipv4"
+	}
+	if target == "" {
+		target = "REJECT"
+	}
+	switch target {
 	case "ACCEPT", "REJECT", "DROP", "LOG":
 	default:
 		return router.Section{}, fmt.Errorf("rule %s target must be ACCEPT, REJECT, DROP, or LOG", input.Name)
 	}
-	switch input.Family {
+	switch family {
 	case "ipv4", "ipv6", "any":
 	default:
 		return router.Section{}, fmt.Errorf("rule %s family must be ipv4, ipv6, or any", input.Name)
 	}
 	options := map[string]string{
-		"name": input.Name, "family": input.Family, "target": input.Target,
+		"name": input.Name, "family": family, "target": target,
 		"enabled": boolString(input.Enabled), "src": input.Src, "dest": input.Dest,
 		"proto": joinStrings(input.Protocols), "src_port": joinStrings(input.SrcPorts), "dest_port": joinStrings(input.DestPorts),
 		router.ManagedOption: "1",
 	}
-	section := router.Section{Package: "firewall", Type: "rule", Name: input.Name, Options: options, Lists: map[string][]string{}}
+	section := router.Section{Package: "firewall", Type: "rule", Name: "@rule[0]", Match: map[string]string{"name": input.Name}, Options: options, Lists: map[string][]string{}}
 	for _, field := range []struct {
 		values []string
 		option string
