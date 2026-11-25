@@ -31,13 +31,15 @@ If you are unsure what values to use, [generate a draft from the existing object
 
 ```terraform
 resource "glinet_wireless_interface" "private_2g" {
-  section    = "wifi2g"
-  ssid       = "Example"
-  device     = "mt798611"
-  network    = "lan"
-  mode       = "ap"
-  encryption = "psk2"
-  isolate    = false
+  section        = "wifi2g"
+  ssid           = "Example"
+  device         = "mt798611"
+  network        = "lan"
+  mode           = "ap"
+  encryption     = "sae"
+  ieee80211w     = 2
+  wps_pushbutton = false
+  isolate        = false
 }
 ```
 
@@ -56,14 +58,16 @@ resource "glinet_wireless_interface" "private_2g" {
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `device` (String) Radio device, such as `mt798611`.
 - `disabled` (Boolean) Disable the AP.
-- `encryption` (String) Encryption, such as `psk2`.
+- `encryption` (String) OpenWrt `encryption` mode. The stock Admin Panel exposes `none`, `psk2`, `psk-mixed`, `sae`, and `sae-mixed`. Other OpenWrt values remain accepted in 0.2.x for compatibility and will be restricted in the next minor release.
 - `hidden` (Boolean) Hide the SSID.
+- `ieee80211w` (Number) Protected Management Frames: `0` disables, `1` makes PMF optional, and `2` requires it. When omitted, the provider derives `2` for `sae`, `1` for `sae-mixed`, and `0` otherwise.
 - `ifname` (String) Optional radio interface name.
 - `isolate` (Boolean) Client isolation.
 - `key_version` (Number) Client-managed key generation. Increase it when rotating `key_wo`.
 - `key_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only WPA passphrase (8–63 printable ASCII). It is not stored in plan or state.
 - `mode` (String) Wi-Fi mode, normally `ap`.
 - `network` (String) Network interface this AP joins.
+- `wps_pushbutton` (Boolean) WPS push-button. When omitted, an existing section keeps its current value and a new section starts disabled. WPS is refused with WPA3 modes.
 
 ### Read-Only
 

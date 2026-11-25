@@ -22,6 +22,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_network_route` | `network` static route | route section name | forget |
 | `glinet_ethernet_port` | `eth_ports_config_map` port | port name (`lan2`) | forget |
 | `glinet_wireless_interface` | `wireless` wifi-iface | section name (`wifi2g`) | forget |
+| `glinet_wireless_radio` | `wireless` wifi-device | section name (`mt798611`) | forget (adopt-only) |
 | `glinet_dhcp_pool` | `dhcp` pool | section name (`lan`) | forget |
 | `glinet_dhcp_reservation` | `dhcp` host | section name (`example_admin_lease`) | forget |
 | `glinet_dns` | `gl-dns-v2` DNS singleton | `dns` | forget |
@@ -35,7 +36,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_wireguard_peer` | `network` `wireguard_<iface>` peer | `interface:section` | forget |
 | `glinet_system` data source | router model, firmware, mode | n/a | n/a |
 
-`delete_behavior = "delete"` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved, and `forget` releases the provider marker without deleting the object. Use `lifecycle { prevent_destroy = true }` on network and management objects.
+`delete_behavior = "delete"` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved, and `forget` releases the provider marker without deleting the object. Use `lifecycle { prevent_destroy = true }` on network and management objects. `glinet_wireless_radio` adopts an existing `wifi-device` section, never creates or deletes radio hardware, and requires `delete_behavior = "forget"`.
 
 ## Transactions and consistency
 

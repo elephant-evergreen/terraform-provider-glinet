@@ -47,6 +47,30 @@ func stringsOf(values map[string]attr.Value, name string) []string {
 	return result
 }
 
+func knownString(values map[string]attr.Value, name string) (string, bool) {
+	value, ok := values[name].(types.String)
+	if !ok || value.IsNull() || value.IsUnknown() {
+		return "", false
+	}
+	return value.ValueString(), true
+}
+
+func knownBool(values map[string]attr.Value, name string) (bool, bool) {
+	value, ok := values[name].(types.Bool)
+	if !ok || value.IsNull() || value.IsUnknown() {
+		return false, false
+	}
+	return value.ValueBool(), true
+}
+
+func knownInt64(values map[string]attr.Value, name string) (int64, bool) {
+	value, ok := values[name].(types.Int64)
+	if !ok || value.IsNull() || value.IsUnknown() {
+		return 0, false
+	}
+	return value.ValueInt64(), true
+}
+
 func stringValue(value string) types.String { return types.StringValue(value) }
 func boolValue(value bool) types.Bool       { return types.BoolValue(value) }
 func int64Value(value int64) types.Int64    { return types.Int64Value(value) }

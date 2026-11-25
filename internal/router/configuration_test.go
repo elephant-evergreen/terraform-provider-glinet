@@ -36,6 +36,21 @@ func TestConfigurationValidation(t *testing.T) {
 	}
 }
 
+func TestWirelessRadioConfigurationValidation(t *testing.T) {
+	radio := Configuration{{Package: "wireless", Name: "mt798611", Type: "wifi-device", Options: map[string]string{"channel": "auto", "htmode": "HE40", "txpower": "100", "country": "JP", "disabled": "0", ManagedOption: "1"}}}
+	if err := ValidateConfiguration(radio); err != nil {
+		t.Fatal(err)
+	}
+	iface := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Example", "mode": "ap", "encryption": "sae", "ieee80211w": "2", "wps_pushbutton": "0", ManagedOption: "1"}}}
+	if err := ValidateConfiguration(iface); err != nil {
+		t.Fatal(err)
+	}
+	radio[0].Options["ssid"] = "Example"
+	if err := ValidateConfiguration(radio); err == nil {
+		t.Fatal("wifi-device accepted a wifi-iface option")
+	}
+}
+
 const (
 	safetyStateMarker   = "GLINET_SAFETY_STATE"
 	safetyEnvMarker     = "GLINET_SAFETY_ENV"
