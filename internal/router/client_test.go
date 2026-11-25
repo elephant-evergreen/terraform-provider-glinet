@@ -38,12 +38,12 @@ func TestValidationAndShellQuoting(t *testing.T) {
 }
 
 func TestFirmwarePolicy(t *testing.T) {
-	for _, version := range []string{"4.11.0", "4.11.1", "4.11.10"} {
+	for _, version := range []string{"4.11.0", "4.11.2", "4.11.9"} {
 		if !FirmwareAllowed(version) {
 			t.Fatalf("Firmware %q should be allowed", version)
 		}
 	}
-	for _, version := range []string{"", "4.10.4", "4.12.0", "4.11.1-beta", "4.11", "4.11.100"} {
+	for _, version := range []string{"", "4.10.4", "4.12.0", "4.11.2-beta", "4.11", "4.11.100"} {
 		if FirmwareAllowed(version) {
 			t.Fatalf("Firmware %q should be rejected", version)
 		}
@@ -51,7 +51,7 @@ func TestFirmwarePolicy(t *testing.T) {
 	if !FirmwareTested("4.11.0") {
 		t.Fatal("4.11.0 is the verified build")
 	}
-	if FirmwareTested("4.11.1") {
-		t.Fatal("4.11.1 becomes verified only after the hardware checks")
+	if FirmwareTested("4.11.2") {
+		t.Fatal("a stable patch becomes verified only after the hardware checks")
 	}
 }

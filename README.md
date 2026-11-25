@@ -12,10 +12,6 @@ Open **Import existing configuration** on the Registry page for the resource you
 
 The provider verifies an age-encrypted full configuration backup before the first change in an apply. Network, port, and Wi-Fi changes also require an active wired management path. Router-side recovery rolls back unconfirmed changes after 300 seconds, including after an SSH disconnection or router reboot. See [typed resources and import IDs](docs/typed-resources.md) and the [scope of hardware testing](docs/testing.md). WireGuard remains experimental.
 
-## Firmware security
-
-GL.iNet lists firmware 4.11.1 as the minimum security version for the GL-MT6000. The verified-build warning is a compatibility signal, not a recommendation to stay on 4.11.0.
-
 ## Development
 
 See [development](docs/development.md), [contributing](CONTRIBUTING.md), and the [release procedure](docs/releases.md).

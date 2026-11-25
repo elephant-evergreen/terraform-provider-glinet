@@ -47,7 +47,6 @@ output "router" {
 1. Run `terraform init`.
 2. Run `terraform plan`. In the planned `router` output, look for model `GL.iNet GL-MT6000`, firmware `4.11.x` (tested with `4.11.0`), and mode `router`. This check reads the router over SSH without an apply.
 
-Firmware `4.11.1` is the vendor's minimum security version for this model. The verified-build warning is a compatibility signal, not a recommendation to defer the security update.
 
 If the plan cannot connect, confirm SSH is enabled and check the host, root key and verified host-key entry.
 
