@@ -9,7 +9,7 @@ import (
 func bridgeConfig(brLAN, brNAS []string) Configuration {
 	return Configuration{
 		{Package: "network", Name: "@device[0]", Type: "device", Options: map[string]string{"name": "br-lan", "type": "bridge"}, Lists: map[string][]string{"ports": brLAN}},
-		{Package: "network", Name: "home_iac_nas_bridge", Type: "device", Options: map[string]string{"name": "br-vlan11", "type": "bridge"}, Lists: map[string][]string{"ports": brNAS}},
+		{Package: "network", Name: "example_nas_bridge", Type: "device", Options: map[string]string{"name": "br-vlan11", "type": "bridge"}, Lists: map[string][]string{"ports": brNAS}},
 	}
 }
 
@@ -38,7 +38,7 @@ func TestBridgePortsPreserveExistingMembership(t *testing.T) {
 func TestBridgePortsPreserveMatchedBridge(t *testing.T) {
 	config := Configuration{
 		{Package: "network", Name: "@device[0]", Type: "device", Match: map[string]string{"name": "br-lan"}, Lists: map[string][]string{"ports": {"lan1", "lan3", "lan4", "lan5"}}},
-		{Package: "network", Name: "home_iac_nas_bridge", Type: "device", Options: map[string]string{"name": "br-vlan11", "type": "bridge"}, Lists: map[string][]string{"ports": {"lan2"}}},
+		{Package: "network", Name: "example_nas_bridge", Type: "device", Options: map[string]string{"name": "br-vlan11", "type": "bridge"}, Lists: map[string][]string{"ports": {"lan2"}}},
 	}
 	state := uciState{"network": {
 		{Name: "lan_bridge", Type: "device", Options: map[string]string{"name": "br-lan", "type": "bridge"}, Lists: map[string][]string{"ports": {"lan1", "lan2", "lan3", "lan4", "lan5"}}},
@@ -67,15 +67,15 @@ func TestPrivateLANAddressChangeIsRejected(t *testing.T) {
 func topologyConfig() Configuration {
 	return Configuration{
 		{Package: "network", Name: "vlan11", Type: "interface", Options: map[string]string{"device": "br-vlan11", "ipaddr": "192.168.11.1", "netmask": "255.255.255.0"}},
-		{Package: "network", Name: "home_iac_nas_bridge", Type: "device", Options: map[string]string{"name": "br-vlan11", "type": "bridge"}, Lists: map[string][]string{"ports": {"lan2"}}},
-		{Package: "wireless", Name: "home_iac_visitor_5g", Type: "wifi-iface", Options: map[string]string{"ifname": "rax4", "network": "vlan12"}},
-		{Package: "firewall", Name: "home_iac_lan_zone", Type: "zone", Options: map[string]string{"name": "lan"}},
-		{Package: "firewall", Name: "home_iac_guest_zone", Type: "zone", Options: map[string]string{"name": "guest"}},
-		{Package: "firewall", Name: "home_iac_iot_zone", Type: "zone", Options: map[string]string{"name": "iot"}},
-		{Package: "firewall", Name: "home_iac_nas_zone", Type: "zone", Options: map[string]string{"name": "nas"}},
-		{Package: "firewall", Name: "home_iac_wan_zone", Type: "zone", Options: map[string]string{"name": "wan"}},
+		{Package: "network", Name: "example_nas_bridge", Type: "device", Options: map[string]string{"name": "br-vlan11", "type": "bridge"}, Lists: map[string][]string{"ports": {"lan2"}}},
+		{Package: "wireless", Name: "example_visitor_5g", Type: "wifi-iface", Options: map[string]string{"ifname": "rax4", "network": "vlan12"}},
+		{Package: "firewall", Name: "example_lan_zone", Type: "zone", Options: map[string]string{"name": "lan"}},
+		{Package: "firewall", Name: "example_guest_zone", Type: "zone", Options: map[string]string{"name": "guest"}},
+		{Package: "firewall", Name: "example_iot_zone", Type: "zone", Options: map[string]string{"name": "iot"}},
+		{Package: "firewall", Name: "example_nas_zone", Type: "zone", Options: map[string]string{"name": "nas"}},
+		{Package: "firewall", Name: "example_wan_zone", Type: "zone", Options: map[string]string{"name": "wan"}},
 		{Package: "firewall", Name: "@forwarding[0]", Type: "forwarding", Match: map[string]string{"src": "guest", "dest": "wan"}, Options: map[string]string{"enabled": "1"}},
-		{Package: "firewall", Name: "home_iac_nas_access", Type: "rule", Options: map[string]string{"target": "ACCEPT", "src": "lan", "dest": "nas"}},
+		{Package: "firewall", Name: "example_nas_access", Type: "rule", Options: map[string]string{"target": "ACCEPT", "src": "lan", "dest": "nas"}},
 	}
 }
 
@@ -89,7 +89,7 @@ func topologyState() uciState {
 			{Name: "nas_alias", Type: "interface", Options: map[string]string{"device": "@vlan11"}},
 		},
 		"wireless": {
-			{Name: "home_iac_visitor_5g", Type: "wifi-iface", Options: map[string]string{"ifname": "rax4", "network": "vlan12"}},
+			{Name: "example_visitor_5g", Type: "wifi-iface", Options: map[string]string{"ifname": "rax4", "network": "vlan12"}},
 		},
 		"firewall": {
 			{Name: "guest", Type: "zone", Options: map[string]string{"name": "guest"}},
@@ -153,11 +153,11 @@ func TestDHCPReservationsRejectConflicts(t *testing.T) {
 	config := Configuration{
 		{Package: "network", Name: "lan", Type: "interface", Options: map[string]string{"ipaddr": "192.168.8.1", "netmask": "255.255.255.0"}},
 		{Package: "network", Name: "vlan11", Type: "interface", Options: map[string]string{"ipaddr": "192.168.11.1", "netmask": "255.255.255.0"}},
-		{Package: "dhcp", Name: "home_iac_nas_dhcp", Type: "dhcp", Options: map[string]string{"interface": "vlan11", "start": "100", "limit": "150"}},
-		{Package: "dhcp", Name: "home_iac_nas_lease", Type: "host", Options: map[string]string{"ip": "192.168.11.10", "mac": "02:00:00:00:00:02"}},
+		{Package: "dhcp", Name: "example_nas_dhcp", Type: "dhcp", Options: map[string]string{"interface": "vlan11", "start": "100", "limit": "150"}},
+		{Package: "dhcp", Name: "example_nas_lease", Type: "host", Options: map[string]string{"ip": "192.168.11.10", "mac": "02:00:00:00:00:02"}},
 	}
 	state := uciState{"dhcp": {
-		{Name: "home_iac_nas_lease", Type: "host", Options: map[string]string{"ip": "192.168.11.10", "mac": "02:00:00:00:00:02"}},
+		{Name: "example_nas_lease", Type: "host", Options: map[string]string{"ip": "192.168.11.10", "mac": "02:00:00:00:00:02"}},
 	}}
 	if err := checkDHCPReservations(config, state, ""); err != nil {
 		t.Fatal(err)

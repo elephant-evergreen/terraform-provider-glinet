@@ -22,7 +22,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_ethernet_port` | `eth_ports_config_map` port | port name (`lan2`) | forget |
 | `glinet_wireless_interface` | `wireless` wifi-iface | section name (`wifi2g`) | forget |
 | `glinet_dhcp_pool` | `dhcp` pool | section name (`lan`) | forget |
-| `glinet_dhcp_reservation` | `dhcp` host | section name (`home_iac_admin_lease`) | forget |
+| `glinet_dhcp_reservation` | `dhcp` host | section name (`example_admin_lease`) | forget |
 | `glinet_dns` | `gl-dns-v2` DNS singleton | `dns` | forget |
 | `glinet_dnsmasq` | `dhcp` dnsmasq singleton | `dnsmasq` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
@@ -46,7 +46,7 @@ Every typed write:
 5. Snapshots the six UCI packages, stages the change, commits, reloads the affected service or reboots, and confirms managed activation and the generated firewall.
 6. On failure, the router-side watchdog restores the previous packages.
 
-A marker (`home_iac_owner=1`) is written in the same transaction. It is how the provider distinguishes its own sections from firmware sections without a separate registry. Marker-only changes do not trigger a service reload or reboot.
+A provider ownership marker is written in the same transaction. It is how the provider distinguishes its own sections from firmware sections without a separate registry. Marker-only changes do not trigger a service reload or reboot.
 
 Terraform has no cross-resource commit barrier. The provider therefore guarantees **per-resource atomicity**, **no partially written UCI package**, and **recovery on every mutation**. A multi-resource apply can stop after some resources have committed; each committed resource is valid, and a subsequent apply completes the rest. Use `depends_on` or attribute references for required ordering.
 
@@ -87,4 +87,4 @@ Do not manage VPN with external scripts.
 
 ## Hardware status
 
-The typed resources have fixture, protocol, schema, and live plan/import coverage. The pre-migration home-network configuration has been applied on the target router. Current acceptance evidence must identify the exact provider version; prior hardware results do not prove the new backup and management protections. WireGuard and OpenVPN remain unverified on hardware; do not treat schema or fixture success as hardware verification for them.
+Hardware acceptance evidence must identify the exact provider version; prior hardware results do not prove the new backup and management protections. WireGuard and OpenVPN remain unverified on hardware; do not treat schema or fixture success as hardware verification for them.

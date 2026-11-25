@@ -30,7 +30,7 @@ func TestFirewallRuleMultiAddressSpec(t *testing.T) {
 	single := map[string]attr.Value{
 		"name": types.StringValue("Home-IaC-Admin-Agent"),
 		"src":  types.StringValue("lan"), "dest": types.StringValue("iot"),
-		"src_ips": stringSet([]string{"192.168.8.237"}), "dest_ips": stringSet(nil),
+		"src_ips": stringSet([]string{"192.0.2.10"}), "dest_ips": stringSet(nil),
 		"protocols": stringSet([]string{"tcp"}), "src_ports": stringSet(nil), "dest_ports": stringSet([]string{"22"}),
 		"family": types.StringValue("ipv4"), "target": types.StringValue("ACCEPT"), "enabled": types.BoolValue(true), "position": types.Int64Value(41),
 	}
@@ -38,7 +38,7 @@ func TestFirewallRuleMultiAddressSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if section.Options["src_ip"] != "192.168.8.237" || len(section.Lists["src_ip"]) != 0 {
+	if section.Options["src_ip"] != "192.0.2.10" || len(section.Lists["src_ip"]) != 0 {
 		t.Fatalf("single src_ip was not scalar: %+v", section)
 	}
 }

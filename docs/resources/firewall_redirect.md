@@ -3,12 +3,12 @@
 page_title: "glinet_firewall_redirect Resource - glinet"
 subcategory: ""
 description: |-
-  Manage one firewall redirect (destination NAT). The home-network policy rejects unmanaged redirects; a redirect declared by this resource is treated as managed. Destroy releases ownership by default.
+  Manage one firewall redirect (destination NAT). Unmanaged redirects are rejected by the provider's safety checks; a redirect declared by this resource is treated as managed. Destroy releases ownership by default.
 ---
 
 # glinet_firewall_redirect (Resource)
 
-Manage one firewall redirect (destination NAT). The home-network policy rejects unmanaged redirects; a redirect declared by this resource is treated as managed. Destroy releases ownership by default.
+Manage one firewall redirect (destination NAT). Unmanaged redirects are rejected by the provider's safety checks; a redirect declared by this resource is treated as managed. Destroy releases ownership by default.
 
 ## Import existing configuration
 
