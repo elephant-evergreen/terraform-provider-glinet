@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -10,7 +11,20 @@ import (
 // It is written in the same atomic transaction as the section itself, so the
 // safety checks can distinguish managed sections from firmware-managed ones
 // without a separate registry.
-const ManagedOption = "home_iac_owner"
+const ManagedOption = "terraform_owner"
+
+// LegacyManagedOption is read during migration and removed when a managed
+// section is next written.
+const LegacyManagedOption = "home_iac_owner"
+
+func IsManaged(options map[string]string) bool {
+	return options[ManagedOption] == "1" || options[LegacyManagedOption] == "1"
+}
+
+func MarkManaged(options map[string]string) {
+	options[ManagedOption] = "1"
+	options[LegacyManagedOption] = ""
+}
 
 // ReadSection reads one section. A selector may be a named section or an
 // anonymous selector with a unique match map. The returned bool is false when
@@ -139,15 +153,146 @@ func (c *Client) ForgetSection(ctx context.Context, selector Section) error {
 		selector.Options = map[string]string{}
 	}
 	selector.Options[ManagedOption] = "0"
+	selector.Options[LegacyManagedOption] = ""
 	selector.Absent = false
 	return c.ApplySections(ctx, Configuration{selector}, nil)
+}
+
+// FirewallRules returns every firewall rule in UCI package order. Position is
+// the absolute section index, including non-rule sections. The provider keeps
+// this ordering detail behind the ordered firewall rules resource.
+func (c *Client) FirewallRules(ctx context.Context) (Configuration, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	state, err := c.readRefreshState(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rules := Configuration{}
+	position := 0
+	for _, actual := range state["firewall"] {
+		if actual.Type == "rule" {
+			value := position
+			rules = append(rules, Section{
+				Package:  "firewall",
+				Name:     actual.Name,
+				Type:     actual.Type,
+				Options:  copyOptions(actual.Options),
+				Lists:    copyLists(actual.Lists),
+				Position: &value,
+			})
+		}
+		position++
+	}
+	return rules, nil
+}
+
+// ApplyFirewallRules writes the complete ordered rule set in one recovery-
+// protected configuration transaction. Every rule currently on the router must
+// appear in desired or removed; this prevents a stock rule from disappearing
+// silently when the ordered list is incomplete.
+func (c *Client) ApplyFirewallRules(ctx context.Context, desired, removed Configuration) error {
+	desired = append(Configuration{}, desired...)
+	for i := range desired {
+		desired[i].Position = nil
+	}
+	if err := ValidateConfiguration(desired); err != nil {
+		return err
+	}
+	for _, section := range desired {
+		if section.Package != "firewall" || section.Type != "rule" || section.Absent {
+			return errors.New("The ordered firewall policy accepts only present firewall rules.")
+		}
+	}
+	for _, section := range removed {
+		if section.Package != "firewall" || section.Type != "rule" || !section.Absent {
+			return errors.New("Removed firewall rules must be absent rule sections.")
+		}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	state, err := c.readSafetyState(ctx)
+	if err != nil {
+		return err
+	}
+	actualRules := Configuration{}
+	position := 0
+	for _, actual := range state["firewall"] {
+		if actual.Type == "rule" {
+			value := position
+			actualRules = append(actualRules, Section{
+				Package:  "firewall",
+				Name:     actual.Name,
+				Type:     actual.Type,
+				Options:  copyOptions(actual.Options),
+				Lists:    copyLists(actual.Lists),
+				Position: &value,
+			})
+		}
+		position++
+	}
+	desiredNames := map[string]bool{}
+	for _, section := range desired {
+		name := firewallRuleIdentity(section)
+		if desiredNames[name] {
+			return errors.New("The ordered firewall policy contains a duplicate rule.")
+		}
+		desiredNames[name] = true
+	}
+	removedNames := map[string]bool{}
+	for _, section := range removed {
+		if removedNames[section.Name] {
+			return errors.New("A firewall rule cannot be removed twice.")
+		}
+		removedNames[section.Name] = true
+	}
+	for _, actual := range actualRules {
+		if !desiredNames[firewallRuleIdentity(actual)] && !removedNames[actual.Name] {
+			return fmt.Errorf("The ordered firewall policy is missing rule %s. List it as an existing rule or remove it explicitly.", actual.Name)
+		}
+	}
+	actualNames := map[string]bool{}
+	for _, actual := range actualRules {
+		actualNames[actual.Name] = true
+	}
+	for _, section := range removed {
+		if !actualNames[section.Name] {
+			return fmt.Errorf("Cannot remove missing firewall rule %s.", section.Name)
+		}
+	}
+	lastPosition := position
+	for i := range desired {
+		var value int
+		if i < len(actualRules) {
+			value = *actualRules[i].Position
+		} else {
+			value = lastPosition + i - len(actualRules)
+		}
+		desired[i].Position = &value
+	}
+	changes := append(Configuration{}, desired...)
+	changes = append(changes, removed...)
+	if err := ValidateConfiguration(changes); err != nil {
+		return err
+	}
+	full := configurationFromManagedState(state)
+	full = mergeManagedConfiguration(full, changes)
+	return c.writeConfiguration(ctx, changes, nil, full)
+}
+
+func firewallRuleIdentity(section Section) string {
+	name := section.Options["name"]
+	if name == "" {
+		name = section.Name
+	}
+	return name + "\x00" + section.Options["src"] + "\x00" + section.Options["dest"]
 }
 
 func configurationFromManagedState(state uciState) Configuration {
 	config := Configuration{}
 	for packageName, sections := range state {
 		for _, section := range sections {
-			if section.Options[ManagedOption] != "1" {
+			if !IsManaged(section.Options) {
 				continue
 			}
 			config = append(config, Section{

@@ -3,12 +3,12 @@
 page_title: "glinet_firewall_rule Resource - glinet"
 subcategory: ""
 description: |-
-  Manage one firewall rule by its unique name option. Stock rules can be imported by name; new rules are created as named sections. position requests an absolute UCI rule index.
+  Deprecated: use glinet_firewall_rules for ordered policy. Manage one firewall rule by its unique name option. Stock rules can be imported by name; new rules are created as named sections. position requests an absolute UCI rule index.
 ---
 
 # glinet_firewall_rule (Resource)
 
-Manage one firewall rule by its unique `name` option. Stock rules can be imported by name; new rules are created as named sections. `position` requests an absolute UCI rule index.
+Deprecated: use `glinet_firewall_rules` for ordered policy. Manage one firewall rule by its unique `name` option. Stock rules can be imported by name; new rules are created as named sections. `position` requests an absolute UCI rule index.
 
 ## Import existing configuration
 
@@ -54,7 +54,7 @@ resource "glinet_firewall_rule" "guest_dns" {
 - `dest_ports` (Set of String) Destination ports or ranges.
 - `enabled` (Boolean) Whether the rule is active.
 - `family` (String) Address family: `ipv4`, `ipv6`, or `any`.
-- `position` (Number) Absolute UCI firewall rule index. Zero leaves ordering unspecified.
+- `position` (Number) Deprecated: use `glinet_firewall_rules` instead. Absolute UCI firewall rule index. Zero leaves ordering unspecified.
 - `protocols` (Set of String) Protocols, such as `tcp`, `udp`, `icmp`, or `all`.
 - `src` (String) Source zone, `*`, or empty.
 - `src_ips` (Set of String) Source addresses or CIDRs.

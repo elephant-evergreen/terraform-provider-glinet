@@ -23,7 +23,7 @@ func NewFirewallRuleResource() resource.Resource {
 func typedFirewallRuleSpec() typedSpec {
 	return typedSpec{
 		TypeName:    "firewall_rule",
-		Description: "Manage one firewall rule by its unique `name` option. Stock rules can be imported by name; new rules are created as named sections. `position` requests an absolute UCI rule index.",
+		Description: "Deprecated: use `glinet_firewall_rules` for ordered policy. Manage one firewall rule by its unique `name` option. Stock rules can be imported by name; new rules are created as named sections. `position` requests an absolute UCI rule index.",
 		Attributes: map[string]schema.Attribute{
 			"name":       schema.StringAttribute{Required: true, MarkdownDescription: "Unique rule name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"src":        schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Source zone, `*`, or empty."},
@@ -36,7 +36,7 @@ func typedFirewallRuleSpec() typedSpec {
 			"family":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("ipv4"), MarkdownDescription: "Address family: `ipv4`, `ipv6`, or `any`."},
 			"target":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("REJECT"), MarkdownDescription: "Target: ACCEPT, REJECT, DROP, or LOG."},
 			"enabled":    schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Whether the rule is active."},
-			"position":   schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Absolute UCI firewall rule index. Zero leaves ordering unspecified."},
+			"position":   schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Deprecated: use `glinet_firewall_rules` instead. Absolute UCI firewall rule index. Zero leaves ordering unspecified."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			name := stringOf(values, "name")
