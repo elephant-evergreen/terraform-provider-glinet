@@ -49,6 +49,7 @@ resource "glinet_dhcp_reservation" "printer" {
 
 ### Optional
 
+- `broadcast` (Boolean) Force broadcast replies.
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `dns` (Set of String) Per-host DNS servers.
 - `duid` (String) DHCPv6 DUID.
@@ -56,6 +57,7 @@ resource "glinet_dhcp_reservation" "printer" {
 - `ignore` (Boolean) Ignore this host.
 - `instance` (String) Optional dnsmasq instance name.
 - `leasetime` (String) Per-host lease time.
+- `set_tag` (String) Optional tag to set for this host.
 - `tag` (String) Optional dnsmasq tag.
 
 ### Read-Only
