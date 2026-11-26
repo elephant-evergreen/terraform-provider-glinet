@@ -45,7 +45,7 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | Hardware/network acceleration | `glinet_hardware_acceleration`, `glinet_firewall_defaults` | Managed |
 | NAT settings | `glinet_nat`, `glinet_firewall_defaults` | Managed |
 | Static routes | `glinet_network_route` | Managed |
-| Policy routing | `glinet_network_rule`, `glinet_route_policy` | Managed for the global policy; GL per-rule sections remain |
+| Policy routing | `glinet_network_rule`, `glinet_route_policy`, `glinet_route_policy_rule` | Managed |
 | Multi-WAN, failover, load balancing | `glinet_kmwan`, `glinet_kmwan_member` | Managed |
 | Repeater/WISP | `glinet_repeater` | Partial: uplink policy; joining a network remains a stock flow |
 | USB tethering | None | Out of scope: runtime state that depends on an attached modem |

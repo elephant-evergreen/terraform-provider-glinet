@@ -50,6 +50,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_kmwan` | `kmwan` multi-WAN singleton | `kmwan` | forget |
 | `glinet_kmwan_member` | `kmwan` multi-WAN member | member section name | forget |
 | `glinet_route_policy` | `route_policy` policy singleton | `route_policy` | forget |
+| `glinet_route_policy_rule` | `route_policy` rule | `kind:section` | forget |
 | `glinet_ddns` | `gl_ddns` service singleton | `ddns` | forget |
 | `glinet_samba` | `samba4` global singleton | `samba` | forget |
 | `glinet_mesh` | `gl-mesh` base singleton | `mesh` | forget |
