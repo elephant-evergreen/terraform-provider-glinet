@@ -44,6 +44,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_openvpn_server` | `openvpn` server section | section name | forget |
 | `glinet_wireguard_global` | `wireguard` global proxy | `wireguard_global` | forget |
 | `glinet_qos` | `qos` general singleton | `qos` | forget |
+| `glinet_qos_interface` | `qos` per-WAN section | `kind:section` | forget |
 | `glinet_minidlna` | `minidlna` media server singleton | `minidlna` | forget |
 | `glinet_admin_access` | `uhttpd` admin singleton | `admin_access` | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
