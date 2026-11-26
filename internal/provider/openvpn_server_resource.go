@@ -40,6 +40,7 @@ func NewOpenVPNServerResource() resource.Resource {
 				"proto": stringOf(values, "proto"), "dev": stringOf(values, "dev"), "server": stringOf(values, "server"),
 				"ca": stringOf(values, "ca"), "cert": stringOf(values, "cert"), "key": stringOf(values, "key"), "dh": stringOf(values, "dh"),
 				"auth": stringOf(values, "auth"), "cipher": stringOf(values, "cipher"), "comp": stringOf(values, "comp"), "verb": fmt.Sprintf("%d", int64Of(values, "verb")), "keepalive": stringOf(values, "keepalive"), "status": stringOf(values, "status"),
+				"ifconfig_pool_persist": stringOf(values, "ifconfig_pool_persist"), "persist_key": boolString(boolOf(values, "persist_key", false)), "persist_tun": boolString(boolOf(values, "persist_tun", false)),
 			}}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
@@ -51,6 +52,7 @@ func NewOpenVPNServerResource() resource.Resource {
 				"auth": stringValue(section.Options["auth"]), "cipher": stringValue(section.Options["cipher"]),
 				"comp": stringValue(section.Options["comp"]), "verb": int64Value(parseOptionInt64(section.Options["verb"])),
 				"keepalive": stringValue(section.Options["keepalive"]), "status": stringValue(section.Options["status"]),
+				"ifconfig_pool_persist": stringValue(section.Options["ifconfig_pool_persist"]), "persist_key": boolValue(section.Options["persist_key"] == "1"), "persist_tun": boolValue(section.Options["persist_tun"] == "1"),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {

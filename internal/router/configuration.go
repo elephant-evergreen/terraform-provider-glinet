@@ -503,7 +503,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"tailscale.settings":        "port log_stdout log_stderr state_file",
 		"zerotier.zerotier":         "enabled nat wan_nat",
 		"tor.global":                "enable manual countries ipv6_intercept",
-		"openvpn.openvpn":           "enabled config port proto dev server ca cert key dh auth cipher comp verb keepalive status",
+		"openvpn.openvpn":           "enabled config port proto dev server ca cert key dh auth cipher comp verb keepalive status ifconfig_pool_persist persist_key persist_tun",
 		"wireguard.proxy":           "global_proxy",
 		"qos.qos":                   "enable model upload download sum",
 		"qos.wan":                   "enabled upload download",
