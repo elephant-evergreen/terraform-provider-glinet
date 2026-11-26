@@ -17,6 +17,7 @@ Manage the stock OpenWrt NTP client. Destroy releases ownership and preserves th
 
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `enabled` (Boolean) Enable NTP synchronization.
+- `interface` (String) Optional NTP interface.
 - `servers` (Set of String) NTP servers.
 - `use_dhcp` (Boolean) Use NTP servers provided by DHCP.
 
