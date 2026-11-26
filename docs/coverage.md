@@ -74,7 +74,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | Zones, forwarding, redirects, filter rules | `glinet_firewall_zone`, `glinet_firewall_forwarding`, `glinet_firewall_redirect`, `glinet_firewall_rules` | Managed for the modeled options |
 | Port forwarding | `glinet_firewall_redirect` | Managed |
 | Firewall defaults and includes | `glinet_firewall_defaults` | Partial: defaults managed; stock includes remain protected |
-| NAT/UPnP | None | Planned |
+| NAT/UPnP | `glinet_upnp` | Partial: UPnP managed; NAT defaults remain |
 | ACL | None | Planned |
 | Admin access restrictions | None | Planned |
 | Security scan | None | Action |
