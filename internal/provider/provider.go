@@ -155,6 +155,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewZeroTierResource,
 		NewTorResource,
 		NewOpenVPNResource,
+		NewOpenVPNServerResource,
 	}
 }
 

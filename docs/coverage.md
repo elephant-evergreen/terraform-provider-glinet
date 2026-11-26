@@ -88,7 +88,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | WireGuard interface and peer primitives | `glinet_wireguard_interface`, `glinet_wireguard_peer` | Partial: low-level UCI only, experimental and hardware-unverified |
 | WireGuard client/server profiles | None | Planned |
 | OpenVPN client | `glinet_openvpn` | Partial: custom config switch; profile file is not managed |
-| OpenVPN server | None | Planned |
+| OpenVPN server | `glinet_openvpn_server` | Partial: basic server options; certificates are paths only |
 | VPN dashboard, policy, kill switch | None | Planned |
 | ExpressVPN and provider profiles | None | Planned |
 | Tailscale | `glinet_tailscale` | Managed for settings |

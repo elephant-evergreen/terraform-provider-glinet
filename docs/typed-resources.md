@@ -41,6 +41,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_zerotier` | `zerotier` integration singleton | `zerotier` | forget |
 | `glinet_tor` | `tor` integration singleton | `tor` | forget |
 | `glinet_openvpn` | `openvpn` custom config singleton | `openvpn` | forget |
+| `glinet_openvpn_server` | `openvpn` server section | section name | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
 | `glinet_firewall_defaults` | firewall defaults singleton | `firewall_defaults` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
