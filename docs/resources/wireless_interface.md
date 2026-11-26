@@ -65,8 +65,10 @@ resource "glinet_wireless_interface" "private_2g" {
 - `isolate` (Boolean) Client isolation.
 - `key_version` (Number) Client-managed key generation. Increase it when rotating `key_wo`.
 - `key_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only WPA passphrase (8–63 printable ASCII). It is not stored in plan or state.
+- `macaddr` (String) Optional MAC address override.
 - `mode` (String) Wi-Fi mode, normally `ap`.
 - `network` (String) Network interface this AP joins.
+- `wds` (Boolean) Enable WDS.
 - `wps_pushbutton` (Boolean) WPS push-button. When omitted, an existing section keeps its current value and a new section starts disabled. WPS is refused with WPA3 modes.
 
 ### Read-Only

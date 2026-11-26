@@ -58,6 +58,8 @@ func typedWirelessInterfaceSpec() typedSpec {
 				MarkdownDescription: "WPS push-button. When omitted, an existing section keeps its current value and a new section starts disabled. WPS is refused with WPA3 modes.",
 			},
 			"ifname":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional radio interface name."},
+			"macaddr":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional MAC address override."},
+			"wds":         schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable WDS."},
 			"hidden":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Hide the SSID."},
 			"isolate":     schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Client isolation."},
 			"disabled":    schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Disable the AP."},
@@ -79,12 +81,13 @@ func typedWirelessInterfaceSpec() typedSpec {
 				pmf = value
 			}
 			options["ieee80211w"] = strconv.FormatInt(pmf, 10)
+			options["wds"] = boolString(boolOf(values, "wds", false))
 			if value, ok := knownBool(values, "wps_pushbutton"); ok {
 				options["wps_pushbutton"] = boolString(value)
 			}
 			ssid := stringOf(values, "ssid")
 			options["ssid"] = ssid
-			for _, field := range []struct{ attrName, option string }{{"device", "device"}, {"network", "network"}, {"mode", "mode"}, {"ifname", "ifname"}} {
+			for _, field := range []struct{ attrName, option string }{{"device", "device"}, {"network", "network"}, {"mode", "mode"}, {"ifname", "ifname"}, {"macaddr", "macaddr"}} {
 				value := stringOf(values, field.attrName)
 				options[field.option] = value
 			}
@@ -108,6 +111,8 @@ func typedWirelessInterfaceSpec() typedSpec {
 				"ieee80211w":     int64Value(pmf),
 				"wps_pushbutton": boolValue(section.Options["wps_pushbutton"] == "1"),
 				"ifname":         stringValue(section.Options["ifname"]),
+				"macaddr":        stringValue(section.Options["macaddr"]),
+				"wds":            boolValue(section.Options["wds"] == "1"),
 				"hidden":         boolValue(section.Options["hidden"] == "1"),
 				"isolate":        boolValue(section.Options["isolate"] != "0"),
 				"disabled":       boolValue(section.Options["disabled"] == "1"),
