@@ -34,6 +34,7 @@ func NewSystemSSHResource() resource.Resource {
 				"Interface":        stringOf(values, "interface"),
 				"IdleTimeout":      fmt.Sprintf("%d", int64Of(values, "idle_timeout")),
 				"GatewayPorts":     boolString(boolOf(values, "gateway_ports", false)),
+				"Banner":           stringOf(values, "banner"),
 			}
 			return router.Section{Package: "dropbear", Type: "dropbear", Name: "@dropbear[0]", Options: options}, nil
 		},
@@ -49,6 +50,7 @@ func NewSystemSSHResource() resource.Resource {
 				"interface":          stringValue(section.Options["Interface"]),
 				"idle_timeout":       int64Value(parseOptionInt64(section.Options["IdleTimeout"])),
 				"gateway_ports":      boolValue(section.Options["GatewayPorts"] == "1"),
+				"banner":             stringValue(section.Options["Banner"]),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
