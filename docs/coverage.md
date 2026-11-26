@@ -59,9 +59,9 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | Radio channel, width, transmit power, country | `glinet_wireless_radio` | Managed |
 | Guest/IoT Wi-Fi | `glinet_wireless_interface` | Partial: SSID-level only; no dedicated network workflow |
 | Wireless schedule | `glinet_timer`, `glinet_wifi_timer` | Managed |
-| MAC filter/access control | None | Planned |
+| MAC filter/access control | `glinet_client_filter` | Partial: filter mode; address list remains in the stock UI |
 | Mesh | `glinet_mesh` | Partial: base settings; pairing remains a stock flow |
-| Client list and block client | None | Planned |
+| Client list and block client | `glinet_client_filter` | Partial: MAC filter mode; live client list remains read-only |
 | EAP/enterprise Wi-Fi | None | Planned |
 | Wi-Fi 6/radio advanced options | None | Planned |
 
@@ -75,11 +75,11 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | Port forwarding | `glinet_firewall_redirect` | Managed |
 | Firewall defaults and includes | `glinet_firewall_defaults` | Partial: defaults managed; stock includes remain protected |
 | NAT/UPnP | `glinet_upnp` | Partial: UPnP managed; NAT defaults remain |
-| ACL | None | Planned |
+| ACL | `glinet_wan_access` | Partial: WAN whitelist switch |
 | Admin access restrictions | `glinet_admin_access` | Partial: listeners and limits; credentials remain external |
 | Security scan | None | Action |
 | Content filter | None | Planned |
-| Parental control | None | Planned |
+| Parental control | `glinet_parental_control` | Partial: global settings; rules remain |
 
 ## VPN
 
@@ -112,7 +112,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | SQM | `glinet_sqm`, `glinet_sqm_service` | Managed |
 | DPI engine | None | Planned |
 | Content filter | None | Planned |
-| Parental control | None | Planned |
+| Parental control | `glinet_parental_control` | Partial: global settings; rules remain |
 | Network quality | None | Read-only |
 | Data statistics | None | Read-only |
 
