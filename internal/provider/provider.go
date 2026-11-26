@@ -169,7 +169,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 }
 
 func (p *glinetProvider) Actions(context.Context) []func() action.Action {
-	return []func() action.Action{NewRebootAction}
+	return []func() action.Action{NewRebootAction, NewBackupAction}
 }
 
 func (p *glinetProvider) DataSources(context.Context) []func() datasource.DataSource {

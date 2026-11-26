@@ -117,3 +117,12 @@ func (c *Client) Reboot(ctx context.Context) error {
 	_, err := c.runner.Run(ctx, "sh -c '(sleep 1; /sbin/reboot) >/dev/null 2>&1 &'")
 	return err
 }
+
+func (c *Client) CreateBackup(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.protection == nil {
+		return fmt.Errorf("encrypted backups are not configured")
+	}
+	return c.protection.Protect(ctx, c.runner, false)
+}
