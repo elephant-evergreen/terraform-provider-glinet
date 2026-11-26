@@ -150,6 +150,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewUPnPResource,
 		NewSQMResource,
 		NewSQMServiceResource,
+		NewAdGuardResource,
 	}
 }
 
