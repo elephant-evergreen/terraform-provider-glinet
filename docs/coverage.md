@@ -108,7 +108,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 
 | Admin Panel setting | Current provider | Status |
 | --- | --- | --- |
-| QoS | None | Planned |
+| QoS | `glinet_qos` | Partial: general settings; per-WAN sections remain |
 | SQM | `glinet_sqm`, `glinet_sqm_service` | Managed |
 | DPI engine | None | Planned |
 | Content filter | None | Planned |
