@@ -30,6 +30,8 @@ func NewDHCPReservationResource() resource.Resource {
 			"duid":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "DHCPv6 DUID."},
 			"leasetime": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Per-host lease time."},
 			"ignore":    schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Ignore this host."},
+			"instance":  schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional dnsmasq instance name."},
+			"tag":       schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional dnsmasq tag."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			section := stringOf(values, "section")
@@ -42,6 +44,8 @@ func NewDHCPReservationResource() resource.Resource {
 			options["duid"] = stringOf(values, "duid")
 			options["leasetime"] = stringOf(values, "leasetime")
 			options["ignore"] = boolString(boolOf(values, "ignore", false))
+			options["instance"] = stringOf(values, "instance")
+			options["tag"] = stringOf(values, "tag")
 			item := router.Section{Package: "dhcp", Type: "host", Name: section, Options: options}
 			servers := stringsOf(values, "dns")
 			item.Lists = map[string][]string{"dns": servers}
