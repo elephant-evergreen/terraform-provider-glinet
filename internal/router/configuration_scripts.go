@@ -9,7 +9,7 @@ const transactionDir = "/root/.terraform-provider-glinet-configuration"
 const resultDir = "/root/.terraform-provider-glinet-results"
 const configurationLock = "/tmp/terraform-provider-glinet-wifi"
 const recoveryService = "/etc/init.d/terraform-glinet-recovery"
-const configurationPackages = "network wireless dhcp firewall gl-dns-v2 eth_ports_config_map system"
+const configurationPackages = "network wireless dhcp firewall gl-dns-v2 eth_ports_config_map system dropbear"
 
 const dnsRefresh = `dns_config=$(ubus call gl-session call '{"module":"dns","func":"get_config"}' | jsonfilter -e '@.result')
 test -n "$dns_config"

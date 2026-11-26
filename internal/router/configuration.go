@@ -495,6 +495,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"system.system":             "hostname timezone zonename log_size log_proto conloglevel cronloglevel",
 		"system.ntp":                "enabled server use_dhcp interface",
 		"system.led":                "name sysfs trigger dev mode default delayon delayoff",
+		"dropbear.dropbear":         "enable Port PasswordAuth RootPasswordAuth Interface IdleTimeout",
 		"network.rule":              "lookup priority src dest in out family invert mark suppress_prefixlength",
 		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate sourcefilter ipv6 ip6assign ip6hint ip6ifaceid ip6class ip6prefix macaddr hostname username",
 		"wireless.wifi-device":      "channel htmode txpower country disabled",
