@@ -24,7 +24,9 @@ Manage one OpenWrt SQM queue section. The UCI section name is the stable identit
 - `download` (Number) Download limit in kbit/s; zero leaves it unset.
 - `enabled` (Boolean) Enable this queue.
 - `linklayer` (String) Link layer adaptation.
+- `overhead` (Number) Per-packet overhead bytes.
 - `qdisc` (String) Queueing discipline.
+- `qdisc_advanced` (Boolean) Use advanced qdisc options.
 - `script` (String) SQM script.
 - `upload` (Number) Upload limit in kbit/s; zero leaves it unset.
 
