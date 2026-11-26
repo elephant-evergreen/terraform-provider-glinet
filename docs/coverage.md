@@ -131,7 +131,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | Admin Panel setting | Current provider | Status |
 | --- | --- | --- |
 | Model, firmware, mode | `glinet_system` data source | Read-only |
-| Time zone/NTP | None | Planned |
+| Time zone/NTP | `glinet_system_settings` | Partial: hostname and timezone; NTP is not covered |
 | Admin password and users | None | Planned |
 | SSH access | None | Planned |
 | LED control | None | Planned |
