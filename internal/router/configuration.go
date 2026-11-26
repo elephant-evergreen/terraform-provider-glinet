@@ -492,7 +492,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"network.wireguard":         "public_key allowed_ips endpoint_host endpoint_port persistent_keepalive route_allowed_ips description",
 		"network.route":             "interface target netmask gateway metric table source onlink mtu type",
 		"network.route6":            "interface target gateway metric table source onlink mtu type",
-		"system.system":             "hostname timezone zonename",
+		"system.system":             "hostname timezone zonename log_size log_proto conloglevel cronloglevel",
 		"system.ntp":                "enabled server use_dhcp interface",
 		"network.rule":              "lookup priority src dest in out family invert mark suppress_prefixlength",
 		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate sourcefilter ipv6 ip6assign ip6hint ip6ifaceid ip6class ip6prefix macaddr hostname username",

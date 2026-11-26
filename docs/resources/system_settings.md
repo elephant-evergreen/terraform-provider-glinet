@@ -15,8 +15,12 @@ Manage the stock OpenWrt `system` identity settings. Destroy releases ownership 
 
 ### Optional
 
+- `conloglevel` (Number) Console log level; zero leaves it unset.
+- `cronloglevel` (Number) Cron log level; zero leaves it unset.
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `hostname` (String) Router hostname.
+- `log_proto` (String) Log protocol: `udp`, `tcp`, or empty.
+- `log_size` (Number) Log ring buffer size in KiB; zero leaves it unset.
 - `timezone` (String) IANA time zone, such as `Asia/Tokyo`.
 - `zonename` (String) Human-readable time zone name.
 
