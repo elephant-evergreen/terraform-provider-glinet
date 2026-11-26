@@ -47,6 +47,9 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_qos_interface` | `qos` per-WAN section | `kind:section` | forget |
 | `glinet_minidlna` | `minidlna` media server singleton | `minidlna` | forget |
 | `glinet_admin_access` | `uhttpd` admin singleton | `admin_access` | forget |
+| `glinet_kmwan` | `kmwan` multi-WAN singleton | `kmwan` | forget |
+| `glinet_kmwan_member` | `kmwan` multi-WAN member | member section name | forget |
+| `glinet_route_policy` | `route_policy` policy singleton | `route_policy` | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
 | `glinet_firewall_defaults` | firewall defaults singleton | `firewall_defaults` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
