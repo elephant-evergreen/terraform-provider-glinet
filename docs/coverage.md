@@ -86,11 +86,11 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | Admin Panel setting | Current provider | Status |
 | --- | --- | --- |
 | WireGuard interface and peer primitives | `glinet_wireguard_interface`, `glinet_wireguard_peer` | Partial: low-level UCI only, experimental and hardware-unverified |
-| WireGuard client/server profiles | None | Planned |
+| WireGuard client/server profiles | `glinet_wireguard_server`, `glinet_wireguard_interface`, `glinet_wireguard_peer` | Partial: server and primitives; generated client profiles remain in the stock UI |
 | OpenVPN client | `glinet_openvpn` | Partial: custom config switch; profile file is not managed |
 | OpenVPN server | `glinet_openvpn_server` | Partial: basic server options; certificates are paths only |
-| VPN dashboard, policy, kill switch | `glinet_wireguard_global` | Partial: global proxy switch only |
-| ExpressVPN and provider profiles | None | Planned |
+| VPN dashboard, policy, kill switch | `glinet_wireguard_global`, `glinet_route_policy` | Partial: global proxy and policy switch |
+| ExpressVPN and provider profiles | None | Out of scope: account-bound provider activation |
 | Tailscale | `glinet_tailscale` | Managed for settings |
 | ZeroTier | `glinet_zerotier` | Managed for integration |
 | Tor | `glinet_tor` | Managed for integration |

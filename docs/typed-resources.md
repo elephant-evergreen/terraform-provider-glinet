@@ -61,6 +61,8 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_client_filter` | `gl-black_white_list` mode | `client_filter` | forget |
 | `glinet_wan_access` | `wan-access` singleton | `wan_access` | forget |
 | `glinet_parental_control` | `parental_control_v2` global | `parental_control` | forget |
+| `glinet_wireguard_server` | `wireguard_server` server | server section name | forget |
+| `glinet_s2s` | `gl_s2s` singleton | `s2s` | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
 | `glinet_firewall_defaults` | firewall defaults singleton | `firewall_defaults` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |

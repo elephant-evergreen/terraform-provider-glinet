@@ -524,6 +524,8 @@ var allowedOptions = func() map[string]map[string]bool {
 		"gl-black_white_list.global": "enable mode black white",
 		"wan-access.main":            "whitelist",
 		"parental_control_v2.global": "enable init drop_anonymous auto_update log_level",
+		"wireguard_server.servers":   "address_v4 address_v6 port access client_to_client masq",
+		"gl_s2s.global":              "enable firewall",
 		"network.rule":               "lookup priority src dest in out family invert mark suppress_prefixlength",
 		"network.interface":          "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate sourcefilter ipv6 ip6assign ip6hint ip6ifaceid ip6class ip6prefix macaddr hostname username",
 		"wireless.wifi-device":       "channel htmode txpower country disabled noscan legacy_rates beacon_int",
