@@ -506,7 +506,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"openvpn.openvpn":           "enabled config port proto dev server ca cert key dh auth cipher comp verb keepalive status",
 		"wireguard.proxy":           "global_proxy",
 		"qos.qos":                   "enable model upload download sum",
-		"minidlna.minidlna":         "enabled port interface friendly_name media_dir inotify enable_tivo wide_links strict_dlna notify_interval",
+		"minidlna.minidlna":         "enabled port interface friendly_name media_dir inotify enable_tivo wide_links strict_dlna notify_interval root_container serial",
 		"network.rule":              "lookup priority src dest in out family invert mark suppress_prefixlength",
 		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate sourcefilter ipv6 ip6assign ip6hint ip6ifaceid ip6class ip6prefix macaddr hostname username",
 		"wireless.wifi-device":      "channel htmode txpower country disabled noscan legacy_rates beacon_int",
