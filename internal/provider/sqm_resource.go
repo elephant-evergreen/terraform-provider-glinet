@@ -57,6 +57,7 @@ func NewSQMResource() resource.Resource {
 				"script": stringValue(defaultString(section.Options["script"], "piece_of_cake.qos")), "linklayer": stringValue(defaultString(section.Options["linklayer"], "none")),
 				"overhead": int64Value(parseOptionInt64(section.Options["overhead"])), "qdisc_advanced": boolValue(section.Options["qdisc_advanced"] == "1"),
 				"ingress_ecn": stringValue(defaultString(section.Options["ingress_ecn"], "ECN")), "egress_ecn": stringValue(defaultString(section.Options["egress_ecn"], "ECN")),
+				"tc_mpu": boolValue(section.Options["tcMPU"] == "1"),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
