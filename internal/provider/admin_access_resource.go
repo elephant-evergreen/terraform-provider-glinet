@@ -36,6 +36,7 @@ func NewAdminAccessResource() resource.Resource {
 				"cert": stringOf(values, "cert"), "key": stringOf(values, "key"),
 				"script_timeout": fmt.Sprintf("%d", int64Of(values, "script_timeout")), "network_timeout": fmt.Sprintf("%d", int64Of(values, "network_timeout")),
 				"cgi_prefix": stringOf(values, "cgi_prefix"), "lua_prefix": stringOf(values, "lua_prefix"), "ubus_prefix": stringOf(values, "ubus_prefix"),
+				"http_keepalive": fmt.Sprintf("%d", int64Of(values, "http_keepalive")), "tcp_keepalive": boolString(boolOf(values, "tcp_keepalive", true)),
 			}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
@@ -50,6 +51,7 @@ func NewAdminAccessResource() resource.Resource {
 				"cert": stringValue(section.Options["cert"]), "key": stringValue(section.Options["key"]),
 				"script_timeout": int64Value(parseOptionInt64(section.Options["script_timeout"])), "network_timeout": int64Value(parseOptionInt64(section.Options["network_timeout"])),
 				"cgi_prefix": stringValue(section.Options["cgi_prefix"]), "lua_prefix": stringValue(section.Options["lua_prefix"]), "ubus_prefix": stringValue(section.Options["ubus_prefix"]),
+				"http_keepalive": int64Value(parseOptionInt64(section.Options["http_keepalive"])), "tcp_keepalive": boolValue(section.Options["tcp_keepalive"] != "0"),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
