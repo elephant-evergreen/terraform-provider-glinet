@@ -29,6 +29,8 @@ func NewSQMResource() resource.Resource {
 			"linklayer":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("none"), MarkdownDescription: "Link layer adaptation."},
 			"overhead":       schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Per-packet overhead bytes."},
 			"qdisc_advanced": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Use advanced qdisc options."},
+			"ingress_ecn":    schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("ECN"), MarkdownDescription: "Ingress ECN mode."},
+			"egress_ecn":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("ECN"), MarkdownDescription: "Egress ECN mode."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			name := stringOf(values, "name")
@@ -54,6 +56,7 @@ func NewSQMResource() resource.Resource {
 				"upload": int64Value(parseOptionInt64(section.Options["upload"])), "download": int64Value(parseOptionInt64(section.Options["download"])),
 				"script": stringValue(defaultString(section.Options["script"], "piece_of_cake.qos")), "linklayer": stringValue(defaultString(section.Options["linklayer"], "none")),
 				"overhead": int64Value(parseOptionInt64(section.Options["overhead"])), "qdisc_advanced": boolValue(section.Options["qdisc_advanced"] == "1"),
+				"ingress_ecn": stringValue(defaultString(section.Options["ingress_ecn"], "ECN")), "egress_ecn": stringValue(defaultString(section.Options["egress_ecn"], "ECN")),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
