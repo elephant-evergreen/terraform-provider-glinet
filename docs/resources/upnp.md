@@ -16,10 +16,13 @@ Manage the stock OpenWrt UPnP service. Destroy releases ownership and preserves 
 ### Optional
 
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
+- `download` (Number) Download limit in KiB/s; zero leaves it unset.
 - `enabled` (Boolean) Enable UPnP.
 - `external_iface` (String) External interface.
 - `internal_iface` (String) Internal interface.
+- `log_output` (Boolean) Log UPnP mappings.
 - `secure_mode` (Boolean) Restrict mappings to the requesting client.
+- `upload` (Number) Upload limit in KiB/s; zero leaves it unset.
 
 ### Read-Only
 
