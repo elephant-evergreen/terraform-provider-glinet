@@ -22,6 +22,9 @@ func NewUPnPResource() resource.Resource {
 			"internal_iface": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Internal interface."},
 			"external_iface": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "External interface."},
 			"secure_mode":    schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Restrict mappings to the requesting client."},
+			"download":       schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Download limit in KiB/s; zero leaves it unset."},
+			"upload":         schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Upload limit in KiB/s; zero leaves it unset."},
+			"log_output":     schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Log UPnP mappings."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			return router.Section{Package: "upnpd", Type: "upnpd", Name: "@upnpd[0]", Options: map[string]string{
@@ -29,6 +32,9 @@ func NewUPnPResource() resource.Resource {
 				"internal_iface": stringOf(values, "internal_iface"),
 				"external_iface": stringOf(values, "external_iface"),
 				"secure_mode":    boolString(boolOf(values, "secure_mode", true)),
+				"download":       fmt.Sprintf("%d", int64Of(values, "download")),
+				"upload":         fmt.Sprintf("%d", int64Of(values, "upload")),
+				"log_output":     boolString(boolOf(values, "log_output", false)),
 			}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
@@ -40,6 +46,9 @@ func NewUPnPResource() resource.Resource {
 				"internal_iface": stringValue(section.Options["internal_iface"]),
 				"external_iface": stringValue(section.Options["external_iface"]),
 				"secure_mode":    boolValue(section.Options["secure_mode"] != "0"),
+				"download":       int64Value(parseOptionInt64(section.Options["download"])),
+				"upload":         int64Value(parseOptionInt64(section.Options["upload"])),
+				"log_output":     boolValue(section.Options["log_output"] == "1"),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
