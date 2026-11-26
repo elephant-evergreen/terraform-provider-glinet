@@ -30,6 +30,7 @@ func NewSystemSettingsResource() resource.Resource {
 			options := map[string]string{
 				"hostname": stringOf(values, "hostname"), "timezone": stringOf(values, "timezone"), "zonename": stringOf(values, "zonename"),
 				"log_proto": stringOf(values, "log_proto"), "log_ip": stringOf(values, "log_ip"),
+				"log_remote": boolString(boolOf(values, "log_remote", false)), "log_port": strconv.FormatInt(int64Of(values, "log_port"), 10),
 			}
 			for _, name := range []string{"log_size", "conloglevel", "cronloglevel"} {
 				if value := int64Of(values, name); value > 0 {
