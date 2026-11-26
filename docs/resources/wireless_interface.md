@@ -69,6 +69,7 @@ resource "glinet_wireless_interface" "private_2g" {
 - `mode` (String) Wi-Fi mode, normally `ap`.
 - `network` (String) Network interface this AP joins.
 - `wds` (Boolean) Enable WDS.
+- `wpa_group_rekey` (Number) WPA group rekey interval in seconds; zero leaves it unset.
 - `wps_pushbutton` (Boolean) WPS push-button. When omitted, an existing section keeps its current value and a new section starts disabled. WPS is refused with WPA3 modes.
 
 ### Read-Only
