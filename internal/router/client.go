@@ -110,3 +110,10 @@ func operationError(err error) error {
 	}
 	return err
 }
+
+func (c *Client) Reboot(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, err := c.runner.Run(ctx, "sh -c '(sleep 1; /sbin/reboot) >/dev/null 2>&1 &'")
+	return err
+}
