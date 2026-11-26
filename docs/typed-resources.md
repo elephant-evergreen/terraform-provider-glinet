@@ -58,6 +58,9 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_wifi_timer` | `gl_timer` band schedule | timer section name | forget |
 | `glinet_led_timer` | `gl_timer` LED schedule | `led_timer` | forget |
 | `glinet_scheduled_reboot` | `gl_timer` reboot schedule | `scheduled_reboot` | forget |
+| `glinet_client_filter` | `gl-black_white_list` mode | `client_filter` | forget |
+| `glinet_wan_access` | `wan-access` singleton | `wan_access` | forget |
+| `glinet_parental_control` | `parental_control_v2` global | `parental_control` | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
 | `glinet_firewall_defaults` | firewall defaults singleton | `firewall_defaults` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |

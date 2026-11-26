@@ -176,6 +176,9 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewWiFiTimerResource,
 		NewLEDTimerResource,
 		NewScheduledRebootResource,
+		NewClientFilterResource,
+		NewWANAccessResource,
+		NewParentalControlResource,
 	}
 }
 

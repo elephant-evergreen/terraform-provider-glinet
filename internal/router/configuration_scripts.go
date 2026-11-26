@@ -9,7 +9,7 @@ const transactionDir = "/root/.terraform-provider-glinet-configuration"
 const resultDir = "/root/.terraform-provider-glinet-results"
 const configurationLock = "/tmp/terraform-provider-glinet-wifi"
 const recoveryService = "/etc/init.d/terraform-glinet-recovery"
-const configurationPackages = "network wireless dhcp firewall gl-dns-v2 eth_ports_config_map system dropbear upnpd sqm adguardhome tailscale zerotier tor openvpn wireguard qos minidlna uhttpd kmwan route_policy gl_ddns samba4 gl-mesh repeater gl_timer"
+const configurationPackages = "network wireless dhcp firewall gl-dns-v2 eth_ports_config_map system dropbear upnpd sqm adguardhome tailscale zerotier tor openvpn wireguard qos minidlna uhttpd kmwan route_policy gl_ddns samba4 gl-mesh repeater gl_timer gl-black_white_list wan-access parental_control_v2"
 
 const dnsRefresh = `dns_config=$(ubus call gl-session call '{"module":"dns","func":"get_config"}' | jsonfilter -e '@.result')
 test -n "$dns_config"
