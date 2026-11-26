@@ -58,7 +58,7 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | SSID, security, hidden SSID, client isolation | `glinet_wireless_interface` | Managed |
 | Radio channel, width, transmit power, country | `glinet_wireless_radio` | Managed |
 | Guest/IoT Wi-Fi | `glinet_wireless_interface` | Partial: SSID-level only; no dedicated network workflow |
-| Wireless schedule | None | Planned |
+| Wireless schedule | `glinet_timer`, `glinet_wifi_timer` | Managed |
 | MAC filter/access control | None | Planned |
 | Mesh | `glinet_mesh` | Partial: base settings; pairing remains a stock flow |
 | Client list and block client | None | Planned |
@@ -124,7 +124,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | Dynamic DNS | `glinet_ddns` | Partial: service ports; provider credentials remain external |
 | Network storage/Samba/DLNA | `glinet_minidlna`, `glinet_samba` | Partial: DLNA and Samba globals; share sections remain |
 | Plug-ins/package installation | None | Action |
-| Scheduled tasks | None | Planned |
+| Scheduled tasks | `glinet_wifi_timer`, `glinet_led_timer` | Partial: Wi-Fi and LED schedules; arbitrary cron jobs remain |
 
 ## System
 
@@ -139,7 +139,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | Reboot | `glinet_reboot` action | Action implemented |
 | Firmware upgrade | None | Action |
 | Backup/restore | `glinet_backup` action | Partial: backup action; restore remains |
-| Scheduled reboot | None | Planned |
+| Scheduled reboot | `glinet_scheduled_reboot` | Managed |
 
 ## Current provider map
 

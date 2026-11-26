@@ -54,6 +54,10 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_samba` | `samba4` global singleton | `samba` | forget |
 | `glinet_mesh` | `gl-mesh` base singleton | `mesh` | forget |
 | `glinet_repeater` | `repeater` main singleton | `repeater` | forget |
+| `glinet_timer` | `gl_timer` global singleton | `timer` | forget |
+| `glinet_wifi_timer` | `gl_timer` band schedule | timer section name | forget |
+| `glinet_led_timer` | `gl_timer` LED schedule | `led_timer` | forget |
+| `glinet_scheduled_reboot` | `gl_timer` reboot schedule | `scheduled_reboot` | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
 | `glinet_firewall_defaults` | firewall defaults singleton | `firewall_defaults` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
