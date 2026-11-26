@@ -55,7 +55,7 @@ Hardware verification is tracked separately: the release notes state which firmw
 | MAC filter/access control | `glinet_client_filter` | Managed: filter mode |
 | MAC filter address list | None | Out of scope: the stock firmware publishes no option name for list entries |
 | Mesh | `glinet_mesh` | Managed: pairing stays a stock flow |
-| Client list | None | Out of scope: the lease table is runtime state, not configuration |
+| Client list | `glinet_clients` data source | Read-only |
 | Block client | `glinet_client_filter` | Managed: filter mode |
 | EAP/enterprise Wi-Fi | None | Out of scope: this stock build exposes no enterprise Wi-Fi settings |
 | Wi-Fi 6/radio advanced options | None | Out of scope: the stock firmware publishes no additional radio field beyond the managed ones |
@@ -159,5 +159,5 @@ The matrix is backed by these resources and data sources:
 - `glinet_upnp`, `glinet_samba`, `glinet_minidlna`, `glinet_admin_access`
 - `glinet_system_settings`, `glinet_system_ntp`, `glinet_system_ssh`, `glinet_system_led`, `glinet_led`
 - `glinet_timer`, `glinet_wifi_timer`, `glinet_led_timer`, `glinet_scheduled_reboot`
-- `glinet_system` data source
+- `glinet_system` and `glinet_clients` data sources
 - `glinet_reboot` and `glinet_backup` actions
