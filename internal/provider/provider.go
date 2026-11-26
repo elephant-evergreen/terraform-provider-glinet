@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
+	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -25,7 +26,10 @@ type providerModel struct {
 	BackupDirectory types.String `tfsdk:"backup_directory"`
 }
 
-var _ provider.Provider = &glinetProvider{}
+var (
+	_ provider.Provider            = &glinetProvider{}
+	_ provider.ProviderWithActions = &glinetProvider{}
+)
 
 func New(version string) func() provider.Provider {
 	return func() provider.Provider { return &glinetProvider{version: version} }
@@ -162,6 +166,10 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewMiniDLNAResource,
 		NewAdminAccessResource,
 	}
+}
+
+func (p *glinetProvider) Actions(context.Context) []func() action.Action {
+	return []func() action.Action{NewRebootAction}
 }
 
 func (p *glinetProvider) DataSources(context.Context) []func() datasource.DataSource {

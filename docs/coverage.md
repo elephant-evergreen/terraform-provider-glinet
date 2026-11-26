@@ -136,7 +136,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | SSH access | `glinet_system_ssh` | Managed |
 | LED control | `glinet_system_led` | Managed |
 | Logs and diagnostics | None | Read-only |
-| Reboot | None | Action |
+| Reboot | `glinet_reboot` action | Action implemented |
 | Firmware upgrade | None | Action |
 | Backup/restore | None | Action |
 | Scheduled reboot | None | Planned |
