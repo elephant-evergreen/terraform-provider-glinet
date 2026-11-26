@@ -48,3 +48,16 @@ func TestDropInGatewaySpecRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected drop-in gateway: %+v", section)
 	}
 }
+
+func TestDropInDHCPSpecRoundTrip(t *testing.T) {
+	spec := NewDropInDHCPResource().(*typedResource).spec
+	section, err := spec.Selector(map[string]attr.Value{
+		"lease_time": types.Int64Value(43200), "ignore": types.BoolValue(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if section.Package != "edgerouter" || section.Type != "dhcp" || section.Options["leasetime"] != "43200" {
+		t.Fatalf("unexpected drop-in DHCP: %+v", section)
+	}
+}

@@ -71,6 +71,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_led` | `gl_led` singleton | `led` | forget |
 | `glinet_network_mode` | `glconfig` general singleton | `network_mode` | forget |
 | `glinet_dropin_gateway` | `edgerouter` global | `dropin_gateway` | forget |
+| `glinet_dropin_dhcp` | `edgerouter` DHCP helper | `dropin_dhcp` | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
 | `glinet_firewall_defaults` | firewall defaults singleton | `firewall_defaults` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
