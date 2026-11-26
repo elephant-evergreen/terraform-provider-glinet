@@ -36,7 +36,7 @@ func newConfigurationWorld(t *testing.T) *configurationWorld {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(f.root, "bin", "uci"), []byte("#!/bin/sh\ncase \"$*\" in changes) exit 0 ;; *adguardhome*) exit 1 ;; *) exit 0 ;; esac\n"), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(f.root, "bin", "uci"), []byte("#!/bin/sh\ncase \"$*\" in changes) exit 0 ;; *adguardhome*) exit 0 ;; *) exit 0 ;; esac\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	service := filepath.Join(f.root, "service")
