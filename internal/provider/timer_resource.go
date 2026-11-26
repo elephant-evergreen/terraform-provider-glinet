@@ -19,18 +19,18 @@ func NewTimerResource() resource.Resource {
 		Description: "Manage the stock GL.iNet timer global settings. Individual schedules are separate resources.",
 		NoDelete:    true,
 		Attributes: map[string]schema.Attribute{
-			"enabled":  schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable scheduled actions."},
-			"2g_func":  schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("turn_onoff"), MarkdownDescription: "2.4 GHz scheduled action."},
-			"5g_func":  schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("turn_onoff"), MarkdownDescription: "5 GHz scheduled action."},
-			"6g_func":  schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("turn_onoff"), MarkdownDescription: "6 GHz scheduled action."},
-			"mld_func": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("turn_onoff"), MarkdownDescription: "MLD scheduled action."},
+			"enabled":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable scheduled actions."},
+			"band_2g_func": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("turn_onoff"), MarkdownDescription: "2.4 GHz scheduled action."},
+			"band_5g_func": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("turn_onoff"), MarkdownDescription: "5 GHz scheduled action."},
+			"band_6g_func": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("turn_onoff"), MarkdownDescription: "6 GHz scheduled action."},
+			"mld_func":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("turn_onoff"), MarkdownDescription: "MLD scheduled action."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			return router.Section{Package: "gl_timer", Type: "global", Name: "global", Options: map[string]string{
 				"enable":   boolString(boolOf(values, "enabled", true)),
-				"2G_func":  stringOf(values, "2g_func"),
-				"5G_func":  stringOf(values, "5g_func"),
-				"6G_func":  stringOf(values, "6g_func"),
+				"2G_func":  stringOf(values, "band_2g_func"),
+				"5G_func":  stringOf(values, "band_5g_func"),
+				"6G_func":  stringOf(values, "band_6g_func"),
 				"MLD_func": stringOf(values, "mld_func"),
 			}}, nil
 		},
@@ -39,11 +39,11 @@ func NewTimerResource() resource.Resource {
 		},
 		Load: func(section router.Section) map[string]attr.Value {
 			return map[string]attr.Value{
-				"enabled":  boolValue(section.Options["enable"] != "0"),
-				"2g_func":  stringValue(defaultString(section.Options["2G_func"], "turn_onoff")),
-				"5g_func":  stringValue(defaultString(section.Options["5G_func"], "turn_onoff")),
-				"6g_func":  stringValue(defaultString(section.Options["6G_func"], "turn_onoff")),
-				"mld_func": stringValue(defaultString(section.Options["MLD_func"], "turn_onoff")),
+				"enabled":      boolValue(section.Options["enable"] != "0"),
+				"band_2g_func": stringValue(defaultString(section.Options["2G_func"], "turn_onoff")),
+				"band_5g_func": stringValue(defaultString(section.Options["5G_func"], "turn_onoff")),
+				"band_6g_func": stringValue(defaultString(section.Options["6G_func"], "turn_onoff")),
+				"mld_func":     stringValue(defaultString(section.Options["MLD_func"], "turn_onoff")),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {

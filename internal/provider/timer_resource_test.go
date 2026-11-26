@@ -10,8 +10,8 @@ import (
 func TestTimerSpecRoundTrip(t *testing.T) {
 	spec := NewTimerResource().(*typedResource).spec
 	values := map[string]attr.Value{
-		"enabled": types.BoolValue(true), "2g_func": types.StringValue("turn_onoff"),
-		"5g_func": types.StringValue("turn_onoff"), "6g_func": types.StringValue("turn_onoff"),
+		"enabled": types.BoolValue(true), "band_2g_func": types.StringValue("turn_onoff"),
+		"band_5g_func": types.StringValue("turn_onoff"), "band_6g_func": types.StringValue("turn_onoff"),
 		"mld_func": types.StringValue("turn_onoff"),
 	}
 	section, err := spec.Selector(values)
