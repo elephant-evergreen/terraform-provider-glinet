@@ -168,6 +168,8 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewKMWANResource,
 		NewKMWANMemberResource,
 		NewRoutePolicyResource,
+		NewDDNSResource,
+		NewSambaResource,
 	}
 }
 

@@ -50,6 +50,8 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_kmwan` | `kmwan` multi-WAN singleton | `kmwan` | forget |
 | `glinet_kmwan_member` | `kmwan` multi-WAN member | member section name | forget |
 | `glinet_route_policy` | `route_policy` policy singleton | `route_policy` | forget |
+| `glinet_ddns` | `gl_ddns` service singleton | `ddns` | forget |
+| `glinet_samba` | `samba4` global singleton | `samba` | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
 | `glinet_firewall_defaults` | firewall defaults singleton | `firewall_defaults` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |

@@ -515,6 +515,8 @@ var allowedOptions = func() map[string]map[string]bool {
 		"kmwan.global":              "enable mode level sensitivity",
 		"kmwan.member":              "interface metric weight track_mode addr_type disabled check",
 		"route_policy.policy":       "enabled mode append_source_if instance_on",
+		"gl_ddns.service":           "enabled_ssh http_port https_port",
+		"samba4.samba":              "workgroup charset description name interfaces",
 		"network.rule":              "lookup priority src dest in out family invert mark suppress_prefixlength",
 		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate sourcefilter ipv6 ip6assign ip6hint ip6ifaceid ip6class ip6prefix macaddr hostname username",
 		"wireless.wifi-device":      "channel htmode txpower country disabled noscan legacy_rates beacon_int",
