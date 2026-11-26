@@ -32,7 +32,9 @@ func NewAdminAccessResource() resource.Resource {
 				"enabled": boolString(boolOf(values, "enabled", false)), "listen_http": stringOf(values, "listen_http"),
 				"listen_https": stringOf(values, "listen_https"), "redirect_https": boolString(boolOf(values, "redirect_https", false)),
 				"rfc1918_filter": boolString(boolOf(values, "rfc1918_filter", true)), "max_requests": fmt.Sprintf("%d", int64Of(values, "max_requests")),
-				"max_connections": fmt.Sprintf("%d", int64Of(values, "max_connections")), "no_dirlists": boolString(boolOf(values, "no_dirlists", true)),
+				"max_connections": fmt.Sprintf("%d", int64Of(values, "max_connections")), "no_dirlists": boolString(boolOf(values, "no_dirlists", true)), "home": stringOf(values, "home"),
+				"cert": stringOf(values, "cert"), "key": stringOf(values, "key"),
+				"script_timeout": fmt.Sprintf("%d", int64Of(values, "script_timeout")), "network_timeout": fmt.Sprintf("%d", int64Of(values, "network_timeout")),
 			}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
@@ -43,7 +45,9 @@ func NewAdminAccessResource() resource.Resource {
 				"enabled": boolValue(section.Options["enabled"] == "1"), "listen_http": stringValue(section.Options["listen_http"]),
 				"listen_https": stringValue(section.Options["listen_https"]), "redirect_https": boolValue(section.Options["redirect_https"] == "1"),
 				"rfc1918_filter": boolValue(section.Options["rfc1918_filter"] != "0"), "max_requests": int64Value(parseOptionInt64(section.Options["max_requests"])),
-				"max_connections": int64Value(parseOptionInt64(section.Options["max_connections"])), "no_dirlists": boolValue(section.Options["no_dirlists"] == "1"),
+				"max_connections": int64Value(parseOptionInt64(section.Options["max_connections"])), "no_dirlists": boolValue(section.Options["no_dirlists"] == "1"), "home": stringValue(section.Options["home"]),
+				"cert": stringValue(section.Options["cert"]), "key": stringValue(section.Options["key"]),
+				"script_timeout": int64Value(parseOptionInt64(section.Options["script_timeout"])), "network_timeout": int64Value(parseOptionInt64(section.Options["network_timeout"])),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
