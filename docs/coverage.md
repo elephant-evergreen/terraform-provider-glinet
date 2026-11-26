@@ -138,7 +138,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | Logs and diagnostics | None | Read-only |
 | Reboot | `glinet_reboot` action | Action implemented |
 | Firmware upgrade | None | Action |
-| Backup/restore | None | Action |
+| Backup/restore | `glinet_backup` action | Partial: backup action; restore remains |
 | Scheduled reboot | None | Planned |
 
 ## Current provider map
