@@ -510,7 +510,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"qos.wwan":                  "enabled upload download",
 		"qos.tethering":             "enabled upload download",
 		"qos.modem":                 "enabled upload download",
-		"minidlna.minidlna":         "enabled port interface friendly_name media_dir inotify enable_tivo wide_links strict_dlna notify_interval root_container serial model_number album_art_names",
+		"minidlna.minidlna":         "enabled port interface friendly_name media_dir inotify enable_tivo wide_links strict_dlna notify_interval root_container serial model_number album_art_names user db_dir",
 		"uhttpd.uhttpd":             "enabled listen_http listen_https redirect_https rfc1918_filter max_requests max_connections no_dirlists home cert key script_timeout network_timeout cgi_prefix lua_prefix ubus_prefix http_keepalive tcp_keepalive",
 		"network.rule":              "lookup priority src dest in out family invert mark suppress_prefixlength",
 		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate sourcefilter ipv6 ip6assign ip6hint ip6ifaceid ip6class ip6prefix macaddr hostname username",

@@ -32,6 +32,7 @@ func NewMiniDLNAResource() resource.Resource {
 				"wide_links": boolString(boolOf(values, "wide_links", false)), "strict_dlna": boolString(boolOf(values, "strict_dlna", false)),
 				"notify_interval": fmt.Sprintf("%d", int64Of(values, "notify_interval")), "root_container": stringOf(values, "root_container"), "serial": stringOf(values, "serial"),
 				"model_number": stringOf(values, "model_number"), "album_art_names": stringOf(values, "album_art_names"),
+				"user": stringOf(values, "user"), "db_dir": stringOf(values, "db_dir"),
 			}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
