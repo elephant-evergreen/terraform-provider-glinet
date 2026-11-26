@@ -53,6 +53,8 @@ resource "glinet_wireless_radio" "wifi_2g" {
 - `delete_behavior` (String) Destroy behavior. This resource preserves the adopted `wifi-device` section; `forget` is required and `delete` is rejected.
 - `disabled` (Boolean) Disable the radio.
 - `htmode` (String) Channel width and generation, such as `HE40` or `HE80`. Accepted values are `HT20`, `HT40`, `VHT20`, `VHT40`, `VHT80`, `VHT160`, `HE20`, `HE40`, `HE80`, and `HE160`.
+- `legacy_rates` (Boolean) Enable legacy data rates.
+- `noscan` (Boolean) Do not scan for overlapping channels.
 - `txpower` (Number) Transmit power percentage, 0–100.
 
 ### Read-Only
