@@ -517,6 +517,8 @@ var allowedOptions = func() map[string]map[string]bool {
 		"route_policy.policy":       "enabled mode append_source_if instance_on",
 		"gl_ddns.service":           "enabled_ssh http_port https_port",
 		"samba4.samba":              "workgroup charset description name interfaces",
+		"gl-mesh.base":              "enabled mode log_level log_path onboard new_join_confirmed ts_enabled ts_guest_vid ts_iot_vid",
+		"repeater.main":             "auto level switch_interval ip_wait_time blacklist_timeout macaddr smart_reconnect",
 		"network.rule":              "lookup priority src dest in out family invert mark suppress_prefixlength",
 		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate sourcefilter ipv6 ip6assign ip6hint ip6ifaceid ip6class ip6prefix macaddr hostname username",
 		"wireless.wifi-device":      "channel htmode txpower country disabled noscan legacy_rates beacon_int",

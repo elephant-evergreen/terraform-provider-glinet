@@ -170,6 +170,8 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewRoutePolicyResource,
 		NewDDNSResource,
 		NewSambaResource,
+		NewMeshResource,
+		NewRepeaterResource,
 	}
 }
 

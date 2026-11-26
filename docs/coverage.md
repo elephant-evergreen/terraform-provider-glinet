@@ -47,7 +47,7 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | Static routes | `glinet_network_route` | Managed |
 | Policy routing | `glinet_network_rule`, `glinet_route_policy` | Managed for the global policy; GL per-rule sections remain |
 | Multi-WAN, failover, load balancing | `glinet_kmwan`, `glinet_kmwan_member` | Managed |
-| Repeater/WISP | None | Planned |
+| Repeater/WISP | `glinet_repeater` | Partial: uplink policy; joining a network remains a stock flow |
 | USB tethering | None | Planned |
 | Cellular | None | Out of scope for GL-MT6000: no integrated cellular modem |
 
@@ -60,7 +60,7 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | Guest/IoT Wi-Fi | `glinet_wireless_interface` | Partial: SSID-level only; no dedicated network workflow |
 | Wireless schedule | None | Planned |
 | MAC filter/access control | None | Planned |
-| Mesh | None | Planned |
+| Mesh | `glinet_mesh` | Partial: base settings; pairing remains a stock flow |
 | Client list and block client | None | Planned |
 | EAP/enterprise Wi-Fi | None | Planned |
 | Wi-Fi 6/radio advanced options | None | Planned |
