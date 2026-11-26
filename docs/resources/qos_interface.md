@@ -22,6 +22,7 @@ Manage one per-WAN QoS section. The stock section type is selected by `kind`.
 
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `download` (Number) Download limit in kbit/s.
+- `enabled` (Boolean) Enable this QoS section.
 - `upload` (Number) Upload limit in kbit/s.
 
 ### Read-Only
