@@ -53,6 +53,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_route_policy_rule` | `route_policy` rule | `kind:section` | forget |
 | `glinet_ddns` | `gl_ddns` service singleton | `ddns` | forget |
 | `glinet_samba` | `samba4` global singleton | `samba` | forget |
+| `glinet_samba_share` | `samba4` share section | section name | forget |
 | `glinet_mesh` | `gl-mesh` base singleton | `mesh` | forget |
 | `glinet_repeater` | `repeater` main singleton | `repeater` | forget |
 | `glinet_timer` | `gl_timer` global singleton | `timer` | forget |
@@ -60,6 +61,8 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_led_timer` | `gl_timer` LED schedule | `led_timer` | forget |
 | `glinet_scheduled_reboot` | `gl_timer` reboot schedule | `scheduled_reboot` | forget |
 | `glinet_client_filter` | `gl-black_white_list` mode | `client_filter` | forget |
+| `glinet_client_filter_list` | `gl-black_white_list` MAC list | `black` or `white` | forget |
+| `glinet_network_isolation` | `gl-black_white_list` secure option | network name | forget |
 | `glinet_wan_access` | `wan-access` singleton | `wan_access` | forget |
 | `glinet_parental_control` | `parental_control_v2` global | `parental_control` | forget |
 | `glinet_wireguard_server` | `wireguard_server` server | server section name | forget |

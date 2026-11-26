@@ -26,8 +26,8 @@ Hardware verification is tracked separately: the release notes state which firmw
 | Ethernet WAN/LAN roles and port mapping | `glinet_ethernet_port`, `glinet_network_interface`, `glinet_network_bridge` | Managed |
 | WAN protocol: DHCP, static, PPPoE | `glinet_network_interface` | Managed: write-only credentials |
 | LAN address and subnet | `glinet_network_interface`, `glinet_network_bridge`, `glinet_dhcp_pool` | Managed |
-| Guest network | `glinet_network_interface`, `glinet_dhcp_pool`, `glinet_wireless_interface`, `glinet_firewall_zone` | Managed |
-| IoT network | `glinet_network_interface`, `glinet_dhcp_pool`, `glinet_wireless_interface`, `glinet_firewall_zone` | Managed |
+| Guest network | `glinet_network_interface`, `glinet_dhcp_pool`, `glinet_wireless_interface`, `glinet_firewall_zone`, `glinet_network_isolation` | Managed |
+| IoT network | `glinet_network_interface`, `glinet_dhcp_pool`, `glinet_wireless_interface`, `glinet_firewall_zone`, `glinet_network_isolation` | Managed |
 | DNS | `glinet_dns`, `glinet_dnsmasq`, `glinet_adguard` | Managed |
 | Ethernet port and VLAN | `glinet_ethernet_port`, `glinet_network_interface` | Managed |
 | IPv6 | `glinet_network_interface`, `glinet_network_route6`, `glinet_dhcp_pool` | Managed |
@@ -53,7 +53,7 @@ Hardware verification is tracked separately: the release notes state which firmw
 | Guest/IoT Wi-Fi | `glinet_wireless_interface`, `glinet_network_interface`, `glinet_dhcp_pool` | Managed |
 | Wireless schedule | `glinet_timer`, `glinet_wifi_timer` | Managed |
 | MAC filter/access control | `glinet_client_filter` | Managed: filter mode |
-| MAC filter address list | None | Out of scope: the stock firmware publishes no option name for list entries |
+| MAC filter address list | `glinet_client_filter_list` | Managed |
 | Mesh | `glinet_mesh` | Managed: pairing stays a stock flow |
 | Client list | `glinet_clients` data source | Read-only |
 | Block client | `glinet_client_filter` | Managed: filter mode |
@@ -122,7 +122,7 @@ Hardware verification is tracked separately: the release notes state which firmw
 | Dynamic DNS | `glinet_ddns` | Managed: service ports |
 | DDNS provider credentials | None | Out of scope: account-bound credentials |
 | Network storage/Samba/DLNA | `glinet_samba`, `glinet_minidlna` | Managed: global settings |
-| Samba share sections | None | Out of scope: the stock firmware publishes no share option schema |
+| Samba share sections | `glinet_samba_share` | Managed |
 | Plug-ins/package installation | None | Out of scope: package installation is outside declarative router configuration |
 | Scheduled tasks | `glinet_wifi_timer`, `glinet_led_timer`, `glinet_scheduled_reboot` | Managed: the stock schedules |
 
@@ -152,11 +152,11 @@ The matrix is backed by these resources and data sources:
 - `glinet_dhcp_pool`, `glinet_dhcp_reservation`, `glinet_dns`, `glinet_dnsmasq`, `glinet_ddns`, `glinet_adguard`
 - `glinet_firewall_zone`, `glinet_firewall_forwarding`, `glinet_firewall_rules`, `glinet_firewall_redirect`, `glinet_firewall_defaults`
 - `glinet_kmwan`, `glinet_kmwan_member`, `glinet_route_policy`, `glinet_route_policy_rule`, `glinet_dropin_gateway`, `glinet_dropin_dhcp`
-- `glinet_client_filter`, `glinet_wan_access`, `glinet_parental_control`, `glinet_content_protection`, `glinet_dpi`
+- `glinet_client_filter`, `glinet_client_filter_list`, `glinet_network_isolation`, `glinet_wan_access`, `glinet_parental_control`, `glinet_content_protection`, `glinet_dpi`
 - `glinet_wireguard_interface`, `glinet_wireguard_peer`, `glinet_wireguard_server`, `glinet_wireguard_global`
 - `glinet_openvpn`, `glinet_openvpn_server`, `glinet_tailscale`, `glinet_zerotier`, `glinet_tor`, `glinet_s2s`, `glinet_goodcloud`
 - `glinet_qos`, `glinet_qos_interface`, `glinet_sqm`, `glinet_sqm_service`, `glinet_nat`, `glinet_hardware_acceleration`
-- `glinet_upnp`, `glinet_samba`, `glinet_minidlna`, `glinet_admin_access`
+- `glinet_upnp`, `glinet_samba`, `glinet_samba_share`, `glinet_minidlna`, `glinet_admin_access`
 - `glinet_system_settings`, `glinet_system_ntp`, `glinet_system_ssh`, `glinet_system_led`, `glinet_led`
 - `glinet_timer`, `glinet_wifi_timer`, `glinet_led_timer`, `glinet_scheduled_reboot`
 - `glinet_system` and `glinet_clients` data sources
