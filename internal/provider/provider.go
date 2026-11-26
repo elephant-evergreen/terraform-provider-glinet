@@ -143,6 +143,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewFirewallRedirectResource,
 		NewWireGuardInterfaceResource,
 		NewWireGuardPeerResource,
+		NewSystemSettingsResource,
 	}
 }
 

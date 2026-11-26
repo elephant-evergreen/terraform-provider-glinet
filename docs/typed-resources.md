@@ -29,6 +29,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_dhcp_reservation` | `dhcp` host | section name (`example_admin_lease`) | forget |
 | `glinet_dns` | `gl-dns-v2` DNS singleton | `dns` | forget |
 | `glinet_dnsmasq` | `dhcp` dnsmasq singleton | `dnsmasq` | forget |
+| `glinet_system_settings` | `system` identity singleton | `system_settings` | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
 | `glinet_firewall_defaults` | firewall defaults singleton | `firewall_defaults` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
