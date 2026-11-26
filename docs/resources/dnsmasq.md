@@ -48,6 +48,7 @@ resource "glinet_dnsmasq" "router" {
 - `bogus_priv` (Boolean) Reject private reverse DNS upstream requests.
 - `cachesize` (Number) DNS cache size.
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
+- `dnssec` (Boolean) Enable DNSSEC validation.
 - `domain` (String) Optional local domain.
 - `domain_needed` (Boolean) Only forward fully qualified domain names.
 - `local` (String) Optional local service path.
