@@ -495,7 +495,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"system.system":             "hostname timezone zonename log_size log_proto log_ip log_remote log_port conloglevel cronloglevel",
 		"system.ntp":                "enabled server use_dhcp interface",
 		"system.led":                "name sysfs trigger dev mode default delayon delayoff",
-		"dropbear.dropbear":         "enable Port PasswordAuth RootPasswordAuth Interface IdleTimeout",
+		"dropbear.dropbear":         "enable Port PasswordAuth RootPasswordAuth Interface IdleTimeout GatewayPorts",
 		"upnpd.upnpd":               "enabled internal_iface external_iface secure_mode download upload log_output",
 		"sqm.queue":                 "interface enabled qdisc upload download script linklayer overhead qdisc_advanced",
 		"sqm.service":               "enabled autorate upload download qdisc",

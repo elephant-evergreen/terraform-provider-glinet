@@ -33,6 +33,7 @@ func NewSystemSSHResource() resource.Resource {
 				"RootPasswordAuth": boolString(boolOf(values, "root_password_auth", true)),
 				"Interface":        stringOf(values, "interface"),
 				"IdleTimeout":      fmt.Sprintf("%d", int64Of(values, "idle_timeout")),
+				"GatewayPorts":     boolString(boolOf(values, "gateway_ports", false)),
 			}
 			return router.Section{Package: "dropbear", Type: "dropbear", Name: "@dropbear[0]", Options: options}, nil
 		},
@@ -47,6 +48,7 @@ func NewSystemSSHResource() resource.Resource {
 				"root_password_auth": boolValue(section.Options["RootPasswordAuth"] != "0"),
 				"interface":          stringValue(section.Options["Interface"]),
 				"idle_timeout":       int64Value(parseOptionInt64(section.Options["IdleTimeout"])),
+				"gateway_ports":      boolValue(section.Options["GatewayPorts"] == "1"),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
