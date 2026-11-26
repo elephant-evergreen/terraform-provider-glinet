@@ -502,7 +502,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"firewall.defaults":         "input output forward syn_flood synflood_protect synflood_rate synflood_burst drop_invalid tcp_syncookies flow_offloading flow_offloading_hw",
 		"firewall.zone":             "name network input output forward enabled masq mtu_fix log log_limit conntrack device subnet extra_src extra_dest",
 		"firewall.forwarding":       "src dest enabled",
-		"firewall.redirect":         "name src src_dport dest dest_ip dest_port proto target enabled reflection reflection_src helper",
+		"firewall.redirect":         "name src src_ip src_mac src_dport dest dest_ip dest_port proto target enabled reflection reflection_src helper",
 		"firewall.rule":             "name src dest src_ip dest_ip proto src_port dest_port family target enabled src_mac icmp_type limit limit_burst weekdays start_date stop_date utc_time mark set_mark set_xmark helper log log_limit",
 		"gl-dns-v2.dns":             "provider proto servers_list mode manual_enable manual_type manual_local_dns override_vpn force_dns",
 		"gl-cloud.cloud":            "enable",

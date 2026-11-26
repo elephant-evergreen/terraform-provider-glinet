@@ -38,6 +38,7 @@ func NewFirewallRedirectResource() resource.Resource {
 			}
 			options := map[string]string{
 				"name": name, "src": stringOf(values, "src"), "src_dport": stringOf(values, "src_dport"),
+				"src_ip": stringOf(values, "src_ip"), "src_mac": stringOf(values, "src_mac"),
 				"dest": stringOf(values, "dest"), "dest_ip": stringOf(values, "dest_ip"), "dest_port": stringOf(values, "dest_port"),
 				"proto": stringOf(values, "proto"), "target": stringOf(values, "target"), "enabled": boolString(boolOf(values, "enabled", true)),
 			}
