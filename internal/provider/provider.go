@@ -145,6 +145,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewWireGuardPeerResource,
 		NewSystemSettingsResource,
 		NewSystemNTPResource,
+		NewSystemLEDResource,
 	}
 }
 
