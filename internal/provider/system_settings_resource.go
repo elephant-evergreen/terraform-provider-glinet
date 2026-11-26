@@ -29,7 +29,7 @@ func NewSystemSettingsResource() resource.Resource {
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			options := map[string]string{
 				"hostname": stringOf(values, "hostname"), "timezone": stringOf(values, "timezone"), "zonename": stringOf(values, "zonename"),
-				"log_proto": stringOf(values, "log_proto"),
+				"log_proto": stringOf(values, "log_proto"), "log_ip": stringOf(values, "log_ip"),
 			}
 			for _, name := range []string{"log_size", "conloglevel", "cronloglevel"} {
 				if value := int64Of(values, name); value > 0 {
