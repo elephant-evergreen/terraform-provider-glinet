@@ -22,7 +22,9 @@ Manage one OpenWrt SQM queue section. The UCI section name is the stable identit
 
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `download` (Number) Download limit in kbit/s; zero leaves it unset.
+- `egress_ecn` (String) Egress ECN mode.
 - `enabled` (Boolean) Enable this queue.
+- `ingress_ecn` (String) Ingress ECN mode.
 - `linklayer` (String) Link layer adaptation.
 - `overhead` (Number) Per-packet overhead bytes.
 - `qdisc` (String) Queueing discipline.

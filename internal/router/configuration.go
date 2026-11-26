@@ -497,7 +497,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"system.led":                "name sysfs trigger dev mode default delayon delayoff",
 		"dropbear.dropbear":         "enable Port PasswordAuth RootPasswordAuth Interface IdleTimeout GatewayPorts",
 		"upnpd.upnpd":               "enabled internal_iface external_iface secure_mode download upload log_output",
-		"sqm.queue":                 "interface enabled qdisc upload download script linklayer overhead qdisc_advanced",
+		"sqm.queue":                 "interface enabled qdisc upload download script linklayer overhead qdisc_advanced ingress_ecn egress_ecn",
 		"sqm.service":               "enabled autorate upload download qdisc",
 		"adguardhome.config":        "enabled override_vpn",
 		"tailscale.settings":        "port log_stdout log_stderr state_file",
