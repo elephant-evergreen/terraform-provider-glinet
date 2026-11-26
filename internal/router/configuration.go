@@ -492,7 +492,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"network.wireguard":         "public_key allowed_ips endpoint_host endpoint_port persistent_keepalive route_allowed_ips description",
 		"network.route":             "interface target netmask gateway metric table source onlink mtu type",
 		"network.route6":            "interface target gateway metric table source onlink mtu type",
-		"system.system":             "hostname timezone zonename log_size log_proto log_ip log_remote log_port conloglevel cronloglevel",
+		"system.system":             "hostname timezone zonename log_size log_proto log_ip log_remote log_port log_file conloglevel cronloglevel",
 		"system.ntp":                "enabled server use_dhcp interface",
 		"system.led":                "name sysfs trigger dev mode default delayon delayoff",
 		"dropbear.dropbear":         "enable Port PasswordAuth RootPasswordAuth Interface IdleTimeout GatewayPorts",
