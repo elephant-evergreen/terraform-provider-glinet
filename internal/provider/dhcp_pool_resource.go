@@ -53,6 +53,8 @@ func NewDHCPPoolResource() resource.Resource {
 			options["instance"] = stringOf(values, "instance")
 			options["dynamicdhcp"] = boolString(boolOf(values, "dynamicdhcp", true))
 			options["tag"] = stringOf(values, "tag")
+			options["master"] = boolString(boolOf(values, "master", false))
+			options["ndp"] = boolString(boolOf(values, "ndp", false))
 			return router.Section{Package: "dhcp", Type: "dhcp", Name: section, Options: options}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
