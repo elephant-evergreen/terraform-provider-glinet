@@ -31,6 +31,7 @@ func NewMiniDLNAResource() resource.Resource {
 				"inotify": boolString(boolOf(values, "inotify", true)), "enable_tivo": boolString(boolOf(values, "enable_tivo", false)),
 				"wide_links": boolString(boolOf(values, "wide_links", false)), "strict_dlna": boolString(boolOf(values, "strict_dlna", false)),
 				"notify_interval": fmt.Sprintf("%d", int64Of(values, "notify_interval")), "root_container": stringOf(values, "root_container"), "serial": stringOf(values, "serial"),
+				"model_number": stringOf(values, "model_number"), "album_art_names": stringOf(values, "album_art_names"),
 			}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
