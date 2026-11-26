@@ -23,6 +23,7 @@ func NewSystemSSHResource() resource.Resource {
 			"password_auth":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Allow password authentication."},
 			"root_password_auth": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Allow root password authentication."},
 			"interface":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Restrict SSH to an interface; empty leaves it unrestricted."},
+			"idle_timeout":       schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Idle timeout in seconds; zero leaves it unset."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			options := map[string]string{
@@ -31,6 +32,7 @@ func NewSystemSSHResource() resource.Resource {
 				"PasswordAuth":     boolString(boolOf(values, "password_auth", true)),
 				"RootPasswordAuth": boolString(boolOf(values, "root_password_auth", true)),
 				"Interface":        stringOf(values, "interface"),
+				"IdleTimeout":      fmt.Sprintf("%d", int64Of(values, "idle_timeout")),
 			}
 			return router.Section{Package: "dropbear", Type: "dropbear", Name: "@dropbear[0]", Options: options}, nil
 		},
@@ -44,6 +46,7 @@ func NewSystemSSHResource() resource.Resource {
 				"password_auth":      boolValue(section.Options["PasswordAuth"] != "0"),
 				"root_password_auth": boolValue(section.Options["RootPasswordAuth"] != "0"),
 				"interface":          stringValue(section.Options["Interface"]),
+				"idle_timeout":       int64Value(parseOptionInt64(section.Options["IdleTimeout"])),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
