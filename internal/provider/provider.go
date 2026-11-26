@@ -198,5 +198,5 @@ func (p *glinetProvider) Actions(context.Context) []func() action.Action {
 }
 
 func (p *glinetProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{NewSystemDataSource}
+	return []func() datasource.DataSource{NewSystemDataSource, NewClientsDataSource}
 }
