@@ -501,6 +501,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"sqm.service":               "enabled autorate upload download qdisc",
 		"adguardhome.config":        "enabled override_vpn",
 		"tailscale.settings":        "port log_stdout log_stderr state_file",
+		"zerotier.zerotier":         "enabled nat wan_nat",
 		"network.rule":              "lookup priority src dest in out family invert mark suppress_prefixlength",
 		"network.interface":         "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate sourcefilter ipv6 ip6assign ip6hint ip6ifaceid ip6class ip6prefix macaddr hostname username",
 		"wireless.wifi-device":      "channel htmode txpower country disabled noscan legacy_rates beacon_int",
