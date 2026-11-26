@@ -54,7 +54,9 @@ resource "glinet_dhcp_reservation" "printer" {
 - `duid` (String) DHCPv6 DUID.
 - `hostname` (String) DHCP hostname.
 - `ignore` (Boolean) Ignore this host.
+- `instance` (String) Optional dnsmasq instance name.
 - `leasetime` (String) Per-host lease time.
+- `tag` (String) Optional dnsmasq tag.
 
 ### Read-Only
 
