@@ -76,7 +76,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | Firewall defaults and includes | `glinet_firewall_defaults` | Partial: defaults managed; stock includes remain protected |
 | NAT/UPnP | `glinet_upnp` | Partial: UPnP managed; NAT defaults remain |
 | ACL | None | Planned |
-| Admin access restrictions | None | Planned |
+| Admin access restrictions | `glinet_admin_access` | Partial: listeners and limits; credentials remain external |
 | Security scan | None | Action |
 | Content filter | None | Planned |
 | Parental control | None | Planned |
