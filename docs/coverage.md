@@ -45,8 +45,8 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | Hardware/network acceleration | None | Planned |
 | NAT settings | None | Planned |
 | Static routes | `glinet_network_route` | Managed |
-| Policy routing | `glinet_network_rule` | Managed for basic rules |
-| Multi-WAN, failover, load balancing | None | Planned |
+| Policy routing | `glinet_network_rule`, `glinet_route_policy` | Managed for the global policy; GL per-rule sections remain |
+| Multi-WAN, failover, load balancing | `glinet_kmwan`, `glinet_kmwan_member` | Managed |
 | Repeater/WISP | None | Planned |
 | USB tethering | None | Planned |
 | Cellular | None | Out of scope for GL-MT6000: no integrated cellular modem |
