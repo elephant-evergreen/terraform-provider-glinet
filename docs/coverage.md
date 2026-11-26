@@ -122,7 +122,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | --- | --- | --- |
 | AdGuard Home | `glinet_adguard` | Partial: integration switch; YAML config is not managed |
 | Dynamic DNS | None | Planned |
-| Network storage/Samba/DLNA | None | Planned |
+| Network storage/Samba/DLNA | `glinet_minidlna` | Partial: DLNA; Samba remains |
 | Plug-ins/package installation | None | Action |
 | Scheduled tasks | None | Planned |
 
