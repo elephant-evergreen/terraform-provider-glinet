@@ -159,6 +159,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewWireGuardGlobalResource,
 		NewQoSResource,
 		NewMiniDLNAResource,
+		NewAdminAccessResource,
 	}
 }
 
