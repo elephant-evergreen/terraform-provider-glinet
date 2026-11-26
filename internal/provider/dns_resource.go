@@ -91,6 +91,7 @@ func NewDNSMasqResource() resource.Resource {
 			"domain":        schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional local domain."},
 			"local":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional local service path."},
 			"domain_needed": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Only forward fully qualified domain names."},
+			"dnssec":        schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable DNSSEC validation."},
 			"bogus_priv":    schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Reject private reverse DNS upstream requests."},
 			"strictorder":   schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Respect the order of upstream servers."},
 			"cachesize":     schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(150), MarkdownDescription: "DNS cache size."},
@@ -103,6 +104,7 @@ func NewDNSMasqResource() resource.Resource {
 			}
 			options := map[string]string{"noresolv": boolString(boolOf(values, "no_resolv", true)),
 				"domain_needed": boolString(boolOf(values, "domain_needed", false)),
+				"dnssec":        boolString(boolOf(values, "dnssec", false)),
 				"bogus_priv":    boolString(boolOf(values, "bogus_priv", true)),
 				"strictorder":   boolString(boolOf(values, "strictorder", false)),
 				"cachesize":     fmt.Sprintf("%d", int64Of(values, "cachesize"))}
@@ -122,6 +124,7 @@ func NewDNSMasqResource() resource.Resource {
 				"domain":        stringValue(section.Options["domain"]),
 				"local":         stringValue(section.Options["local"]),
 				"domain_needed": boolValue(section.Options["domain_needed"] == "1"),
+				"dnssec":        boolValue(section.Options["dnssec"] == "1"),
 				"bogus_priv":    boolValue(section.Options["bogus_priv"] != "0"),
 				"strictorder":   boolValue(section.Options["strictorder"] == "1"),
 				"cachesize":     int64Value(parseOptionInt64(section.Options["cachesize"])),
