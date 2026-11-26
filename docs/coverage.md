@@ -91,7 +91,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | OpenVPN server | None | Planned |
 | VPN dashboard, policy, kill switch | None | Planned |
 | ExpressVPN and provider profiles | None | Planned |
-| Tailscale | None | Planned |
+| Tailscale | `glinet_tailscale` | Managed for settings |
 | ZeroTier | None | Planned |
 | Tor | None | Planned |
 
