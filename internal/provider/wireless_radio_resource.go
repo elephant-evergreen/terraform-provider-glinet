@@ -41,13 +41,15 @@ func typedWirelessRadioSpec() typedSpec {
 		NoDelete:                  true,
 		DeleteBehaviorDescription: "Destroy behavior. This resource preserves the adopted `wifi-device` section; `forget` is required and `delete` is rejected.",
 		Attributes: map[string]schema.Attribute{
-			"device":   schema.StringAttribute{Required: true, MarkdownDescription: "UCI `wifi-device` section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
-			"band":     schema.StringAttribute{Computed: true, MarkdownDescription: "Radio band reported by the router, such as `2g` or `5g`."},
-			"channel":  schema.StringAttribute{Required: true, MarkdownDescription: "Channel number or `auto`. The router's regulatory domain remains authoritative."},
-			"htmode":   schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Channel width and generation, such as `HE40` or `HE80`. Accepted values are `HT20`, `HT40`, `VHT20`, `VHT40`, `VHT80`, `VHT160`, `HE20`, `HE40`, `HE80`, and `HE160`."},
-			"txpower":  schema.Int64Attribute{Optional: true, Computed: true, MarkdownDescription: "Transmit power percentage, 0–100."},
-			"country":  schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Two-letter regulatory country code, such as `JP`. When omitted, the current value is preserved."},
-			"disabled": schema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Disable the radio."},
+			"device":       schema.StringAttribute{Required: true, MarkdownDescription: "UCI `wifi-device` section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"band":         schema.StringAttribute{Computed: true, MarkdownDescription: "Radio band reported by the router, such as `2g` or `5g`."},
+			"channel":      schema.StringAttribute{Required: true, MarkdownDescription: "Channel number or `auto`. The router's regulatory domain remains authoritative."},
+			"htmode":       schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Channel width and generation, such as `HE40` or `HE80`. Accepted values are `HT20`, `HT40`, `VHT20`, `VHT40`, `VHT80`, `VHT160`, `HE20`, `HE40`, `HE80`, and `HE160`."},
+			"txpower":      schema.Int64Attribute{Optional: true, Computed: true, MarkdownDescription: "Transmit power percentage, 0–100."},
+			"country":      schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: "Two-letter regulatory country code, such as `JP`. When omitted, the current value is preserved."},
+			"disabled":     schema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Disable the radio."},
+			"noscan":       schema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Do not scan for overlapping channels."},
+			"legacy_rates": schema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Enable legacy data rates."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			device := stringOf(values, "device")
@@ -66,18 +68,25 @@ func typedWirelessRadioSpec() typedSpec {
 			if value, ok := knownBool(values, "disabled"); ok {
 				options["disabled"] = boolString(value)
 			}
+			for _, name := range []string{"noscan", "legacy_rates"} {
+				if value, ok := knownBool(values, name); ok {
+					options[name] = boolString(value)
+				}
+			}
 			return router.Section{Package: "wireless", Type: "wifi-device", Name: device, Options: options}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
 			txpower, _ := strconv.ParseInt(defaultString(section.Options["txpower"], "100"), 10, 64)
 			return map[string]attr.Value{
-				"device":   stringValue(section.Name),
-				"band":     stringValue(section.Options["band"]),
-				"channel":  stringValue(defaultString(section.Options["channel"], "auto")),
-				"htmode":   stringValue(section.Options["htmode"]),
-				"txpower":  int64Value(txpower),
-				"country":  stringValue(section.Options["country"]),
-				"disabled": boolValue(section.Options["disabled"] == "1"),
+				"device":       stringValue(section.Name),
+				"band":         stringValue(section.Options["band"]),
+				"channel":      stringValue(defaultString(section.Options["channel"], "auto")),
+				"htmode":       stringValue(section.Options["htmode"]),
+				"txpower":      int64Value(txpower),
+				"country":      stringValue(section.Options["country"]),
+				"disabled":     boolValue(section.Options["disabled"] == "1"),
+				"noscan":       boolValue(section.Options["noscan"] == "1"),
+				"legacy_rates": boolValue(section.Options["legacy_rates"] == "1"),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
