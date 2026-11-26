@@ -50,6 +50,7 @@ func typedWirelessRadioSpec() typedSpec {
 			"disabled":     schema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Disable the radio."},
 			"noscan":       schema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Do not scan for overlapping channels."},
 			"legacy_rates": schema.BoolAttribute{Optional: true, Computed: true, MarkdownDescription: "Enable legacy data rates."},
+			"beacon_int":   schema.Int64Attribute{Optional: true, Computed: true, MarkdownDescription: "Beacon interval in milliseconds."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			device := stringOf(values, "device")
@@ -87,6 +88,7 @@ func typedWirelessRadioSpec() typedSpec {
 				"disabled":     boolValue(section.Options["disabled"] == "1"),
 				"noscan":       boolValue(section.Options["noscan"] == "1"),
 				"legacy_rates": boolValue(section.Options["legacy_rates"] == "1"),
+				"beacon_int":   int64Value(parseOptionInt64(section.Options["beacon_int"])),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
