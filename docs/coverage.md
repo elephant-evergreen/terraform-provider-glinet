@@ -38,17 +38,17 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | DNS | `glinet_dns`, `glinet_dnsmasq` | Partial: stock DNS mode/dnsmasq; AdGuard Home is separate |
 | Ethernet port and VLAN | `glinet_ethernet_port`, `glinet_network_interface` | Managed |
 | IPv6 | `glinet_network_interface`, `glinet_network_route6` | Partial: interface hints and routes; no full address/RA coverage |
-| MAC address clone | None | Planned |
+| MAC address clone | `glinet_network_interface` (`macaddr`) | Managed |
 | IGMP snooping | `glinet_network_bridge` | Managed |
-| Network mode | None | Planned |
-| Drop-in gateway | None | Planned |
+| Network mode | `glinet_network_mode` | Managed |
+| Drop-in gateway | `glinet_dropin_gateway` | Partial: global switch; helper DHCP section remains |
 | Hardware/network acceleration | `glinet_hardware_acceleration`, `glinet_firewall_defaults` | Managed |
 | NAT settings | `glinet_nat`, `glinet_firewall_defaults` | Managed |
 | Static routes | `glinet_network_route` | Managed |
 | Policy routing | `glinet_network_rule`, `glinet_route_policy` | Managed for the global policy; GL per-rule sections remain |
 | Multi-WAN, failover, load balancing | `glinet_kmwan`, `glinet_kmwan_member` | Managed |
 | Repeater/WISP | `glinet_repeater` | Partial: uplink policy; joining a network remains a stock flow |
-| USB tethering | None | Planned |
+| USB tethering | None | Out of scope: runtime state that depends on an attached modem |
 | Cellular | None | Out of scope for GL-MT6000: no integrated cellular modem |
 
 ## Wireless
@@ -62,7 +62,7 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | MAC filter/access control | `glinet_client_filter` | Partial: filter mode; address list remains in the stock UI |
 | Mesh | `glinet_mesh` | Partial: base settings; pairing remains a stock flow |
 | Client list and block client | `glinet_client_filter` | Partial: MAC filter mode; live client list remains read-only |
-| EAP/enterprise Wi-Fi | None | Planned |
+| EAP/enterprise Wi-Fi | None | Out of scope: this stock build exposes no enterprise Wi-Fi settings |
 | Wi-Fi 6/radio advanced options | None | Planned |
 
 The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa2`, `wpa-mixed`, `owe`) so existing configurations continue to plan. The next compatible release adds `ieee80211w` and `wps_pushbutton` without changing existing defaults. The next minor release will restrict `encryption` to the five stock modes (`none`, `psk2`, `psk-mixed`, `sae`, `sae-mixed`) and default `wps_pushbutton` to disabled. The release before that restriction will warn in the plan and document the migration. Radio settings are covered by schema, fixture, and protocol tests; a representative channel or width change still needs the hardware acceptance run before the provider claims 100%.
@@ -100,9 +100,9 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | Admin Panel setting | Current provider | Status |
 | --- | --- | --- |
 | GoodCloud switch | `glinet_goodcloud` | Managed; unreleased and hardware-unverified |
-| GL.iNet account binding | None | Planned |
-| GoodPAS | None | Planned |
-| AstroWarp | None | Planned |
+| GL.iNet account binding | None | Out of scope: account-bound activation |
+| GoodPAS | None | Out of scope: account-bound activation |
+| AstroWarp | None | Out of scope: account-bound activation |
 
 ## Flow control
 
@@ -132,7 +132,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | --- | --- | --- |
 | Model, firmware, mode | `glinet_system` data source | Read-only |
 | Time zone/NTP | `glinet_system_settings`, `glinet_system_ntp` | Managed |
-| Admin password and users | None | Planned |
+| Admin password and users | None | Out of scope: credentials stay outside Terraform |
 | SSH access | `glinet_system_ssh` | Managed |
 | LED control | `glinet_system_led`, `glinet_led` | Managed |
 | Logs and diagnostics | None | Read-only |
