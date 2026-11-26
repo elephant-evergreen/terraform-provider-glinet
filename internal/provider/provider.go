@@ -189,6 +189,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewLEDResource,
 		NewNetworkModeResource,
 		NewDropInGatewayResource,
+		NewDropInDHCPResource,
 	}
 }
 
