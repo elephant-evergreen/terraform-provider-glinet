@@ -57,14 +57,15 @@ func typedWirelessInterfaceSpec() typedSpec {
 				Optional: true, Computed: true,
 				MarkdownDescription: "WPS push-button. When omitted, an existing section keeps its current value and a new section starts disabled. WPS is refused with WPA3 modes.",
 			},
-			"ifname":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional radio interface name."},
-			"macaddr":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional MAC address override."},
-			"wds":         schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable WDS."},
-			"hidden":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Hide the SSID."},
-			"isolate":     schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Client isolation."},
-			"disabled":    schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Disable the AP."},
-			"key_wo":      schema.StringAttribute{Optional: true, Sensitive: true, WriteOnly: true, MarkdownDescription: "Write-only WPA passphrase (8–63 printable ASCII). It is not stored in plan or state."},
-			"key_version": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1), MarkdownDescription: "Client-managed key generation. Increase it when rotating `key_wo`."},
+			"ifname":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional radio interface name."},
+			"macaddr":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional MAC address override."},
+			"wds":             schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable WDS."},
+			"wpa_group_rekey": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "WPA group rekey interval in seconds; zero leaves it unset."},
+			"hidden":          schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Hide the SSID."},
+			"isolate":         schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Client isolation."},
+			"disabled":        schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Disable the AP."},
+			"key_wo":          schema.StringAttribute{Optional: true, Sensitive: true, WriteOnly: true, MarkdownDescription: "Write-only WPA passphrase (8–63 printable ASCII). It is not stored in plan or state."},
+			"key_version":     schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1), MarkdownDescription: "Client-managed key generation. Increase it when rotating `key_wo`."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			section := stringOf(values, "section")
@@ -82,6 +83,9 @@ func typedWirelessInterfaceSpec() typedSpec {
 			}
 			options["ieee80211w"] = strconv.FormatInt(pmf, 10)
 			options["wds"] = boolString(boolOf(values, "wds", false))
+			if rekey := int64Of(values, "wpa_group_rekey"); rekey > 0 {
+				options["wpa_group_rekey"] = strconv.FormatInt(rekey, 10)
+			}
 			if value, ok := knownBool(values, "wps_pushbutton"); ok {
 				options["wps_pushbutton"] = boolString(value)
 			}
@@ -102,22 +106,23 @@ func typedWirelessInterfaceSpec() typedSpec {
 				}
 			}
 			return map[string]attr.Value{
-				"section":        stringValue(section.Name),
-				"ssid":           stringValue(section.Options["ssid"]),
-				"device":         stringValue(section.Options["device"]),
-				"network":        stringValue(section.Options["network"]),
-				"mode":           stringValue(defaultString(section.Options["mode"], "ap")),
-				"encryption":     stringValue(encryption),
-				"ieee80211w":     int64Value(pmf),
-				"wps_pushbutton": boolValue(section.Options["wps_pushbutton"] == "1"),
-				"ifname":         stringValue(section.Options["ifname"]),
-				"macaddr":        stringValue(section.Options["macaddr"]),
-				"wds":            boolValue(section.Options["wds"] == "1"),
-				"hidden":         boolValue(section.Options["hidden"] == "1"),
-				"isolate":        boolValue(section.Options["isolate"] != "0"),
-				"disabled":       boolValue(section.Options["disabled"] == "1"),
-				"key_wo":         types.StringNull(),
-				"key_version":    int64Value(1),
+				"section":         stringValue(section.Name),
+				"ssid":            stringValue(section.Options["ssid"]),
+				"device":          stringValue(section.Options["device"]),
+				"network":         stringValue(section.Options["network"]),
+				"mode":            stringValue(defaultString(section.Options["mode"], "ap")),
+				"encryption":      stringValue(encryption),
+				"ieee80211w":      int64Value(pmf),
+				"wps_pushbutton":  boolValue(section.Options["wps_pushbutton"] == "1"),
+				"ifname":          stringValue(section.Options["ifname"]),
+				"macaddr":         stringValue(section.Options["macaddr"]),
+				"wds":             boolValue(section.Options["wds"] == "1"),
+				"wpa_group_rekey": int64Value(parseOptionInt64(section.Options["wpa_group_rekey"])),
+				"hidden":          boolValue(section.Options["hidden"] == "1"),
+				"isolate":         boolValue(section.Options["isolate"] != "0"),
+				"disabled":        boolValue(section.Options["disabled"] == "1"),
+				"key_wo":          types.StringNull(),
+				"key_version":     int64Value(1),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
