@@ -34,6 +34,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 | `glinet_system_led` | `system` LED section | LED section name | forget |
 | `glinet_system_ssh` | `dropbear` SSH singleton | `system_ssh` | forget |
 | `glinet_upnp` | `upnpd` UPnP singleton | `upnp` | forget |
+| `glinet_sqm` | `sqm` queue | queue section name | forget |
 | `glinet_goodcloud` | `gl-cloud` GoodCloud singleton | `goodcloud` | forget |
 | `glinet_firewall_defaults` | firewall defaults singleton | `firewall_defaults` | forget |
 | `glinet_firewall_zone` | firewall zone | zone name (`lan`) | forget |
