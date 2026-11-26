@@ -18,13 +18,14 @@ func NewSystemNTPResource() resource.Resource {
 		Description: "Manage the stock OpenWrt NTP client. Destroy releases ownership and preserves the firmware section.",
 		NoDelete:    true,
 		Attributes: map[string]schema.Attribute{
-			"enabled":  schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable NTP synchronization."},
-			"servers":  schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "NTP servers."},
-			"use_dhcp": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Use NTP servers provided by DHCP."},
+			"enabled":   schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable NTP synchronization."},
+			"servers":   schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "NTP servers."},
+			"use_dhcp":  schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Use NTP servers provided by DHCP."},
+			"interface": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional NTP interface."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			return router.Section{Package: "system", Type: "ntp", Name: "@ntp[0]", Options: map[string]string{
-				"enabled": boolString(boolOf(values, "enabled", true)), "use_dhcp": boolString(boolOf(values, "use_dhcp", false)),
+				"enabled": boolString(boolOf(values, "enabled", true)), "use_dhcp": boolString(boolOf(values, "use_dhcp", false)), "interface": stringOf(values, "interface"),
 			}, Lists: map[string][]string{"server": stringsOf(values, "servers")}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
@@ -33,7 +34,7 @@ func NewSystemNTPResource() resource.Resource {
 		Load: func(section router.Section) map[string]attr.Value {
 			return map[string]attr.Value{
 				"enabled": boolValue(section.Options["enabled"] != "0"), "servers": stringSet(section.Lists["server"]),
-				"use_dhcp": boolValue(section.Options["use_dhcp"] == "1"),
+				"use_dhcp": boolValue(section.Options["use_dhcp"] == "1"), "interface": stringValue(section.Options["interface"]),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
