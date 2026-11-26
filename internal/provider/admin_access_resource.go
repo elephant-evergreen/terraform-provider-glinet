@@ -35,6 +35,7 @@ func NewAdminAccessResource() resource.Resource {
 				"max_connections": fmt.Sprintf("%d", int64Of(values, "max_connections")), "no_dirlists": boolString(boolOf(values, "no_dirlists", true)), "home": stringOf(values, "home"),
 				"cert": stringOf(values, "cert"), "key": stringOf(values, "key"),
 				"script_timeout": fmt.Sprintf("%d", int64Of(values, "script_timeout")), "network_timeout": fmt.Sprintf("%d", int64Of(values, "network_timeout")),
+				"cgi_prefix": stringOf(values, "cgi_prefix"), "lua_prefix": stringOf(values, "lua_prefix"), "ubus_prefix": stringOf(values, "ubus_prefix"),
 			}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
@@ -48,6 +49,7 @@ func NewAdminAccessResource() resource.Resource {
 				"max_connections": int64Value(parseOptionInt64(section.Options["max_connections"])), "no_dirlists": boolValue(section.Options["no_dirlists"] == "1"), "home": stringValue(section.Options["home"]),
 				"cert": stringValue(section.Options["cert"]), "key": stringValue(section.Options["key"]),
 				"script_timeout": int64Value(parseOptionInt64(section.Options["script_timeout"])), "network_timeout": int64Value(parseOptionInt64(section.Options["network_timeout"])),
+				"cgi_prefix": stringValue(section.Options["cgi_prefix"]), "lua_prefix": stringValue(section.Options["lua_prefix"]), "ubus_prefix": stringValue(section.Options["ubus_prefix"]),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
