@@ -153,6 +153,7 @@ func (p *glinetProvider) Resources(context.Context) []func() resource.Resource {
 		NewAdGuardResource,
 		NewTailscaleResource,
 		NewZeroTierResource,
+		NewTorResource,
 	}
 }
 
