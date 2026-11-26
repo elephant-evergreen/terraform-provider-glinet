@@ -42,8 +42,8 @@ This matrix is the source of truth for scope. A row is not complete merely becau
 | IGMP snooping | `glinet_network_bridge` | Managed |
 | Network mode | None | Planned |
 | Drop-in gateway | None | Planned |
-| Hardware/network acceleration | None | Planned |
-| NAT settings | None | Planned |
+| Hardware/network acceleration | `glinet_hardware_acceleration`, `glinet_firewall_defaults` | Managed |
+| NAT settings | `glinet_nat`, `glinet_firewall_defaults` | Managed |
 | Static routes | `glinet_network_route` | Managed |
 | Policy routing | `glinet_network_rule`, `glinet_route_policy` | Managed for the global policy; GL per-rule sections remain |
 | Multi-WAN, failover, load balancing | `glinet_kmwan`, `glinet_kmwan_member` | Managed |
@@ -78,7 +78,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | ACL | `glinet_wan_access` | Partial: WAN whitelist switch |
 | Admin access restrictions | `glinet_admin_access` | Partial: listeners and limits; credentials remain external |
 | Security scan | None | Action |
-| Content filter | None | Planned |
+| Content filter | `glinet_content_protection` | Managed |
 | Parental control | `glinet_parental_control` | Partial: global settings; rules remain |
 
 ## VPN
@@ -110,8 +110,8 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | --- | --- | --- |
 | QoS | `glinet_qos`, `glinet_qos_interface` | Managed |
 | SQM | `glinet_sqm`, `glinet_sqm_service` | Managed |
-| DPI engine | None | Planned |
-| Content filter | None | Planned |
+| DPI engine | `glinet_dpi` | Managed |
+| Content filter | `glinet_content_protection` | Managed |
 | Parental control | `glinet_parental_control` | Partial: global settings; rules remain |
 | Network quality | None | Read-only |
 | Data statistics | None | Read-only |
@@ -134,7 +134,7 @@ The 0.2.x line keeps the remaining OpenWrt encryption values (`psk`, `wpa`, `wpa
 | Time zone/NTP | `glinet_system_settings`, `glinet_system_ntp` | Managed |
 | Admin password and users | None | Planned |
 | SSH access | `glinet_system_ssh` | Managed |
-| LED control | `glinet_system_led` | Managed |
+| LED control | `glinet_system_led`, `glinet_led` | Managed |
 | Logs and diagnostics | None | Read-only |
 | Reboot | `glinet_reboot` action | Action implemented |
 | Firmware upgrade | None | Action |
