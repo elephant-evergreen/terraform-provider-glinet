@@ -49,6 +49,7 @@ resource "glinet_wireless_radio" "wifi_2g" {
 
 ### Optional
 
+- `beacon_int` (Number) Beacon interval in milliseconds.
 - `country` (String) Two-letter regulatory country code, such as `JP`. When omitted, the current value is preserved.
 - `delete_behavior` (String) Destroy behavior. This resource preserves the adopted `wifi-device` section; `forget` is required and `delete` is rejected.
 - `disabled` (Boolean) Disable the radio.
