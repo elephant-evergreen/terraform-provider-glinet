@@ -243,3 +243,15 @@ func TestSafetyStateLuaRedactsWirelessSecrets(t *testing.T) {
 		t.Fatal("Safety state does not redact Wi-Fi credentials")
 	}
 }
+
+func TestManagedFirewallSectionsCanBeRemoved(t *testing.T) {
+	state := topologyState()
+	state["firewall"] = append(state["firewall"],
+		uciSection{Name: "tf_glinet_redirect", Type: "redirect", Options: map[string]string{"src": "guest", "dest": "nas", ManagedOption: "1"}},
+		uciSection{Name: "tf_glinet_forwarding", Type: "forwarding", Options: map[string]string{"src": "guest", "dest": "nas", ManagedOption: "1"}},
+		uciSection{Name: "tf_glinet_accept", Type: "rule", Options: map[string]string{"target": "ACCEPT", "src": "guest", "dest": "nas", ManagedOption: "1"}},
+	)
+	if err := checkTopologyOwnership(topologyConfig(), state); err != nil {
+		t.Fatalf("managed firewall removal was rejected: %v", err)
+	}
+}

@@ -525,14 +525,15 @@ func checkTopologyOwnership(config Configuration, state uciState) error {
 		if firewallDisabled(section) || section.Options["family"] == "ipv6" {
 			continue
 		}
+		managed := managedFirewallSection(config, section) || IsManaged(section.Options)
 		switch section.Type {
 		case "redirect":
-			if managedFirewallSection(config, section) {
+			if managed {
 				continue
 			}
 			return errors.New("An unmanaged enabled port redirect exists. Resolve it before applying.")
 		case "forwarding":
-			if managedFirewallSection(config, section) {
+			if managed {
 				continue
 			}
 			source, destination := section.Options["src"], section.Options["dest"]
@@ -540,7 +541,7 @@ func checkTopologyOwnership(config Configuration, state uciState) error {
 				return fmt.Errorf("Unmanaged firewall forwarding %s is enabled. Resolve it before applying.", section.Name)
 			}
 		case "rule":
-			if managedFirewallSection(config, section) || section.Options["target"] != "ACCEPT" {
+			if managed || section.Options["target"] != "ACCEPT" {
 				continue
 			}
 			source, destination := section.Options["src"], section.Options["dest"]

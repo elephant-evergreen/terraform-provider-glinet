@@ -52,7 +52,7 @@ func (c *Client) VerifyFirmware(ctx context.Context) (SystemInfo, error) {
 
 const supportedFirmwareMinor = "4.11"
 
-var testedFirmwares = []string{"4.11.0"}
+var testedFirmwares = []string{"4.11.0", "4.11.2", "4.11.3"}
 
 var supportedFirmware = regexp.MustCompile(`^4\.11\.[0-9]{1,2}$`)
 
