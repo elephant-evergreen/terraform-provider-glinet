@@ -36,6 +36,8 @@ func NewSystemSettingsResource() resource.Resource {
 			for _, name := range []string{"log_size", "conloglevel", "cronloglevel"} {
 				if value := int64Of(values, name); value > 0 {
 					options[name] = strconv.FormatInt(value, 10)
+				} else {
+					options[name] = ""
 				}
 			}
 			return router.Section{Package: "system", Type: "system", Name: "@system[0]", Options: options}, nil
