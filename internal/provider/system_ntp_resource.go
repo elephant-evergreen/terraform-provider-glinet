@@ -25,12 +25,12 @@ func NewSystemNTPResource() resource.Resource {
 			"interface": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional NTP interface."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
-			return router.Section{Package: "system", Type: "ntp", Name: "@ntp[0]", Options: map[string]string{
+			return router.Section{Package: "system", Type: "timeserver", Name: "ntp", Options: map[string]string{
 				"enabled": boolString(boolOf(values, "enabled", true)), "use_dhcp": boolString(boolOf(values, "use_dhcp", false)), "interface": stringOf(values, "interface"),
 			}, Lists: map[string][]string{"server": stringsOf(values, "servers")}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
-			return router.Section{Package: "system", Type: "ntp", Name: "@ntp[0]"}, nil
+			return router.Section{Package: "system", Type: "timeserver", Name: "ntp"}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
 			return map[string]attr.Value{

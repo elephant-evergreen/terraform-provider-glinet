@@ -14,7 +14,7 @@ func TestSystemNTPSpecRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if section.Package != "system" || section.Type != "ntp" || section.Lists["server"][0] != "pool.ntp.org" {
+	if section.Package != "system" || section.Type != "timeserver" || section.Name != "ntp" || section.Lists["server"][0] != "pool.ntp.org" {
 		t.Fatalf("unexpected ntp section: %+v", section)
 	}
 }
