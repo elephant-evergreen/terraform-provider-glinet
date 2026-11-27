@@ -36,6 +36,23 @@ func TestConfigurationValidation(t *testing.T) {
 	}
 }
 
+func TestConfigurationValidationAcceptsMultipleAnonymousRules(t *testing.T) {
+	config := Configuration{
+		{Package: "firewall", Name: "@rule[0]", Type: "rule", Match: map[string]string{"name": "first"}, Options: map[string]string{"name": "first", "target": "ACCEPT", ManagedOption: "1"}},
+		{Package: "firewall", Name: "@rule[0]", Type: "rule", Match: map[string]string{"name": "second"}, Options: map[string]string{"name": "second", "target": "ACCEPT", ManagedOption: "1"}},
+	}
+	if err := ValidateConfiguration(config); err != nil {
+		t.Fatal(err)
+	}
+	duplicate := Configuration{
+		{Package: "firewall", Name: "rule_first", Type: "rule", Options: map[string]string{"target": "ACCEPT", ManagedOption: "1"}},
+		{Package: "firewall", Name: "rule_first", Type: "rule", Options: map[string]string{"target": "ACCEPT", ManagedOption: "1"}},
+	}
+	if err := ValidateConfiguration(duplicate); err == nil {
+		t.Fatal("duplicate named sections must still be rejected")
+	}
+}
+
 func TestWirelessRadioConfigurationValidation(t *testing.T) {
 	radio := Configuration{{Package: "wireless", Name: "mt798611", Type: "wifi-device", Options: map[string]string{"channel": "auto", "htmode": "HE40", "txpower": "100", "country": "JP", "disabled": "0", ManagedOption: "1"}}}
 	if err := ValidateConfiguration(radio); err != nil {
