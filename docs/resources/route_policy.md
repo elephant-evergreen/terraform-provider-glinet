@@ -15,7 +15,7 @@ Manage the stock GL.iNet policy routing global settings. Individual policy rules
 
 ### Optional
 
-- `append_source_if` (String) Interface appended as the source match.
+- `append_source_if` (Set of String) Interfaces appended as the source match.
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `enabled` (Boolean) Enable policy routing.
 - `instance_on` (Boolean) Apply per VPN instance.

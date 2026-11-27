@@ -19,7 +19,7 @@ Manage the stock MiniDLNA media server. Destroy releases ownership and preserves
 - `enabled` (Boolean) Enable MiniDLNA.
 - `friendly_name` (String) DLNA display name.
 - `interface` (String) Listening interface.
-- `media_dir` (String) Media directory.
+- `media_dir` (Set of String) Media directories.
 - `port` (Number) HTTP port.
 
 ### Read-Only

@@ -9,7 +9,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func NewAdminAccessResource() resource.Resource {
@@ -19,8 +20,8 @@ func NewAdminAccessResource() resource.Resource {
 		NoDelete:    true,
 		Attributes: map[string]schema.Attribute{
 			"enabled":         schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable the web admin service."},
-			"listen_http":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "HTTP listen address."},
-			"listen_https":    schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "HTTPS listen address."},
+			"listen_http":     schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "HTTP listen addresses."},
+			"listen_https":    schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "HTTPS listen addresses."},
 			"redirect_https":  schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Redirect HTTP to HTTPS."},
 			"rfc1918_filter":  schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Restrict access from private networks."},
 			"max_requests":    schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(3), MarkdownDescription: "Maximum concurrent requests per client."},
@@ -29,19 +30,19 @@ func NewAdminAccessResource() resource.Resource {
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			return router.Section{Package: "uhttpd", Type: "uhttpd", Name: "main", Options: map[string]string{
-				"enabled": boolString(boolOf(values, "enabled", false)), "listen_http": stringOf(values, "listen_http"),
-				"listen_https": stringOf(values, "listen_https"), "redirect_https": boolString(boolOf(values, "redirect_https", false)),
+				"enabled":        boolString(boolOf(values, "enabled", false)),
+				"redirect_https": boolString(boolOf(values, "redirect_https", false)),
 				"rfc1918_filter": boolString(boolOf(values, "rfc1918_filter", true)), "max_requests": fmt.Sprintf("%d", int64Of(values, "max_requests")),
 				"max_connections": fmt.Sprintf("%d", int64Of(values, "max_connections")), "no_dirlists": boolString(boolOf(values, "no_dirlists", true)),
-			}}, nil
+			}, Lists: map[string][]string{"listen_http": stringsOf(values, "listen_http"), "listen_https": stringsOf(values, "listen_https")}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
 			return router.Section{Package: "uhttpd", Type: "uhttpd", Name: "main"}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
 			return map[string]attr.Value{
-				"enabled": boolValue(section.Options["enabled"] == "1"), "listen_http": stringValue(section.Options["listen_http"]),
-				"listen_https": stringValue(section.Options["listen_https"]), "redirect_https": boolValue(section.Options["redirect_https"] == "1"),
+				"enabled": boolValue(section.Options["enabled"] == "1"), "listen_http": stringSet(section.Lists["listen_http"]),
+				"listen_https": stringSet(section.Lists["listen_https"]), "redirect_https": boolValue(section.Options["redirect_https"] == "1"),
 				"rfc1918_filter": boolValue(section.Options["rfc1918_filter"] != "0"), "max_requests": int64Value(parseOptionInt64(section.Options["max_requests"])),
 				"max_connections": int64Value(parseOptionInt64(section.Options["max_connections"])), "no_dirlists": boolValue(section.Options["no_dirlists"] == "1"),
 			}

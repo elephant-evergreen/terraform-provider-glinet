@@ -17,8 +17,8 @@ Manage the stock uhttpd admin access singleton. Certificate files are referenced
 
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `enabled` (Boolean) Enable the web admin service.
-- `listen_http` (String) HTTP listen address.
-- `listen_https` (String) HTTPS listen address.
+- `listen_http` (Set of String) HTTP listen addresses.
+- `listen_https` (Set of String) HTTPS listen addresses.
 - `max_connections` (Number) Maximum connections.
 - `max_requests` (Number) Maximum concurrent requests per client.
 - `no_dirlists` (Boolean) Disable directory listings.

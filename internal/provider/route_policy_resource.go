@@ -8,7 +8,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func NewRoutePolicyResource() resource.Resource {
@@ -19,16 +21,15 @@ func NewRoutePolicyResource() resource.Resource {
 		Attributes: map[string]schema.Attribute{
 			"enabled":          schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable policy routing."},
 			"mode":             schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("0"), MarkdownDescription: "Policy routing mode."},
-			"append_source_if": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Interface appended as the source match."},
+			"append_source_if": schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Interfaces appended as the source match."},
 			"instance_on":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Apply per VPN instance."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			return router.Section{Package: "route_policy", Type: "policy", Name: "global", Options: map[string]string{
-				"enabled":          boolString(boolOf(values, "enabled", false)),
-				"mode":             stringOf(values, "mode"),
-				"append_source_if": stringOf(values, "append_source_if"),
-				"instance_on":      boolString(boolOf(values, "instance_on", false)),
-			}}, nil
+				"enabled":     boolString(boolOf(values, "enabled", false)),
+				"mode":        stringOf(values, "mode"),
+				"instance_on": boolString(boolOf(values, "instance_on", false)),
+			}, Lists: map[string][]string{"append_source_if": stringsOf(values, "append_source_if")}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
 			return router.Section{Package: "route_policy", Type: "policy", Name: "global"}, nil
@@ -37,7 +38,7 @@ func NewRoutePolicyResource() resource.Resource {
 			return map[string]attr.Value{
 				"enabled":          boolValue(section.Options["enabled"] == "1"),
 				"mode":             stringValue(defaultString(section.Options["mode"], "0")),
-				"append_source_if": stringValue(section.Options["append_source_if"]),
+				"append_source_if": stringSet(section.Lists["append_source_if"]),
 				"instance_on":      boolValue(section.Options["instance_on"] == "1"),
 			}
 		},

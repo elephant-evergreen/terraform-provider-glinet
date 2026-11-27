@@ -282,6 +282,9 @@ func TestManagedSectionsAreWritable(t *testing.T) {
 		{Package: "gl_led", Type: "led", Name: "global", Options: map[string]string{"led_enable": "1", "led_daemon": "1"}},
 		{Package: "mtkhnat", Type: "global", Name: "global", Options: map[string]string{"enable": "1", "hqos": "1", "txq_num": "16", "scheduling": "wrr", "actype": "1"}},
 		{Package: "samba4", Type: "sambashare", Name: "media", Options: map[string]string{"name": "media", "path": "/mnt/media", "read_only": "no", "force_root": "0", "timemachine": "0"}},
+		{Package: "kmwan", Type: "member", Name: "wan", Options: map[string]string{"interface": "wan", "metric": "10"}, Lists: map[string][]string{"tracks": {"ping,1.1.1.1"}}},
+		{Package: "route_policy", Type: "default", Name: "cfg000000", Options: map[string]string{"enabled": "1", "type": "default", "mark": "0x8000"}, Lists: map[string][]string{"from": {"10000"}}},
+		{Package: "route_policy", Type: "rule_process", Name: "gl_process", Options: map[string]string{"enabled": "1", "from_type": "process_gid"}, Lists: map[string][]string{"from": {"10000"}}},
 	}
 	if err := ValidateConfiguration(sections); err != nil {
 		t.Fatal(err)
