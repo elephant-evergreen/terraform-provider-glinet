@@ -28,11 +28,19 @@ func TestNetworkModeSpecRoundTrip(t *testing.T) {
 
 func TestNetworkModeValidation(t *testing.T) {
 	spec := NewNetworkModeResource().(*typedResource).spec
+	for _, mode := range []string{"", "ap", "repeater"} {
+		if err := spec.Validate(map[string]attr.Value{
+			"mode": types.StringValue(mode), "autotimezone": types.BoolValue(true),
+			"track_ip": stringSet(nil), "track_ipv6": stringSet(nil),
+		}); err == nil {
+			t.Fatalf("mode %q was accepted", mode)
+		}
+	}
 	if err := spec.Validate(map[string]attr.Value{
-		"mode": types.StringValue(""), "autotimezone": types.BoolValue(true),
+		"mode": types.StringValue("router"), "autotimezone": types.BoolValue(true),
 		"track_ip": stringSet(nil), "track_ipv6": stringSet(nil),
-	}); err == nil {
-		t.Fatal("empty mode was accepted")
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
