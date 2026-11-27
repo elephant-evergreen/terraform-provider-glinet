@@ -2,10 +2,8 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
 	"github.com/hashicorp/terraform-plugin-framework/action"
@@ -110,16 +108,9 @@ func (p *glinetProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		return
 	}
 	client := router.NewClient(transport, protection)
-	info, err := client.VerifyFirmware(ctx)
-	if err != nil {
+	if _, err := client.VerifyFirmware(ctx); err != nil {
 		resp.Diagnostics.AddError("Cannot verify router", err.Error())
 		return
-	}
-	if !router.FirmwareTested(info.Firmware) {
-		resp.Diagnostics.AddWarning(
-			"Untested router firmware",
-			fmt.Sprintf("Firmware %s is not in the verified set (%s). The provider allows stable 4.11.x builds but has not verified this build. Take an encrypted backup and keep a wired management path before applying.", info.Firmware, strings.Join(router.TestedFirmwares(), ", ")),
-		)
 	}
 	resp.ResourceData = client
 	resp.DataSourceData = client
