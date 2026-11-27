@@ -27,12 +27,16 @@ func NewNetworkBridgeResource() resource.Resource {
 			"igmp_snooping": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable IGMP snooping."},
 			"macaddr":       schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional bridge MAC address override."},
 		},
+		PreserveUnset: []string{"macaddr"},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			name := stringOf(values, "name")
 			if name == "" {
 				return router.Section{}, fmt.Errorf("name is required")
 			}
 			options := map[string]string{"name": name, "type": "bridge", "bridge_empty": boolString(boolOf(values, "empty", false)), "stp": boolString(boolOf(values, "stp", false)), "igmp_snooping": boolString(boolOf(values, "igmp_snooping", false))}
+			if macaddr := stringOf(values, "macaddr"); macaddr != "" {
+				options["macaddr"] = macaddr
+			}
 			section := router.Section{Package: "network", Type: "device", Name: "@device[0]", Match: map[string]string{"name": name}, Options: options}
 			ports := stringsOf(values, "ports")
 			section.Lists = map[string][]string{"ports": ports}

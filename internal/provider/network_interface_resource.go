@@ -51,6 +51,7 @@ func typedNetworkInterfaceSpec() typedSpec {
 			"password_version": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1), MarkdownDescription: "Client-managed password generation. Increase it when rotating `password_wo`."},
 			"enabled":          schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Whether the interface is enabled."},
 		},
+		PreserveUnset: []string{"defaultroute", "hostname", "ip6assign", "ip6hint", "ipv6", "macaddr", "metric", "mtu", "password_version", "peerdns", "username"},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			name := stringOf(values, "name")
 			if name == "" {

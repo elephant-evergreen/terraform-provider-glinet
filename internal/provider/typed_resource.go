@@ -28,6 +28,7 @@ type typedSpec struct {
 	Validate                  func(map[string]attr.Value) error
 	ValidateConfig            func(map[string]attr.Value) error
 	ModifyPlan                func(plan, config, state map[string]attr.Value, creating bool) (map[string]attr.Value, error)
+	PreserveUnset             []string
 	Secrets                   func(map[string]attr.Value) map[string]string
 	WriteOnly                 []string
 	RequireExisting           bool
@@ -132,7 +133,7 @@ func (r *typedResource) ValidateConfig(ctx context.Context, req resource.Validat
 }
 
 func (r *typedResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
-	if r.spec.ModifyPlan == nil || req.Plan.Raw.IsNull() {
+	if req.Plan.Raw.IsNull() || req.Config.Raw.IsNull() {
 		return
 	}
 	var plan types.Object
@@ -162,15 +163,66 @@ func (r *typedResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 			}
 		}
 	}
-	updated, err := r.spec.ModifyPlan(values, config.Attributes(), stateValues, req.State.Raw.IsNull())
-	if err != nil {
-		resp.Diagnostics.AddError("Cannot plan configuration", err.Error())
-		return
+	preserveUnsetAttributes(values, config.Attributes(), stateValues, r.spec.PreserveUnset)
+	r.preserveIdentity(values, stateValues)
+	if r.spec.ModifyPlan != nil {
+		updated, err := r.spec.ModifyPlan(values, config.Attributes(), stateValues, req.State.Raw.IsNull())
+		if err != nil {
+			resp.Diagnostics.AddError("Cannot plan configuration", err.Error())
+			return
+		}
+		values = updated
 	}
-	object, diagnostics := types.ObjectValue(r.attrTypes, updated)
+	object, diagnostics := types.ObjectValue(r.attrTypes, values)
 	resp.Diagnostics.Append(diagnostics...)
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, object)...)
+	}
+}
+
+func (r *typedResource) preserveIdentity(plan, state map[string]attr.Value) {
+	stateID, ok := state["id"].(types.String)
+	if !ok || stateID.IsNull() || stateID.IsUnknown() {
+		return
+	}
+	id, err := r.spec.ID(plan)
+	if err != nil || id != stateID.ValueString() {
+		return
+	}
+	for name, attribute := range r.schema.Attributes {
+		if !attribute.IsRequired() {
+			continue
+		}
+		planValue, ok := plan[name]
+		if !ok {
+			continue
+		}
+		stateValue, ok := state[name]
+		if !ok || stateValue.IsNull() || stateValue.IsUnknown() || planValue.IsNull() || planValue.IsUnknown() || !planValue.Equal(stateValue) {
+			return
+		}
+	}
+	plan["id"] = stateID
+	section, ok := state["uci_section"].(types.String)
+	if !ok || section.IsNull() || section.IsUnknown() {
+		return
+	}
+	plan["uci_section"] = section
+}
+
+func preserveUnsetAttributes(plan, config, state map[string]attr.Value, names []string) {
+	for _, name := range names {
+		if _, ok := plan[name]; !ok {
+			continue
+		}
+		if value, ok := config[name]; ok && !value.IsNull() {
+			continue
+		}
+		value, ok := state[name]
+		if !ok || value.IsNull() || value.IsUnknown() {
+			continue
+		}
+		plan[name] = value
 	}
 }
 

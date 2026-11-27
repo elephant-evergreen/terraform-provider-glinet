@@ -31,6 +31,7 @@ func NewFirewallRedirectResource() resource.Resource {
 			"reflection_src": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Reflection source: `internal`, `external`, or empty."},
 			"helper":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional firewall helper."},
 		},
+		PreserveUnset: []string{"helper", "reflection_src"},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			name := stringOf(values, "name")
 			if name == "" {

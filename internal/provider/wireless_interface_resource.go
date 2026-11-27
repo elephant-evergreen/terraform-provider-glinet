@@ -165,6 +165,7 @@ func typedWirelessInterfaceSpec() typedSpec {
 		},
 		ValidateConfig: validateWirelessSecurity,
 		ModifyPlan:     modifyWirelessPlan,
+		PreserveUnset:  []string{"ieee80211w", "macaddr", "wds", "wpa_group_rekey", "wps_pushbutton"},
 	}
 }
 

@@ -97,6 +97,7 @@ func NewDNSMasqResource() resource.Resource {
 			"cachesize":     schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(150), MarkdownDescription: "DNS cache size."},
 			"rebind_domain": schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Domains allowed to resolve to private addresses."},
 		},
+		PreserveUnset: []string{"bogus_priv", "cachesize", "dnssec", "domain_needed", "rebind_domain", "strictorder"},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			servers := stringsOf(values, "servers")
 			if len(servers) == 0 {
