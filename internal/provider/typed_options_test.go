@@ -38,7 +38,7 @@ func TestSelectorsKeepOptionsOutsideTheSchema(t *testing.T) {
 			values: map[string]attr.Value{
 				"enabled": types.BoolValue(false), "port": types.Int64Value(8200),
 				"interface": types.StringValue("br-lan"), "friendly_name": types.StringValue("DLNA"),
-				"media_dir": types.StringValue("/mnt"),
+				"media_dir": stringSet([]string{"/mnt"}),
 			},
 			unexpected: []string{"inotify", "user", "db_dir", "notify_interval", "root_container"},
 		},
@@ -54,7 +54,7 @@ func TestSelectorsKeepOptionsOutsideTheSchema(t *testing.T) {
 		{
 			resource: NewAdminAccessResource().(*typedResource),
 			values: map[string]attr.Value{
-				"enabled": types.BoolValue(true), "listen_http": types.StringValue(""), "listen_https": types.StringValue(""),
+				"enabled": types.BoolValue(true), "listen_http": stringSet(nil), "listen_https": stringSet(nil),
 				"redirect_https": types.BoolValue(false), "rfc1918_filter": types.BoolValue(true),
 				"max_requests": types.Int64Value(3), "max_connections": types.Int64Value(100), "no_dirlists": types.BoolValue(true),
 			},

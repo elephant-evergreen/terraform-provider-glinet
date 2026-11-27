@@ -22,7 +22,7 @@ Manage one stock GL.iNet policy routing rule. `kind` selects the UCI section typ
 
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
 - `enabled` (Boolean) Enable this rule.
-- `from` (String) Match value for `from_type`.
+- `from` (Set of String) Match values for `from_type`.
 - `from_type` (String) Match source, such as `device` or `process_gid`.
 - `label` (String) Rule label shown by the stock UI.
 - `mark` (String) Firewall mark, such as `0x8000`.

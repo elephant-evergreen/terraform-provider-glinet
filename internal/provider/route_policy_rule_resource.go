@@ -12,8 +12,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func NewRoutePolicyRuleResource() resource.Resource {
@@ -26,7 +28,7 @@ func NewRoutePolicyRuleResource() resource.Resource {
 			"enabled":   schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable this rule."},
 			"via":       schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Tunnel or route the rule selects."},
 			"from_type": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Match source, such as `device` or `process_gid`."},
-			"from":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Match value for `from_type`."},
+			"from":      schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Match values for `from_type`."},
 			"tunnel_id": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Tunnel identifier."},
 			"mark":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Firewall mark, such as `0x8000`."},
 			"label":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Rule label shown by the stock UI."},
@@ -44,7 +46,6 @@ func NewRoutePolicyRuleResource() resource.Resource {
 			options := map[string]string{
 				"enabled":   boolString(boolOf(values, "enabled", true)),
 				"from_type": stringOf(values, "from_type"),
-				"from":      stringOf(values, "from"),
 				"mark":      stringOf(values, "mark"),
 				"name":      stringOf(values, "label"),
 			}
@@ -57,7 +58,7 @@ func NewRoutePolicyRuleResource() resource.Resource {
 			if kind == "default" {
 				options["type"] = "default"
 			}
-			return router.Section{Package: "route_policy", Type: kind, Name: name, Options: options}, nil
+			return router.Section{Package: "route_policy", Type: kind, Name: name, Options: options, Lists: map[string][]string{"from": stringsOf(values, "from")}}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
 			return map[string]attr.Value{
@@ -66,7 +67,7 @@ func NewRoutePolicyRuleResource() resource.Resource {
 				"enabled":   boolValue(section.Options["enabled"] != "0"),
 				"via":       stringValue(section.Options["via"]),
 				"from_type": stringValue(section.Options["from_type"]),
-				"from":      stringValue(section.Options["from"]),
+				"from":      stringSet(section.Lists["from"]),
 				"tunnel_id": int64Value(parseOptionInt64(section.Options["tunnel_id"])),
 				"mark":      stringValue(section.Options["mark"]),
 				"label":     stringValue(section.Options["name"]),

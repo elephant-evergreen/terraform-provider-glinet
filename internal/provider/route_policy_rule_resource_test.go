@@ -12,7 +12,7 @@ func TestRoutePolicyRuleSpecRoundTrip(t *testing.T) {
 	values := map[string]attr.Value{
 		"name": types.StringValue("gl_process"), "kind": types.StringValue("rule_process"),
 		"enabled": types.BoolValue(true), "via": types.StringValue("wgclient1"),
-		"from_type": types.StringValue("process_gid"), "from": types.StringValue("10000"),
+		"from_type": types.StringValue("process_gid"), "from": stringSet([]string{"10000"}),
 		"tunnel_id": types.Int64Value(201), "mark": types.StringValue(""),
 		"label": types.StringValue("process policy"),
 	}
@@ -34,7 +34,7 @@ func TestRoutePolicyRuleDefaultKind(t *testing.T) {
 	section, err := spec.Selector(map[string]attr.Value{
 		"name": types.StringValue("default"), "kind": types.StringValue("default"),
 		"enabled": types.BoolValue(true), "via": types.StringValue("novpn"),
-		"from_type": types.StringValue("device"), "from": types.StringValue(""),
+		"from_type": types.StringValue("device"), "from": stringSet(nil),
 		"tunnel_id": types.Int64Value(100), "mark": types.StringValue("0x8000"),
 		"label": types.StringValue("last sort default policy"),
 	})
@@ -51,7 +51,7 @@ func TestRoutePolicyRuleValidation(t *testing.T) {
 	if _, err := spec.Selector(map[string]attr.Value{
 		"name": types.StringValue("x"), "kind": types.StringValue("other"),
 		"enabled": types.BoolValue(true), "via": types.StringValue(""),
-		"from_type": types.StringValue(""), "from": types.StringValue(""),
+		"from_type": types.StringValue(""), "from": stringSet(nil),
 		"tunnel_id": types.Int64Value(0), "mark": types.StringValue(""),
 		"label": types.StringValue(""),
 	}); err == nil {

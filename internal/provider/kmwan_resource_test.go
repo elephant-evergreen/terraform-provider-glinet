@@ -79,13 +79,13 @@ func TestRoutePolicySpecRoundTrip(t *testing.T) {
 	spec := NewRoutePolicyResource().(*typedResource).spec
 	values := map[string]attr.Value{
 		"enabled": types.BoolValue(true), "mode": types.StringValue("0"),
-		"append_source_if": types.StringValue("iot"), "instance_on": types.BoolValue(false),
+		"append_source_if": stringSet([]string{"iot"}), "instance_on": types.BoolValue(false),
 	}
 	section, err := spec.Selector(values)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if section.Package != "route_policy" || section.Type != "policy" || section.Options["append_source_if"] != "iot" {
+	if section.Package != "route_policy" || section.Type != "policy" || len(section.Lists["append_source_if"]) != 1 || section.Lists["append_source_if"][0] != "iot" {
 		t.Fatalf("unexpected route policy: %+v", section)
 	}
 }

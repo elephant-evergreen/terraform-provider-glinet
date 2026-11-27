@@ -9,7 +9,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func NewMiniDLNAResource() resource.Resource {
@@ -22,13 +24,13 @@ func NewMiniDLNAResource() resource.Resource {
 			"port":          schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(8200), MarkdownDescription: "HTTP port."},
 			"interface":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("br-lan"), MarkdownDescription: "Listening interface."},
 			"friendly_name": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("OpenWrt DLNA Server"), MarkdownDescription: "DLNA display name."},
-			"media_dir":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("/mnt"), MarkdownDescription: "Media directory."},
+			"media_dir":     schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "Media directories."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			return router.Section{Package: "minidlna", Type: "minidlna", Name: "config", Options: map[string]string{
 				"enabled": boolString(boolOf(values, "enabled", false)), "port": fmt.Sprintf("%d", int64Of(values, "port")),
-				"interface": stringOf(values, "interface"), "friendly_name": stringOf(values, "friendly_name"), "media_dir": stringOf(values, "media_dir"),
-			}}, nil
+				"interface": stringOf(values, "interface"), "friendly_name": stringOf(values, "friendly_name"),
+			}, Lists: map[string][]string{"media_dir": stringsOf(values, "media_dir")}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
 			return router.Section{Package: "minidlna", Type: "minidlna", Name: "config"}, nil
@@ -36,7 +38,7 @@ func NewMiniDLNAResource() resource.Resource {
 		Load: func(section router.Section) map[string]attr.Value {
 			return map[string]attr.Value{
 				"enabled": boolValue(section.Options["enabled"] == "1"), "port": int64Value(parseOptionInt64(section.Options["port"])),
-				"interface": stringValue(section.Options["interface"]), "friendly_name": stringValue(section.Options["friendly_name"]), "media_dir": stringValue(section.Options["media_dir"]),
+				"interface": stringValue(section.Options["interface"]), "friendly_name": stringValue(section.Options["friendly_name"]), "media_dir": stringSet(section.Lists["media_dir"]),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
