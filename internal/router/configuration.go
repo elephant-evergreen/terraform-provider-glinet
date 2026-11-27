@@ -558,7 +558,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"gl-black_white_list.list":          "mac",
 		"gl-black_white_list.secure_option": "ap_isolate wan_isolate transfer_enable",
 		"wan-access.main":                   "whitelist",
-		"parental_control_v2.global":        "enable init drop_anonymous auto_update log_level",
+		"parental_control_v2.global":        "enable init drop_anonymous auto_update log_level src_dev",
 		"wireguard_server.servers":          "address_v4 address_v6 port access client_to_client masq",
 		"gl_s2s.global":                     "enable firewall",
 		"network.rule":                      "lookup priority src dest in out family invert mark suppress_prefixlength",
