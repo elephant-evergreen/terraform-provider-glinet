@@ -49,6 +49,7 @@ var (
 	_ resource.Resource                = &firewallRulesResource{}
 	_ resource.ResourceWithConfigure   = &firewallRulesResource{}
 	_ resource.ResourceWithImportState = &firewallRulesResource{}
+	_ resource.ResourceWithModifyPlan  = &firewallRulesResource{}
 )
 
 func (r *firewallRulesResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -166,6 +167,93 @@ func firewallRulesSchema() schema.Schema {
 
 func (r *firewallRulesResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = firewallRulesSchema()
+}
+
+func (r *firewallRulesResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if r.client == nil || req.Plan.Raw.IsNull() {
+		return
+	}
+	var plan firewallRulesModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() || plan.Rules.IsNull() || plan.Rules.IsUnknown() {
+		return
+	}
+	rules, diagnostics := r.fillRuleDefaults(ctx, plan.Rules)
+	resp.Diagnostics.Append(diagnostics...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.Rules = rules
+	resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+}
+
+func (r *firewallRulesResource) fillRuleDefaults(ctx context.Context, list types.List) (types.List, diag.Diagnostics) {
+	var diagnostics diag.Diagnostics
+	actualRules, err := r.client.FirewallRules(ctx)
+	if err != nil {
+		diagnostics.AddError("Cannot read firewall rules", err.Error())
+		return types.ListNull(firewallRuleObjectType()), diagnostics
+	}
+	actualByKey := map[string]firewallRuleInput{}
+	actualByName := map[string][]firewallRuleInput{}
+	for _, actual := range actualRules {
+		input := firewallRuleInputFromSection(actual)
+		actualByKey[firewallRuleInputKey(input)] = input
+		actualByName[input.Name] = append(actualByName[input.Name], input)
+	}
+	elements := list.Elements()
+	objects := make([]attr.Value, 0, len(elements))
+	for _, element := range elements {
+		object, ok := element.(types.Object)
+		if !ok {
+			diagnostics.AddError("Invalid firewall rule", "The planned rule is not an object.")
+			return types.ListNull(firewallRuleObjectType()), diagnostics
+		}
+		values := object.Attributes()
+		fill := firewallRuleInput{Enabled: true}
+		if boolOf(values, "existing", false) {
+			key := firewallRuleInputKey(firewallRuleInput{Name: stringOf(values, "name"), Src: stringOf(values, "src"), Dest: stringOf(values, "dest")})
+			if actual, ok := actualByKey[key]; ok {
+				fill = actual
+			} else if candidates := actualByName[stringOf(values, "name")]; len(candidates) == 1 {
+				fill = candidates[0]
+			}
+		}
+		updated := map[string]attr.Value{}
+		for name, value := range values {
+			updated[name] = value
+		}
+		if updated["src"].IsNull() {
+			updated["src"] = stringValue(fill.Src)
+		}
+		if updated["dest"].IsNull() {
+			updated["dest"] = stringValue(fill.Dest)
+		}
+		if updated["family"].IsNull() {
+			updated["family"] = stringValue(defaultString(fill.Family, "ipv4"))
+		}
+		if updated["target"].IsNull() {
+			updated["target"] = stringValue(defaultString(fill.Target, "REJECT"))
+		}
+		if updated["enabled"].IsNull() {
+			updated["enabled"] = boolValue(fill.Enabled)
+		}
+		for name, source := range map[string][]string{
+			"src_ips": fill.SrcIPs, "dest_ips": fill.DestIPs, "protocols": fill.Protocols,
+			"src_ports": fill.SrcPorts, "dest_ports": fill.DestPorts,
+		} {
+			if updated[name].IsNull() {
+				updated[name] = stringSet(source)
+			}
+		}
+		object, objectDiagnostics := types.ObjectValue(firewallRuleAttributeTypes(), updated)
+		diagnostics.Append(objectDiagnostics...)
+		if diagnostics.HasError() {
+			return types.ListNull(firewallRuleObjectType()), diagnostics
+		}
+		objects = append(objects, object)
+	}
+	return types.ListValue(firewallRuleObjectType(), objects)
 }
 
 func (r *firewallRulesResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
