@@ -36,6 +36,7 @@ func NewFirewallZoneResource() resource.Resource {
 			"extra_src":  schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Extra source match."},
 			"extra_dest": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Extra destination match."},
 		},
+		PreserveUnset: []string{"conntrack", "device", "extra_dest", "extra_src", "log", "log_limit", "subnet"},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			name := stringOf(values, "name")
 			if name == "" {

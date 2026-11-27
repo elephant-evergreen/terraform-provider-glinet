@@ -34,6 +34,7 @@ func NewDHCPPoolResource() resource.Resource {
 			"dynamicdhcp": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable dynamic DHCP leases."},
 			"tag":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional dnsmasq tag."},
 		},
+		PreserveUnset: []string{"dynamicdhcp", "instance", "tag"},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			section := stringOf(values, "section")
 			if section == "" {

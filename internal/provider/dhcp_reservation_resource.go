@@ -35,6 +35,7 @@ func NewDHCPReservationResource() resource.Resource {
 			"set_tag":   schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Optional tag to set for this host."},
 			"broadcast": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Force broadcast replies."},
 		},
+		PreserveUnset: []string{"broadcast", "duid", "ignore", "instance", "leasetime", "set_tag", "tag"},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
 			section := stringOf(values, "section")
 			if section == "" {
@@ -65,6 +66,10 @@ func NewDHCPReservationResource() resource.Resource {
 				"duid":      stringValue(section.Options["duid"]),
 				"leasetime": stringValue(section.Options["leasetime"]),
 				"ignore":    boolValue(section.Options["ignore"] == "1"),
+				"instance":  stringValue(section.Options["instance"]),
+				"tag":       stringValue(section.Options["tag"]),
+				"set_tag":   stringValue(section.Options["set_tag"]),
+				"broadcast": boolValue(section.Options["broadcast"] == "1"),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
