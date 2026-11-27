@@ -43,11 +43,17 @@ func NewSQMResource() resource.Resource {
 				"overhead": fmt.Sprintf("%d", int64Of(values, "overhead")), "qdisc_advanced": boolString(boolOf(values, "qdisc_advanced", false)),
 				"ingress_ecn": stringOf(values, "ingress_ecn"), "egress_ecn": stringOf(values, "egress_ecn"),
 			}
-			if upload := int64Of(values, "upload"); upload > 0 {
+			upload := int64Of(values, "upload")
+			if upload > 0 {
 				options["upload"] = fmt.Sprintf("%d", upload)
+			} else {
+				options["upload"] = ""
 			}
-			if download := int64Of(values, "download"); download > 0 {
+			download := int64Of(values, "download")
+			if download > 0 {
 				options["download"] = fmt.Sprintf("%d", download)
+			} else {
+				options["download"] = ""
 			}
 			return router.Section{Package: "sqm", Type: "queue", Name: name, Options: options}, nil
 		},

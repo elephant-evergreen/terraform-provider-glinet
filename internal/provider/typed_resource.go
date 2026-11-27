@@ -267,7 +267,12 @@ func (r *typedResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Cannot apply section", err.Error())
 		return
 	}
-	object, diagnostics := r.stateObject(values, section)
+	actual, ok, err := r.client.ReadSection(ctx, section)
+	if err != nil || !ok {
+		resp.Diagnostics.AddError("Cannot read the applied section", "The section could not be read back after the change.")
+		return
+	}
+	object, diagnostics := r.stateObject(values, actual)
 	resp.Diagnostics.Append(diagnostics...)
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.State.Set(ctx, object)...)
@@ -334,7 +339,12 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Cannot apply section", err.Error())
 		return
 	}
-	object, diagnostics := r.stateObject(values, section)
+	actual, ok, err := r.client.ReadSection(ctx, section)
+	if err != nil || !ok {
+		resp.Diagnostics.AddError("Cannot read the applied section", "The section could not be read back after the change.")
+		return
+	}
+	object, diagnostics := r.stateObject(values, actual)
 	resp.Diagnostics.Append(diagnostics...)
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.State.Set(ctx, object)...)
