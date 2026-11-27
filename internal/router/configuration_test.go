@@ -253,3 +253,20 @@ func TestMutationRequiresSuccessfulProtection(t *testing.T) {
 		})
 	}
 }
+
+func TestManagedSectionsAreWritable(t *testing.T) {
+	sections := Configuration{
+		{Package: "glconfig", Type: "service", Name: "general", Options: map[string]string{"mode": "router", "autotimezone": "1"}, Lists: map[string][]string{"track_ip": {"1.1.1.1"}, "track_ipv6": {"2001:4860:4860::8888"}}},
+		{Package: "edgerouter", Type: "global", Name: "global", Options: map[string]string{"enabled": "1", "force_dns": "1"}},
+		{Package: "edgerouter", Type: "dhcp", Name: "wandhcp", Options: map[string]string{"leasetime": "43200", "ignore": "1"}},
+		{Package: "fullconenat", Type: "global", Name: "global", Options: map[string]string{"enable": "1"}},
+		{Package: "gl_dpi", Type: "gl_dpi", Name: "dpi_config", Options: map[string]string{"log": "INFO", "expire_time": "0", "lib_auto_upgrade": "0", "ota_auto_upgrade": "0"}},
+		{Package: "gl_dpi_content_protection", Type: "dpi", Name: "content_protection", Options: map[string]string{"enabled": "0"}, Lists: map[string][]string{"category": {"gambling"}}},
+		{Package: "gl_led", Type: "led", Name: "global", Options: map[string]string{"led_enable": "1", "led_daemon": "1"}},
+		{Package: "mtkhnat", Type: "global", Name: "global", Options: map[string]string{"enable": "1", "hqos": "1", "txq_num": "16", "scheduling": "wrr", "actype": "1"}},
+		{Package: "samba4", Type: "sambashare", Name: "media", Options: map[string]string{"name": "media", "path": "/mnt/media", "read_only": "no", "force_root": "0", "timemachine": "0"}},
+	}
+	if err := ValidateConfiguration(sections); err != nil {
+		t.Fatal(err)
+	}
+}
