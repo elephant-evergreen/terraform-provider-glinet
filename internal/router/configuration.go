@@ -542,6 +542,15 @@ var allowedOptions = func() map[string]map[string]bool {
 		"firewall.rule":                     "name src dest src_ip dest_ip proto src_port dest_port family target enabled src_mac icmp_type limit limit_burst weekdays start_date stop_date utc_time mark set_mark set_xmark helper log log_limit",
 		"gl-dns-v2.dns":                     "provider proto servers_list mode manual_enable manual_type manual_local_dns override_vpn force_dns",
 		"gl-cloud.cloud":                    "enable",
+		"glconfig.service":                  "mode autotimezone track_ip track_ipv6",
+		"edgerouter.global":                 "enabled force_dns",
+		"edgerouter.dhcp":                   "leasetime ignore",
+		"fullconenat.global":                "enable",
+		"gl_dpi.gl_dpi":                     "log expire_time lib_auto_upgrade ota_auto_upgrade",
+		"gl_dpi_content_protection.dpi":     "enabled category",
+		"gl_led.led":                        "led_enable led_daemon",
+		"mtkhnat.global":                    "enable hqos txq_num scheduling actype",
+		"samba4.sambashare":                 "name path users read_only writeable browseable guest_ok guest_only inherit_owner create_mask dir_mask write_list read_list vfs_objects force_root timemachine timemachine_maxsize",
 		"eth_ports_config_map.port":         "mode vlan_mode pvid port",
 	}
 	result := map[string]map[string]bool{}
