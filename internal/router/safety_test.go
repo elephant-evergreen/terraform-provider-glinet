@@ -222,7 +222,10 @@ func TestDNSProviderAndStockIncludeChecks(t *testing.T) {
 	if err := checkDNSProviders(context.Background(), client, config); err == nil {
 		t.Fatal("Missing DNS provider server was accepted")
 	}
-	state := uciState{"firewall": {{Name: "stock", Type: "include", Options: map[string]string{"path": "/etc/firewall.user"}}}}
+	state := uciState{"firewall": {
+		{Name: "stock", Type: "include", Options: map[string]string{"path": "/etc/firewall.user"}},
+		{Name: "vpnclient", Type: "include", Options: map[string]string{"path": "/etc/firewall.vpnclient"}},
+	}}
 	includeClient := newFixtureClient(runnerFunc(func(_ context.Context, script string) ([]byte, error) {
 		return []byte("a  /etc/firewall.user\na  /rom/etc/firewall.user\n"), nil
 	}))

@@ -690,6 +690,7 @@ var stockFirewallIncludes = map[string]bool{
 	"/etc/netifyd/iptables-init.sh":         true,
 	"/usr/bin/rtp2.sh":                      true,
 	"/etc/firewall.security":                true,
+	"/etc/firewall.vpnclient":               true,
 	"/etc/firewall.pf":                      true,
 	"/usr/lib/gl-upnp/firewall-reload.sh":   true,
 	"/etc/firewall.tor.fw3":                 true,
