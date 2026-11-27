@@ -4,7 +4,7 @@
 - Preserve MPL-2.0 and third-party copyright notices. Do not add code comments unless explicitly requested.
 - Never commit credentials, router exports, backups, Terraform state, personal network identifiers, or machine-specific paths.
 - Follow the [public information rules](CONTRIBUTING.md#public-information) for documentation, examples, issues, pull requests, commit messages, and release notes.
-- Support existing Wi-Fi AP settings, coordinated UCI configuration for network, wireless, DHCP, firewall, stock DNS, Ethernet port mapping, and the stock GoodCloud operation on Flint 2 stock firmware 4.11.x in router mode. Firmware 4.11.0 is hardware-verified; stable 4.11.x patches are allowed with a warning until they pass the hardware checks. Do not broaden hardware or firmware support without evidence.
+- Support existing Wi-Fi AP settings, coordinated UCI configuration for network, wireless, DHCP, firewall, stock DNS, Ethernet port mapping, and the stock GoodCloud operation on Flint 2 stock firmware 4.11.x in router mode. Firmware 4.11.0, 4.11.2, and 4.11.3 are hardware-verified; other stable 4.11.x patches are allowed with a warning until they pass the hardware checks. Do not broaden hardware or firmware support without evidence.
 - Use Go and the official Terraform Plugin Framework. Use the Go and Terraform versions in mise.toml, and run mise run check for required checks.
 - Keep examples synthetic. Ordinary tests must use local test fixtures and must not change a real router. Hardware acceptance testing requires an explicitly authorized dedicated device.
 - Record unverified hardware behavior in the issue or pull request. Do not equate fixture tests with hardware compatibility.

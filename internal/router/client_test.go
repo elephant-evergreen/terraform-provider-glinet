@@ -48,10 +48,12 @@ func TestFirmwarePolicy(t *testing.T) {
 			t.Fatalf("Firmware %q should be rejected", version)
 		}
 	}
-	if !FirmwareTested("4.11.0") {
-		t.Fatal("4.11.0 is the verified build")
+	for _, version := range []string{"4.11.0", "4.11.2", "4.11.3"} {
+		if !FirmwareTested(version) {
+			t.Fatalf("%s is a verified build", version)
+		}
 	}
-	if FirmwareTested("4.11.2") {
+	if FirmwareTested("4.11.1") {
 		t.Fatal("a stable patch becomes verified only after the hardware checks")
 	}
 }
