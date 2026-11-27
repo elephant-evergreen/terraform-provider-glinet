@@ -57,6 +57,9 @@ func ValidateConfiguration(config Configuration) error {
 		}
 		config[index] = s
 		key := s.Package + "." + s.Name
+		if anonymous != nil {
+			key = fmt.Sprintf("%s.%s[%d]", s.Package, s.Type, index)
+		}
 		if seen[key] {
 			return errors.New("Each UCI section may appear only once.")
 		}
