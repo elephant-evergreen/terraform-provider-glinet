@@ -426,19 +426,36 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 	}
 	_, err = c.runner.Run(ctx, configurationApplyScript(config, token, plan, secrets))
 	var exit *ExitError
-	if errors.As(err, &exit) {
-		if service != nil && service.Cloud != nil {
-			return fmt.Errorf("%w The GoodCloud rollback restores the configuration and the recorded service states on the router; if a service cannot be restored, the transaction snapshot and failure record remain for inspection. Confirm the final service state before retrying.", operationError(err))
+	if err != nil {
+		if errors.As(err, &exit) && (exit.Code == 73 || exit.Code == 74) {
+			return operationError(err)
 		}
-		return operationError(err)
+		if service != nil && service.Cloud != nil {
+			rollbackErr := c.rollbackTransaction(token)
+			return fmt.Errorf("%w The GoodCloud rollback restores the configuration and the recorded service states on the router; if a service cannot be restored, the transaction snapshot and failure record remain for inspection. Rollback confirmation: %v", operationError(err), rollbackErr)
+		}
+		rollbackErr := c.rollbackTransaction(token)
+		return fmt.Errorf("%w The change was rolled back on the router (rollback confirmation: %v).", operationError(err), rollbackErr)
 	}
 	wait, cancel := context.WithTimeout(ctx, 240*time.Second)
 	defer cancel()
 	for {
 		actual, readErr := c.ReadConfiguration(wait, config)
 		if readErr == nil && SameConfiguration(actual, config) {
-			if runtimeErr := c.verifyRuntimeFirewall(wait); runtimeErr != nil {
-				return runtimeErr
+			runtimeErr := c.verifyRuntimeFirewall(wait)
+			for attempt := 0; runtimeErr != nil && attempt < 6; attempt++ {
+				select {
+				case <-wait.Done():
+				case <-time.After(5 * time.Second):
+				}
+				runtimeErr = c.verifyRuntimeFirewall(wait)
+			}
+			if runtimeErr != nil {
+				rollbackErr := c.rollbackTransaction(token)
+				if rollbackErr != nil {
+					return fmt.Errorf("%w The router-side rollback could not be confirmed: %v", runtimeErr, rollbackErr)
+				}
+				return fmt.Errorf("%w The change was rolled back on the router.", runtimeErr)
 			}
 			_, confirmErr := c.runner.Run(wait, configurationConfirmScriptWithPlan(token, safetyConfig, plan, secrets))
 			if confirmErr == nil {
@@ -450,10 +467,18 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 		}
 		select {
 		case <-wait.Done():
-			return fmt.Errorf("The operation outcome could not be confirmed. Recovery or confirmed cleanup may still be pending. Inspect router transaction results and connectivity before retrying: %w", wait.Err())
+			rollbackErr := c.rollbackTransaction(token)
+			return fmt.Errorf("The operation outcome could not be confirmed and the change was rolled back (rollback confirmation: %v). Inspect the router before retrying: %w", rollbackErr, wait.Err())
 		case <-time.After(2 * time.Second):
 		}
 	}
+}
+
+func (c *Client) rollbackTransaction(token string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+	defer cancel()
+	_, err := c.runner.Run(ctx, configurationRollbackScript(token))
+	return err
 }
 
 func sameSectionExceptManagedMarker(a, b Section) bool {
