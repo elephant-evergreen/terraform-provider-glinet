@@ -166,3 +166,49 @@ func TestFirewallRulesDuplicateStockNamesProtocol(t *testing.T) {
 		}},
 	})
 }
+
+func reconcileFixtureRules() router.Configuration {
+	return router.Configuration{
+		{Package: "firewall", Type: "rule", Name: "rule_a", Options: map[string]string{"name": "A", "src": "lan", "dest": "wan"}},
+		{Package: "firewall", Type: "rule", Name: "rule_b", Options: map[string]string{"name": "B", "src": "guest", "dest": "wan"}},
+	}
+}
+
+func TestReconcileFirewallRulesUpdatesInPlace(t *testing.T) {
+	state := []firewallRuleInput{{Name: "A", Src: "lan", Dest: "wan"}, {Name: "B", Src: "guest", Dest: "wan"}}
+	plan := []firewallRuleInput{{Name: "A", Src: "iot", Dest: "wan"}, {Name: "B", Src: "guest", Dest: "wan"}}
+	desired, removed, err := reconcileFirewallRules(plan, state, reconcileFixtureRules())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 0 {
+		t.Fatalf("src change removed sections: %+v", removed)
+	}
+	var updated *router.Section
+	for i := range desired {
+		if desired[i].Name == "rule_a" {
+			updated = &desired[i]
+		}
+		if desired[i].Name == "@rule[0]" {
+			t.Fatalf("src change still plans an anonymous section: %+v", desired[i])
+		}
+	}
+	if updated == nil || updated.Options["src"] != "iot" {
+		t.Fatalf("rule_a was not updated in place: %+v", desired)
+	}
+}
+
+func TestReconcileFirewallRulesRenamesInChain(t *testing.T) {
+	state := []firewallRuleInput{{Name: "A", Src: "lan", Dest: "wan"}, {Name: "B", Src: "guest", Dest: "wan"}}
+	plan := []firewallRuleInput{{Name: "B", Src: "lan", Dest: "wan"}, {Name: "C", Src: "guest", Dest: "wan"}}
+	desired, removed, err := reconcileFirewallRules(plan, state, reconcileFixtureRules())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || removed[0].Name != "rule_a" {
+		t.Fatalf("unexpected removals: %+v", removed)
+	}
+	if len(desired) != 2 || desired[0].Name != "rule_b" {
+		t.Fatalf("expected the first rule to update rule_b in place: %+v", desired)
+	}
+}

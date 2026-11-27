@@ -290,3 +290,18 @@ func TestManagedSectionsAreWritable(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAnonymousSectionDeletionRequiresMatch(t *testing.T) {
+	match := Configuration{{Package: "firewall", Type: "forwarding", Name: "@forwarding[0]", Match: map[string]string{"src": "lan", "dest": "wan"}, Absent: true}}
+	if err := ValidateConfiguration(match); err != nil {
+		t.Fatal(err)
+	}
+	withoutMatch := Configuration{{Package: "firewall", Type: "forwarding", Name: "@forwarding[0]", Absent: true}}
+	if err := ValidateConfiguration(withoutMatch); err == nil {
+		t.Fatal("anonymous deletion without a match was accepted")
+	}
+	namedMatch := Configuration{{Package: "firewall", Type: "forwarding", Name: "cfg000000", Match: map[string]string{"src": "lan"}, Absent: true}}
+	if err := ValidateConfiguration(namedMatch); err == nil {
+		t.Fatal("named deletion with a match was accepted")
+	}
+}

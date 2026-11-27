@@ -3,12 +3,12 @@
 page_title: "glinet_firewall_forwarding Resource - glinet"
 subcategory: ""
 description: |-
-  Manage one firewall forwarding between zones. Identity is src:dest; destroy releases ownership by default.
+  Manage one firewall forwarding between zones. Changing the zones updates the forwarding in place; set delete_behavior = "delete" to remove the section on destroy.
 ---
 
 # glinet_firewall_forwarding (Resource)
 
-Manage one firewall forwarding between zones. Identity is `src:dest`; destroy releases ownership by default.
+Manage one firewall forwarding between zones. Changing the zones updates the forwarding in place; set `delete_behavior = "delete"` to remove the section on destroy.
 
 ## Import existing configuration
 

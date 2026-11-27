@@ -253,61 +253,100 @@ func (r *firewallRulesResource) apply(ctx context.Context, planRules, stateRules
 	if diagnostics.HasError() {
 		return fmt.Errorf("invalid planned firewall rules")
 	}
+	stateInputs := []firewallRuleInput{}
+	if !stateRules.IsNull() && !stateRules.IsUnknown() {
+		stateInputs, diagnostics = parseFirewallRuleInputs(ctx, stateRules)
+		if diagnostics.HasError() {
+			return fmt.Errorf("invalid prior firewall rules")
+		}
+	}
 	actualRules, err := r.client.FirewallRules(ctx)
 	if err != nil {
 		return err
 	}
-	actualByName := map[string]router.Section{}
+	desired, removed, err := reconcileFirewallRules(planInputs, stateInputs, actualRules)
+	if err != nil {
+		return err
+	}
+	return r.client.ApplyFirewallRules(ctx, desired, removed)
+}
+
+func reconcileFirewallRules(planInputs, stateInputs []firewallRuleInput, actualRules router.Configuration) (router.Configuration, router.Configuration, error) {
+	actualByKey := map[string]router.Section{}
+	actualByName := map[string][]router.Section{}
 	for _, actual := range actualRules {
-		actualByName[firewallRuleInputKey(firewallRuleInputFromSection(actual))] = actual
+		input := firewallRuleInputFromSection(actual)
+		actualByKey[firewallRuleInputKey(input)] = actual
+		actualByName[input.Name] = append(actualByName[input.Name], actual)
+	}
+	priorManaged := map[string]bool{}
+	for _, input := range stateInputs {
+		if !input.Existing {
+			priorManaged[input.Name] = true
+		}
+	}
+	planNameCount := map[string]int{}
+	for _, input := range planInputs {
+		planNameCount[input.Name]++
 	}
 	desired := router.Configuration{}
-	planNames := map[string]bool{}
+	planKeys := map[string]bool{}
+	inPlace := map[string]bool{}
 	for _, input := range planInputs {
 		if input.Name == "" {
-			return fmt.Errorf("firewall rule name is required")
+			return nil, nil, fmt.Errorf("firewall rule name is required")
 		}
 		key := firewallRuleInputKey(input)
-		if planNames[key] {
-			return fmt.Errorf("firewall rule %s is listed more than once", input.Name)
+		if planKeys[key] {
+			return nil, nil, fmt.Errorf("firewall rule %s is listed more than once", input.Name)
 		}
-		planNames[key] = true
+		planKeys[key] = true
 		if input.Existing {
-			actual, ok := actualByName[key]
+			actual, ok := actualByKey[key]
 			if !ok {
-				return fmt.Errorf("existing firewall rule %s is not present; import it or remove the entry", input.Name)
+				return nil, nil, fmt.Errorf("existing firewall rule %s is not present; import it or remove the entry", input.Name)
 			}
 			desired = append(desired, actual)
 			continue
 		}
+		if planNameCount[input.Name] == 1 && priorManaged[input.Name] {
+			if candidates := actualByName[input.Name]; len(candidates) == 1 && !inPlace[candidates[0].Name] {
+				section, err := firewallRuleSection(input)
+				if err != nil {
+					return nil, nil, err
+				}
+				section.Name = candidates[0].Name
+				section.Match = nil
+				desired = append(desired, section)
+				inPlace[candidates[0].Name] = true
+				continue
+			}
+		}
 		section, err := firewallRuleSection(input)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		desired = append(desired, section)
 	}
 	removed := router.Configuration{}
-	if !stateRules.IsNull() && !stateRules.IsUnknown() {
-		stateInputs, diagnostics := parseFirewallRuleInputs(ctx, stateRules)
-		if diagnostics.HasError() {
-			return fmt.Errorf("invalid prior firewall rules")
+	for _, input := range stateInputs {
+		key := firewallRuleInputKey(input)
+		if planKeys[key] {
+			continue
 		}
-		for _, input := range stateInputs {
-			key := firewallRuleInputKey(input)
-			if planNames[key] {
-				continue
-			}
-			if input.Existing {
-				return fmt.Errorf("existing firewall rule %s cannot be removed from the ordered policy; keep it listed", input.Name)
-			}
-			actual, ok := actualByName[key]
-			if !ok {
-				return fmt.Errorf("firewall rule %s is already absent", input.Name)
-			}
-			removed = append(removed, router.Section{Package: "firewall", Name: actual.Name, Type: "rule", Absent: true})
+		if input.Existing {
+			return nil, nil, fmt.Errorf("existing firewall rule %s cannot be removed from the ordered policy; keep it listed", input.Name)
 		}
+		actual, ok := actualByKey[key]
+		if !ok {
+			return nil, nil, fmt.Errorf("firewall rule %s is already absent", input.Name)
+		}
+		if inPlace[actual.Name] {
+			continue
+		}
+		removed = append(removed, router.Section{Package: "firewall", Name: actual.Name, Type: "rule", Absent: true})
 	}
-	return r.client.ApplyFirewallRules(ctx, desired, removed)
+	return desired, removed, nil
 }
 
 func (r *firewallRulesResource) read(ctx context.Context, model *firewallRulesModel) diag.Diagnostics {

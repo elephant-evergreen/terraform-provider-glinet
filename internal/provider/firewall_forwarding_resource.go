@@ -9,25 +9,28 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 )
 
 func NewFirewallForwardingResource() resource.Resource {
 	return newTypedResource(typedSpec{
 		TypeName:    "firewall_forwarding",
-		Description: "Manage one firewall forwarding between zones. Identity is `src:dest`; destroy releases ownership by default.",
+		Description: "Manage one firewall forwarding between zones. Changing the zones updates the forwarding in place; set `delete_behavior = \"delete\"` to remove the section on destroy.",
 		Attributes: map[string]schema.Attribute{
-			"src":     schema.StringAttribute{Required: true, MarkdownDescription: "Source zone.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
-			"dest":    schema.StringAttribute{Required: true, MarkdownDescription: "Destination zone.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"src":     schema.StringAttribute{Required: true, MarkdownDescription: "Source zone."},
+			"dest":    schema.StringAttribute{Required: true, MarkdownDescription: "Destination zone."},
 			"enabled": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Whether the forwarding is active."},
 		},
-		Selector: func(values map[string]attr.Value) (router.Section, error) {
-			src, dest := stringOf(values, "src"), stringOf(values, "dest")
-			if src == "" || dest == "" {
-				return router.Section{}, fmt.Errorf("src and dest are required")
+		Selector: forwardingSection,
+		UpdateSelector: func(plan, state map[string]attr.Value) (router.Section, error) {
+			section, err := forwardingSection(plan)
+			if err != nil {
+				return router.Section{}, err
 			}
-			return router.Section{Package: "firewall", Type: "forwarding", Name: "@forwarding[0]", Match: map[string]string{"src": src, "dest": dest}, Options: map[string]string{"src": src, "dest": dest, "enabled": boolString(boolOf(values, "enabled", true))}}, nil
+			if name := stringOf(state, "uci_section"); name != "" {
+				section.Name = name
+				section.Match = nil
+			}
+			return section, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
 			return map[string]attr.Value{
@@ -51,4 +54,12 @@ func NewFirewallForwardingResource() resource.Resource {
 			return src + ":" + dest, nil
 		},
 	})
+}
+
+func forwardingSection(values map[string]attr.Value) (router.Section, error) {
+	src, dest := stringOf(values, "src"), stringOf(values, "dest")
+	if src == "" || dest == "" {
+		return router.Section{}, fmt.Errorf("src and dest are required")
+	}
+	return router.Section{Package: "firewall", Type: "forwarding", Name: "@forwarding[0]", Match: map[string]string{"src": src, "dest": dest}, Options: map[string]string{"src": src, "dest": dest, "enabled": boolString(boolOf(values, "enabled", true))}}, nil
 }
