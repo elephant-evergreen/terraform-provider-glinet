@@ -545,13 +545,17 @@ func TestConfigurationWorldConfirmationWaitsForCompletedCleanup(t *testing.T) {
 	root := f.base.root
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
 	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
+	blocked := filepath.Join(root, "cleanup-blocked")
 	releaseCleanup := filepath.Join(root, "release-cleanup")
 	t.Cleanup(func() {
 		_ = os.WriteFile(releaseCleanup, nil, 0600)
 	})
+	gate := "#!/bin/sh\nfor arg in \"$@\"; do\ncase \"$arg\" in\n*transaction-retired-token)\ntouch " + quote(blocked) + "\nwhile [ ! -f " + quote(releaseCleanup) + " ]; do sleep 0.05; done\n;;\nesac\ndone\nexec /bin/rm \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(root, "bin", "rm"), []byte(gate), 0700); err != nil {
+		t.Fatal(err)
+	}
 	script := configurationApplyScript(spec, "token", reloadPlan{Firewall: true})
 	script = strings.Replace(script, configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
-	script = strings.ReplaceAll(script, "rm -rf "+quote(transactionDir+"-retired-token"), "while [ ! -f "+quote(releaseCleanup)+" ]; do sleep 0.05; done\nrm -rf "+quote(transactionDir+"-retired-token"))
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Apply failed: %s %v", out, err)
 	}
@@ -572,8 +576,7 @@ func TestConfigurationWorldConfirmationWaitsForCompletedCleanup(t *testing.T) {
 	}()
 	deadline = time.Now().Add(5 * time.Second)
 	for {
-		data, err := os.ReadFile(filepath.Join(root, "results", "token"))
-		if err == nil && string(data) == "confirm" {
+		if _, err := os.Stat(blocked); err == nil {
 			break
 		}
 		select {

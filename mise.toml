@@ -15,3 +15,15 @@ run = [
   "go tool tfplugindocs generate --provider-name glinet",
   "git diff --exit-code -- docs",
 ]
+
+[tasks.fuzz]
+description = "Run each fuzz target for a short session"
+run = '''
+fuzztime="${FUZZTIME:-30s}"
+go test ./internal/router -run '^FuzzShellQuote$' -fuzz '^FuzzShellQuote$' -fuzztime "$fuzztime"
+go test ./internal/router -run '^FuzzLuaQuote$' -fuzz '^FuzzLuaQuote$' -fuzztime "$fuzztime"
+go test ./internal/router -run '^FuzzSectionValidation$' -fuzz '^FuzzSectionValidation$' -fuzztime "$fuzztime"
+go test ./internal/router -run '^FuzzValidOption$' -fuzz '^FuzzValidOption$' -fuzztime "$fuzztime"
+go test ./internal/provider -run '^FuzzFirewallRuleRoundTrip$' -fuzz '^FuzzFirewallRuleRoundTrip$' -fuzztime "$fuzztime"
+go test ./internal/provider -run '^FuzzReconcileFirewallRules$' -fuzz '^FuzzReconcileFirewallRules$' -fuzztime "$fuzztime"
+'''
