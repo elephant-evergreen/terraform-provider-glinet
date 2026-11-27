@@ -287,6 +287,18 @@ touch activate
 	return script
 }
 
+func configurationRollbackScript(token string) string {
+	dir := transactionDir
+	return "cd " + quote(dir) + " 2>/dev/null || exit 0\n" +
+		"test \"$(cat token 2>/dev/null || true)\" = " + quote(token) + " || exit 0\n" +
+		"ln recover decision 2>/dev/null || test \"$(cat decision 2>/dev/null || true)\" = rollback || exit 0\n" +
+		"for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do\n" +
+		"if [ ! -d " + quote(dir) + " ] || [ \"$(cat " + quote(dir+"/token") + " 2>/dev/null || true)\" != " + quote(token) + " ]; then exit 0; fi\n" +
+		"sleep 10\n" +
+		"done\n" +
+		"exit 75\n"
+}
+
 func configurationConfirmScript(token string, config Configuration, secrets ...map[string]string) string {
 	return configurationConfirmScriptWithPlan(token, config, reloadPlan{}, secrets...)
 }
