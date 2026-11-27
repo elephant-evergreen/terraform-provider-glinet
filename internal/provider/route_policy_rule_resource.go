@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -72,7 +73,11 @@ func NewRoutePolicyRuleResource() resource.Resource {
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {
-			return nil, fmt.Errorf("import ID must be kind:section, such as default:gl_process")
+			parts := strings.SplitN(id, ":", 2)
+			if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+				return nil, fmt.Errorf("import ID must be kind:section, such as default:gl_process")
+			}
+			return map[string]attr.Value{"kind": stringValue(parts[0]), "name": stringValue(parts[1])}, nil
 		},
 		ID: func(values map[string]attr.Value) (string, error) {
 			return stringOf(values, "kind") + ":" + stringOf(values, "name"), nil

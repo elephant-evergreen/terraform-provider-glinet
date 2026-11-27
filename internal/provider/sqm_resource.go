@@ -40,6 +40,8 @@ func NewSQMResource() resource.Resource {
 			options := map[string]string{
 				"interface": stringOf(values, "interface"), "enabled": boolString(boolOf(values, "enabled", false)),
 				"qdisc": stringOf(values, "qdisc"), "script": stringOf(values, "script"), "linklayer": stringOf(values, "linklayer"),
+				"overhead": fmt.Sprintf("%d", int64Of(values, "overhead")), "qdisc_advanced": boolString(boolOf(values, "qdisc_advanced", false)),
+				"ingress_ecn": stringOf(values, "ingress_ecn"), "egress_ecn": stringOf(values, "egress_ecn"),
 			}
 			if upload := int64Of(values, "upload"); upload > 0 {
 				options["upload"] = fmt.Sprintf("%d", upload)
@@ -57,7 +59,6 @@ func NewSQMResource() resource.Resource {
 				"script": stringValue(defaultString(section.Options["script"], "piece_of_cake.qos")), "linklayer": stringValue(defaultString(section.Options["linklayer"], "none")),
 				"overhead": int64Value(parseOptionInt64(section.Options["overhead"])), "qdisc_advanced": boolValue(section.Options["qdisc_advanced"] == "1"),
 				"ingress_ecn": stringValue(defaultString(section.Options["ingress_ecn"], "ECN")), "egress_ecn": stringValue(defaultString(section.Options["egress_ecn"], "ECN")),
-				"tc_mpu": boolValue(section.Options["tcMPU"] == "1"),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {

@@ -28,11 +28,6 @@ func NewMiniDLNAResource() resource.Resource {
 			return router.Section{Package: "minidlna", Type: "minidlna", Name: "config", Options: map[string]string{
 				"enabled": boolString(boolOf(values, "enabled", false)), "port": fmt.Sprintf("%d", int64Of(values, "port")),
 				"interface": stringOf(values, "interface"), "friendly_name": stringOf(values, "friendly_name"), "media_dir": stringOf(values, "media_dir"),
-				"inotify": boolString(boolOf(values, "inotify", true)), "enable_tivo": boolString(boolOf(values, "enable_tivo", false)),
-				"wide_links": boolString(boolOf(values, "wide_links", false)), "strict_dlna": boolString(boolOf(values, "strict_dlna", false)),
-				"notify_interval": fmt.Sprintf("%d", int64Of(values, "notify_interval")), "root_container": stringOf(values, "root_container"), "serial": stringOf(values, "serial"),
-				"model_number": stringOf(values, "model_number"), "album_art_names": stringOf(values, "album_art_names"),
-				"user": stringOf(values, "user"), "db_dir": stringOf(values, "db_dir"),
 			}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
@@ -42,10 +37,6 @@ func NewMiniDLNAResource() resource.Resource {
 			return map[string]attr.Value{
 				"enabled": boolValue(section.Options["enabled"] == "1"), "port": int64Value(parseOptionInt64(section.Options["port"])),
 				"interface": stringValue(section.Options["interface"]), "friendly_name": stringValue(section.Options["friendly_name"]), "media_dir": stringValue(section.Options["media_dir"]),
-				"inotify": boolValue(section.Options["inotify"] != "0"), "enable_tivo": boolValue(section.Options["enable_tivo"] == "1"),
-				"wide_links": boolValue(section.Options["wide_links"] == "1"), "strict_dlna": boolValue(section.Options["strict_dlna"] == "1"),
-				"notify_interval": int64Value(parseOptionInt64(section.Options["notify_interval"])),
-				"root_container":  stringValue(section.Options["root_container"]), "serial": stringValue(section.Options["serial"]),
 			}
 		},
 		Import: func(id string) (map[string]attr.Value, error) {

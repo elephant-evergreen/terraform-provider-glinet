@@ -20,12 +20,12 @@ func NewAdGuardResource() resource.Resource {
 			"override_vpn": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Let AdGuard Home DNS bypass VPN DNS."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {
-			return router.Section{Package: "adguardhome", Type: "config", Name: "config", Options: map[string]string{
+			return router.Section{Package: "adguardhome", Type: "adguardhome", Name: "config", Options: map[string]string{
 				"enabled": boolString(boolOf(values, "enabled", false)), "override_vpn": boolString(boolOf(values, "override_vpn", true)),
 			}}, nil
 		},
 		ReadSelector: func(map[string]attr.Value) (router.Section, error) {
-			return router.Section{Package: "adguardhome", Type: "config", Name: "config"}, nil
+			return router.Section{Package: "adguardhome", Type: "adguardhome", Name: "config"}, nil
 		},
 		Load: func(section router.Section) map[string]attr.Value {
 			return map[string]attr.Value{
