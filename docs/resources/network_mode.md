@@ -17,7 +17,7 @@ Manage the stock GL.iNet operating mode and connectivity tracking. Changing the 
 
 - `autotimezone` (Boolean) Derive the time zone from the uplink.
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
-- `mode` (String) Operating mode, such as `router` or `ap`.
+- `mode` (String) Operating mode. Only `router` is supported because every provider operation requires router mode.
 - `track_ip` (Set of String) IPv4 reachability probes.
 - `track_ipv6` (Set of String) IPv6 reachability probes.
 

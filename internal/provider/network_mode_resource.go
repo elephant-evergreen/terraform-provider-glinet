@@ -19,7 +19,7 @@ func NewNetworkModeResource() resource.Resource {
 		Description: "Manage the stock GL.iNet operating mode and connectivity tracking. Changing the mode restarts networking.",
 		NoDelete:    true,
 		Attributes: map[string]schema.Attribute{
-			"mode":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("router"), MarkdownDescription: "Operating mode, such as `router` or `ap`."},
+			"mode":         schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("router"), MarkdownDescription: "Operating mode. Only `router` is supported because every provider operation requires router mode."},
 			"autotimezone": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Derive the time zone from the uplink."},
 			"track_ip":     schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "IPv4 reachability probes."},
 			"track_ipv6":   schema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType, Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)), MarkdownDescription: "IPv6 reachability probes."},
@@ -51,9 +51,16 @@ func NewNetworkModeResource() resource.Resource {
 			return map[string]attr.Value{}, nil
 		},
 		ID: func(map[string]attr.Value) (string, error) { return "network_mode", nil },
+		ValidateConfig: func(values map[string]attr.Value) error {
+			mode, ok := values["mode"].(types.String)
+			if !ok || mode.IsNull() || mode.IsUnknown() || mode.ValueString() == "router" {
+				return nil
+			}
+			return fmt.Errorf("mode must be router; the provider only manages stock firmware in router mode")
+		},
 		Validate: func(values map[string]attr.Value) error {
-			if stringOf(values, "mode") == "" {
-				return fmt.Errorf("mode is required")
+			if stringOf(values, "mode") != "router" {
+				return fmt.Errorf("mode must be router; the provider only manages stock firmware in router mode")
 			}
 			return nil
 		},
