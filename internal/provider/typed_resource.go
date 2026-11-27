@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
@@ -29,6 +30,7 @@ type typedSpec struct {
 	ValidateConfig            func(map[string]attr.Value) error
 	ModifyPlan                func(plan, config, state map[string]attr.Value, creating bool) (map[string]attr.Value, error)
 	PreserveUnset             []string
+	UpdateSelector            func(plan, state map[string]attr.Value) (router.Section, error)
 	Secrets                   func(map[string]attr.Value) map[string]string
 	WriteOnly                 []string
 	RequireExisting           bool
@@ -319,7 +321,7 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Invalid configuration", err.Error())
 		return
 	}
-	section, err := r.spec.Selector(values)
+	section, err := r.updateSection(ctx, values, req.State)
 	if err != nil {
 		resp.Diagnostics.AddError("Cannot build section", err.Error())
 		return
@@ -337,6 +339,25 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.State.Set(ctx, object)...)
 	}
+}
+
+func (r *typedResource) updateSection(ctx context.Context, values map[string]attr.Value, state tfsdk.State) (router.Section, error) {
+	if r.spec.UpdateSelector == nil {
+		return r.spec.Selector(values)
+	}
+	stateValues := map[string]attr.Value{}
+	if !state.Raw.IsNull() && state.Raw.IsKnown() {
+		var object types.Object
+		if diagnostics := state.Get(ctx, &object); diagnostics.HasError() {
+			return router.Section{}, fmt.Errorf("cannot read prior state")
+		}
+		if !object.IsNull() && !object.IsUnknown() {
+			for name, value := range object.Attributes() {
+				stateValues[name] = value
+			}
+		}
+	}
+	return r.spec.UpdateSelector(values, stateValues)
 }
 
 func (r *typedResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

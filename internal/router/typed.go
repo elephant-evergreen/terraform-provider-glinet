@@ -225,23 +225,33 @@ func (c *Client) ApplyFirewallRules(ctx context.Context, desired, removed Config
 		}
 		position++
 	}
+	desiredIdentities := map[string]bool{}
 	desiredNames := map[string]bool{}
 	for _, section := range desired {
-		name := firewallRuleIdentity(section)
-		if desiredNames[name] {
+		identity := firewallRuleIdentity(section)
+		if desiredIdentities[identity] {
 			return errors.New("The ordered firewall policy contains a duplicate rule.")
 		}
-		desiredNames[name] = true
+		desiredIdentities[identity] = true
+		if !strings.HasPrefix(section.Name, "@") {
+			if desiredNames[section.Name] {
+				return errors.New("The ordered firewall policy contains a duplicate section.")
+			}
+			desiredNames[section.Name] = true
+		}
 	}
 	removedNames := map[string]bool{}
 	for _, section := range removed {
 		if removedNames[section.Name] {
 			return errors.New("A firewall rule cannot be removed twice.")
 		}
+		if desiredNames[section.Name] {
+			return errors.New("A firewall rule cannot be updated and removed in the same change.")
+		}
 		removedNames[section.Name] = true
 	}
 	for _, actual := range actualRules {
-		if !desiredNames[firewallRuleIdentity(actual)] && !removedNames[actual.Name] {
+		if !desiredIdentities[firewallRuleIdentity(actual)] && !desiredNames[actual.Name] && !removedNames[actual.Name] {
 			return fmt.Errorf("The ordered firewall policy is missing rule %s. List it as an existing rule or remove it explicitly.", actual.Name)
 		}
 	}

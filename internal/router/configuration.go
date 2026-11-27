@@ -67,8 +67,11 @@ func ValidateConfiguration(config Configuration) error {
 		if anonymous == nil && len(s.Match) > 0 {
 			return errors.New("Identity matches are supported only for anonymous sections.")
 		}
-		if anonymous != nil && (anonymous[1] != s.Type || s.Absent) {
-			return errors.New("Anonymous selectors must match the section type and cannot be deleted.")
+		if anonymous != nil && anonymous[1] != s.Type {
+			return errors.New("Anonymous selectors must match the section type.")
+		}
+		if anonymous != nil && s.Absent && len(s.Match) == 0 {
+			return errors.New("Deleting an anonymous section requires an identity match.")
 		}
 		if s.Position != nil {
 			if s.Package != "firewall" || s.Type != "rule" || (*s.Position < 0 || *s.Position > 4095) {
@@ -85,8 +88,8 @@ func ValidateConfiguration(config Configuration) error {
 				positioned++
 			}
 		}
-		if s.Absent && (len(s.Options)+len(s.Lists)+len(s.Match) > 0 || s.Position != nil) {
-			return errors.New("Absent sections cannot include options, lists or matches.")
+		if s.Absent && (len(s.Options)+len(s.Lists) > 0 || s.Position != nil || (len(s.Match) > 0 && anonymous == nil)) {
+			return errors.New("Absent sections may only carry an anonymous identity match.")
 		}
 		for k, v := range s.Options {
 			if s.Package == "wireless" && ((k == "ssid" && !ValidSSID(v)) || ((k == "disabled" || k == "hidden" || k == "isolate") && v != "0" && v != "1")) {
