@@ -10,7 +10,7 @@ The design follows the [HashiCorp provider design principles](https://developer.
 - Identity, import, refresh, update, and destroy are defined per resource. Anonymous stock sections are resolved by a stable unique option instead of by their mutable `@type[index]` name.
 - Secrets use write-only arguments. They are never stored in plan or state.
 - Every create, update, and delete is one recovery-protected transaction. The existing snapshot, watchdog, boot service, and rollback engine is reused.
-- Terraform's dependency graph orders related objects. Use references (`glinet_network_interface.lan.name`, `glinet_firewall_zone.lan.name`) so the graph is explicit. Firewall rule order is a collection-level invariant, so the new `glinet_firewall_rules` owns the complete ordered rule list; `glinet_firewall_rule` remains only for the deprecation period.
+- Terraform's dependency graph orders related objects. Use references (`glinet_network_interface.lan.name`, `glinet_firewall_zone.lan.name`) so the graph is explicit. Firewall rule order is a collection-level invariant, so `glinet_firewall_rules` owns the complete ordered rule list.
 - A failed multi-resource apply leaves each completed resource in a valid committed state. It never leaves a half-written UCI package. Re-running apply converges; the retry boundary is Terraform's normal plan/apply.
 
 ## Resources
@@ -118,7 +118,7 @@ The provider is the only owner of the sections it manages. Do not overlap typed 
 
 ## VPN status
 
-WireGuard is an experimental typed resource family. OpenVPN support is not available yet. Neither is hardware-verified.
+WireGuard remains experimental. OpenVPN resources are available, and the OpenVPN server profile is covered by the hardware acceptance suite.
 
 WireGuard resources:
 
