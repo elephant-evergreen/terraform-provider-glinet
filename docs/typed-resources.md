@@ -120,6 +120,15 @@ The provider is the only owner of the sections it manages. Do not overlap typed 
 
 WireGuard remains experimental.
 
+## Apply order
+
+Terraform applies independent resources concurrently and resolves explicit references first. The provider serializes mutations on the router, but it cannot validate the end state of several resources at once, and a correct final configuration can still pass through an unusable intermediate state.
+
+- Make dependencies explicit with references or `depends_on` between interfaces, bridges, zones, and the rules that use them.
+- Apply topology changes in stages when the intermediate state must be valid, for example interfaces and bridges first, then the firewall policy.
+- Avoid changing a managed network and the firewall or routing policy that references it in the same parallel group.
+- The per-change safety checks stop on conflicting unmanaged policy, but they are not a whole-configuration validator.
+
 ## State upgrades
 
 Change an attribute's type or meaning only with a schema version bump and a state upgrader. Set `SchemaVersion` and `UpgradeState` on the typed spec; the framework calls the upgrader for the previous version before it reads the state. Do not rename or retype an attribute without an upgrader, because existing states fail to decode. OpenVPN resources are available, and the OpenVPN server profile is covered by the hardware acceptance suite.

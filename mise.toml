@@ -26,6 +26,9 @@ go test ./internal/router -run '^FuzzLuaQuote$' -fuzz '^FuzzLuaQuote$' -fuzztime
 go test ./internal/router -run '^FuzzSectionValidation$' -fuzz '^FuzzSectionValidation$' -fuzztime "$fuzztime"
 go test ./internal/router -run '^FuzzValidOption$' -fuzz '^FuzzValidOption$' -fuzztime "$fuzztime"
 go test ./internal/router -run '^FuzzMergeManagedConfiguration$' -fuzz '^FuzzMergeManagedConfiguration$' -fuzztime "$fuzztime"
+go test ./internal/router -run '^FuzzParseSafetyState$' -fuzz '^FuzzParseSafetyState$' -fuzztime "$fuzztime"
+go test ./internal/router -run '^FuzzParseConfigurationState$' -fuzz '^FuzzParseConfigurationState$' -fuzztime "$fuzztime"
+go test ./internal/router -run '^FuzzSectionMatches$' -fuzz '^FuzzSectionMatches$' -fuzztime "$fuzztime"
 go test ./internal/provider -run '^FuzzFirewallRuleRoundTrip$' -fuzz '^FuzzFirewallRuleRoundTrip$' -fuzztime "$fuzztime"
 go test ./internal/provider -run '^FuzzReconcileFirewallRules$' -fuzz '^FuzzReconcileFirewallRules$' -fuzztime "$fuzztime"
 '''
