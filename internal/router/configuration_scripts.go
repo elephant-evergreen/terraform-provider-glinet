@@ -288,15 +288,40 @@ touch activate
 }
 
 func configurationRollbackScript(token string) string {
-	dir := transactionDir
-	return "cd " + quote(dir) + " 2>/dev/null || exit 0\n" +
-		"test \"$(cat token 2>/dev/null || true)\" = " + quote(token) + " || exit 0\n" +
-		"ln recover decision 2>/dev/null || test \"$(cat decision 2>/dev/null || true)\" = rollback || exit 0\n" +
+	dir := quote(transactionDir)
+	result := quote(resultDir + "/" + token)
+	return "set -u\n" +
+		"dir=" + dir + "\n" +
+		"if [ ! -d \"$dir\" ]; then\n" +
+		"  if [ -f " + result + " ]; then\n" +
+		"    case \"$(cat " + result + ")\" in\n" +
+		"      confirm) printf committed; exit 0 ;;\n" +
+		"      rollback) printf rolled_back; exit 0 ;;\n" +
+		"      cancel) printf cancelled; exit 0 ;;\n" +
+		"    esac\n" +
+		"  fi\n" +
+		"  printf missing\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"test \"$(cat \"$dir/token\" 2>/dev/null || true)\" = " + quote(token) + " || { printf superseded; exit 0; }\n" +
+		"if [ -e \"$dir/decision\" ]; then\n" +
+		"  case \"$(cat \"$dir/decision\")\" in\n" +
+		"    confirm) printf committed; exit 0 ;;\n" +
+		"    rollback|cancel) : ;;\n" +
+		"    *) printf missing; exit 0 ;;\n" +
+		"  esac\n" +
+		"fi\n" +
+		"ln recover decision 2>/dev/null || true\n" +
 		"for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do\n" +
-		"if [ ! -d " + quote(dir) + " ] || [ \"$(cat " + quote(dir+"/token") + " 2>/dev/null || true)\" != " + quote(token) + " ]; then exit 0; fi\n" +
-		"sleep 10\n" +
+		"  if [ ! -d \"$dir\" ] || [ \"$(cat \"$dir/token\" 2>/dev/null || true)\" != " + quote(token) + " ]; then\n" +
+		"    if [ -f " + result + " ] && [ \"$(cat " + result + ")\" = rollback ]; then printf rolled_back; exit 0; fi\n" +
+		"    if [ -f " + result + " ] && [ \"$(cat " + result + ")\" = confirm ]; then printf committed; exit 0; fi\n" +
+		"    printf missing; exit 0\n" +
+		"  fi\n" +
+		"  sleep 10\n" +
 		"done\n" +
-		"exit 75\n"
+		"printf timeout\n" +
+		"exit 0\n"
 }
 
 func configurationConfirmScript(token string, config Configuration, secrets ...map[string]string) string {

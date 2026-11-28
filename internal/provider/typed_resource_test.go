@@ -322,3 +322,21 @@ func TestTypedWirelessRadioRequiresExisting(t *testing.T) {
 }`, ExpectError: regexp.MustCompile("Section not found")},
 		}})
 }
+
+func TestDeleteRequiresOwnershipMarker(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		options map[string]string
+		want    bool
+	}{
+		{"managed", map[string]string{router.ManagedOption: "1"}, true},
+		{"unmanaged", map[string]string{}, false},
+		{"released", map[string]string{router.ManagedOption: "0"}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := router.IsManaged(test.options); got != test.want {
+				t.Fatalf("IsManaged(%v) = %v, want %v", test.options, got, test.want)
+			}
+		})
+	}
+}

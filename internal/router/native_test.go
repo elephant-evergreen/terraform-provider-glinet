@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +35,18 @@ func TestNativeUCIFixture(t *testing.T) {
 	conf := root + "/config"
 	saved := root + "/saved"
 	setup := "set -eu\numask 077\nmkdir " + quote(root) + "\nmkdir " + quote(conf) + " " + quote(saved) + "\n"
+	packages := map[string]bool{}
 	for _, name := range strings.Fields(configurationPackages) {
+		packages[name] = true
+	}
+	if start := strings.Index(safetyStateLua, "local packages={"); start >= 0 {
+		if end := strings.Index(safetyStateLua[start:], "}"); end >= 0 {
+			for _, match := range regexp.MustCompile(`'([a-z0-9_-]+)'`).FindAllStringSubmatch(safetyStateLua[start:start+end], -1) {
+				packages[match[1]] = true
+			}
+		}
+	}
+	for name := range packages {
 		setup += "touch " + quote(conf+"/"+name) + "\n"
 	}
 	firewall := "config rule 'stock_allow'\n option name 'Stock Allow'\n option target 'ACCEPT'\nconfig rule 'managed_a'\n option name 'Managed A'\n option target 'REJECT'\nconfig rule 'stock_other'\n option name 'Stock Other'\n option target 'ACCEPT'\nconfig rule 'managed_b'\n option name 'Managed B'\n option target 'REJECT'\n"
@@ -170,5 +182,58 @@ func TestNativeUCIFixture(t *testing.T) {
 	check := "test \"$(uci -c " + quote(conf) + " -P " + quote(saved) + " get wireless.wifi2g.key)\" = 'fixture-secret-updated'\n"
 	if _, err := transport.Run(ctx, check); err != nil {
 		t.Fatal("Write-only fixture key was not stored")
+	}
+}
+
+func TestNativeSafetyStateExcludesSecrets(t *testing.T) {
+	host := os.Getenv("GLINET_NATIVE_TEST_HOST")
+	if host == "" {
+		t.Skip("Set GLINET_NATIVE_TEST_HOST only for an explicitly authorized native UCI fixture test")
+	}
+	transport, err := NewSSH(host, 22, os.Getenv("GLINET_NATIVE_TEST_PRIVATE_KEY_FILE"), os.Getenv("GLINET_NATIVE_TEST_KNOWN_HOSTS_FILE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	nonce := make([]byte, 12)
+	if _, err := rand.Read(nonce); err != nil {
+		t.Fatal(err)
+	}
+	root := "/tmp/terraform-glinet-safety-" + hex.EncodeToString(nonce)
+	conf := root + "/config"
+	saved := root + "/saved"
+	setup := "set -eu\numask 077\nmkdir " + quote(root) + "\nmkdir " + quote(conf) + " " + quote(saved) + "\n"
+	for _, name := range strings.Fields(configurationPackages) {
+		setup += "touch " + quote(conf+"/"+name) + "\n"
+	}
+	network := "config interface 'pppoe'\n option proto 'pppoe'\n option username 'fixture-user'\n option password 'fixture-pppoe-secret'\nconfig wireguard_vpn 'peer'\n option public_key 'fixture-public-key'\n"
+	wireless := "config wifi-iface 'wifi2g'\n option mode 'ap'\n option ssid 'Example'\n option key 'fixture-wifi-secret'\n option wpa_psk 'fixture-wpa-secret'\n"
+	setup += "printf '%s' " + quote(network) + " > " + quote(conf+"/network") + "\nprintf '%s' " + quote(wireless) + " > " + quote(conf+"/wireless") + "\n"
+	if _, err := transport.Run(ctx, setup); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 20*time.Second)
+		defer stop()
+		if _, err := transport.Run(cleanup, "rm -rf "+quote(root)+"\ntest ! -e "+quote(root)+"\n"); err != nil {
+			t.Error("Native safety fixture cleanup failed:", err)
+		}
+	})
+	script := "lua - <<'GLINET_SAFETY_STATE'\n" + strings.Replace(safetyStateLua, "require('uci').cursor()", "require('uci').cursor("+luaQuote(conf)+","+luaQuote(saved)+")", 1) + "\nGLINET_SAFETY_STATE\n"
+	var buffer strings.Builder
+	if err := transport.RunTo(ctx, script, &buffer); err != nil {
+		t.Fatalf("Native safety state failed: %v: %s", err, buffer.String())
+	}
+	output := []byte(buffer.String())
+	for _, secret := range []string{"fixture-pppoe-secret", "fixture-wifi-secret", "fixture-wpa-secret"} {
+		if strings.Contains(string(output), secret) {
+			t.Fatalf("Native safety state returned the secret %q", secret)
+		}
+	}
+	for _, kept := range []string{"fixture-user", "fixture-public-key"} {
+		if !strings.Contains(string(output), kept) {
+			t.Fatalf("Native safety state dropped the non-secret option %q", kept)
+		}
 	}
 }

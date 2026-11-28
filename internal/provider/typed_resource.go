@@ -405,6 +405,10 @@ func (r *typedResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		deleteBehavior = value.ValueString()
 	}
 	if deleteBehavior == "delete" && actual.Name != "" && !isAnonymousSection(actual.Name) {
+		if !router.IsManaged(actual.Options) {
+			resp.Diagnostics.AddError("Section is not managed by the provider", "The router section "+actual.Name+" does not carry the provider ownership marker, so destroy will not delete it. Inspect the section and import it before deleting.")
+			return
+		}
 		absent := router.Section{Package: actual.Package, Name: actual.Name, Type: actual.Type, Absent: true}
 		if err := r.client.ApplySections(ctx, router.Configuration{absent}, nil); err != nil {
 			resp.Diagnostics.AddError("Cannot delete section", err.Error())
