@@ -138,3 +138,79 @@ func TestRestoreStateMachineModel(t *testing.T) {
 		}
 	})
 }
+
+// TestTransactionOutcomeModel checks the durable outcome probe against a model
+// of the commit/cleanup state machine: a confirmed transaction is reported only
+// after its transaction directory, lock, and recovery service are gone, while
+// a decided but uncommitted transaction stays pending.
+func TestTransactionOutcomeModel(t *testing.T) {
+	if flag.Lookup("rapid.checks") != nil {
+		if err := flag.Set("rapid.checks", "40"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rapid.Check(t, func(rt *rapid.T) {
+		tb := rapidTB{rt}
+		f := newConfigurationWorld(tb)
+		root := f.base.root
+		result := rapid.SampledFrom([]string{"", "confirm", "restored", "restore_failed", "cancel", "restoring"}).Draw(rt, "result")
+		dirToken := rapid.SampledFrom([]string{"", "token", "other"}).Draw(rt, "dir-token")
+		decision := rapid.SampledFrom([]string{"", "confirm", "rollback"}).Draw(rt, "decision")
+		actor := rapid.Bool().Draw(rt, "actor")
+		retired := rapid.Bool().Draw(rt, "retired")
+		recovery := rapid.SampledFrom([]string{"", "token", "other"}).Draw(rt, "recovery")
+		if result != "" {
+			writeOutcome(tb, root, result)
+		}
+		if dirToken != "" {
+			dir := filepath.Join(root, "transaction")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				rt.Fatal(err)
+			}
+			writeFile(tb, filepath.Join(dir, "token"), dirToken)
+			if decision != "" {
+				writeFile(tb, filepath.Join(dir, "decision"), decision)
+			}
+		}
+		if actor {
+			if err := os.MkdirAll(filepath.Join(root, "lock-actor-token"), 0700); err != nil {
+				rt.Fatal(err)
+			}
+		}
+		if retired {
+			if err := os.MkdirAll(filepath.Join(root, "transaction-retired-token"), 0700); err != nil {
+				rt.Fatal(err)
+			}
+		}
+		if recovery != "" {
+			writeFile(tb, filepath.Join(root, "recovery"), recovery)
+		}
+		want := transactionOutcomeModel(result, dirToken, actor, retired, recovery)
+		output, err := f.run(configurationOutcomeProbe("token"))
+		if err != nil {
+			rt.Fatalf("Probe failed: %s %v", output, err)
+		}
+		if got := strings.TrimSpace(string(output)); got != want {
+			rt.Fatalf("probe = %q, want %q (result=%q dir=%q decision=%q actor=%v retired=%v recovery=%q)", got, want, result, dirToken, decision, actor, retired, recovery)
+		}
+	})
+}
+
+func transactionOutcomeModel(result, dirToken string, actor, retired bool, recovery string) string {
+	if result != "" {
+		if result != "confirm" {
+			return result
+		}
+		if actor || retired || dirToken == "token" || recovery == "token" {
+			return "pending"
+		}
+		return "confirm"
+	}
+	if dirToken == "token" {
+		return "pending"
+	}
+	if dirToken != "" {
+		return "superseded"
+	}
+	return "missing"
+}
