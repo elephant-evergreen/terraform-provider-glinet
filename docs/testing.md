@@ -21,6 +21,7 @@ The suite:
 - verifies the model, the firmware line, router mode, and a clean transaction state;
 - creates, updates, imports, and destroys a firewall redirect, a disabled OpenVPN server profile, a Samba share, and a firewall zone, and checks that each apply leaves an empty plan;
 - injects an undeclared firewall rule during a redirect update, expects the transaction to roll back and the section to be restored, and verifies the injected rule is gone;
+- changes the NTP configuration and checks that the stock time service restarts with a new process;
 - reboots the router when `GLINET_ACCEPTANCE_REBOOT=1` is set and waits for the connection to return.
 
 Each step removes the temporary objects it created and does not change singleton stock sections. A test failure before cleanup can leave an `Acceptance-*` object behind; remove it through the stock UI or the provider before the next run. Archive the sanitized result against the exact provider version. The suite is compiled by the ordinary check, so it cannot silently rot.
