@@ -146,6 +146,11 @@ func allowedOptionsFor(pkg, kind string) map[string]bool {
 	return nil
 }
 
+func OptionAllowed(pkg, kind, key string) bool {
+	options := allowedOptionsFor(pkg, kind)
+	return options != nil && options[key]
+}
+
 func validOption(pkg, kind, key, value string) bool {
 	options := allowedOptionsFor(pkg, kind)
 	return options != nil && options[key] && len(value) <= 1024 && !strings.ContainsFunc(value, unicode.IsControl)
