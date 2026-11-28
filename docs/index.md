@@ -18,6 +18,9 @@ Set these environment variables before you run Terraform.
 | `GLINET_HOST` | The router's hostname or private LAN IP address. |
 | `GLINET_PRIVATE_KEY_FILE` | The path to an unencrypted OpenSSH Ed25519 or RSA key authorized for `root` on the router. |
 | `GLINET_KNOWN_HOSTS_FILE` | The path to a known-hosts file with the router's host key. Verify the key through a trusted channel before adding it. |
+| `GLINET_ALLOW_NETWORK_DISRUPTION` | Set `true` to allow network, port, Wi-Fi, and GoodCloud changes. Defaults to `false`. |
+
+Changes that can interrupt the network connection require `allow_network_disruption = true` or `GLINET_ALLOW_NETWORK_DISRUPTION=true`. The provider still verifies an active wired management path and takes an encrypted backup before the change.
 
 Save this example as `main.tf` in an empty directory.
 
@@ -63,6 +66,7 @@ Before upgrading, ensure the router offers an Ed25519, ECDSA, or RSA host key an
 
 ### Optional
 
+- `allow_network_disruption` (Boolean) Allow changes that can interrupt the network connection, such as a network, port, Wi-Fi, or GoodCloud change. Falls back to `GLINET_ALLOW_NETWORK_DISRUPTION`. Defaults to false; confirm a wired recovery path before enabling it.
 - `backup_directory` (String) Directory for verified age-encrypted full router configuration backups. Falls back to `GLINET_BACKUP_DIRECTORY`, then the operating system user configuration directory under `glinet/backups`. The SSH private key decrypts these backups. A backup is required before the first mutation of each apply; backup failure prevents all changes.
 - `host` (String) Router hostname or IP address. Falls back to `GLINET_HOST`.
 - `known_hosts_file` (String) Path to a known_hosts file containing the verified router host key. Falls back to `GLINET_KNOWN_HOSTS_FILE`. Host-key verification is always required.

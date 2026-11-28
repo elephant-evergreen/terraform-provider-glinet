@@ -18,6 +18,9 @@ Set these environment variables before you run Terraform.
 | `GLINET_HOST` | The router's hostname or private LAN IP address. |
 | `GLINET_PRIVATE_KEY_FILE` | The path to an unencrypted OpenSSH Ed25519 or RSA key authorized for `root` on the router. |
 | `GLINET_KNOWN_HOSTS_FILE` | The path to a known-hosts file with the router's host key. Verify the key through a trusted channel before adding it. |
+| `GLINET_ALLOW_NETWORK_DISRUPTION` | Set `true` to allow network, port, Wi-Fi, and GoodCloud changes. Defaults to `false`. |
+
+Changes that can interrupt the network connection require `allow_network_disruption = true` or `GLINET_ALLOW_NETWORK_DISRUPTION=true`. The provider still verifies an active wired management path and takes an encrypted backup before the change.
 
 Save this example as `main.tf` in an empty directory.
 

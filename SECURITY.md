@@ -12,6 +12,7 @@ Include the provider version, the router model and firmware line, the affected r
 - The SSH private key decrypts the age-encrypted router backups. Treat it as the recovery credential and keep it outside Terraform state and version control.
 - Wi-Fi keys, PPPoE passwords, VPN keys, tokens, and similar options are write-only or sensitive in the schema, are passed to the router separately from the UCI configuration, and are excluded from the safety state the provider reads back.
 - Terraform state can still contain non-secret topology and configuration values. Store state in encrypted remote storage.
+- Changes that can interrupt the management path (network, port, Wi-Fi, and GoodCloud) require `allow_network_disruption = true` or `GLINET_ALLOW_NETWORK_DISRUPTION=true`, in addition to the wired-path check and encrypted backup.
 - The provider refuses to replace firmware include scripts, rejects unsupported UCI scopes, and requires an encrypted backup before the first change in an apply.
 - The provider does not manage GL.iNet account binding, provider profiles, or cloud activation.
 

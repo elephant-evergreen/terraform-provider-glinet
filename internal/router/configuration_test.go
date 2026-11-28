@@ -172,7 +172,9 @@ func TestPortMappingOnlyChangeSynchronizesRuntime(t *testing.T) {
 	before := Configuration{{Package: "eth_ports_config_map", Name: "lan2", Type: "port", Options: map[string]string{"pvid": "1"}}}
 	after := Configuration{{Package: "eth_ports_config_map", Name: "lan2", Type: "port", Options: map[string]string{"pvid": "11"}}}
 	remote := &configurationMutationRunner{current: before, wanted: after}
-	if err := newFixtureClient(remote).writeConfiguration(context.Background(), after, nil, after, nil); err != nil {
+	client := newFixtureClient(remote)
+	client.AllowNetworkDisruption(true)
+	if err := client.writeConfiguration(context.Background(), after, nil, after, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(remote.apply, "gl-vlan-port-map sync") || !strings.Contains(remote.apply, "reboot") {
@@ -205,7 +207,9 @@ func TestSSIDChangeReloadsOnlyWireless(t *testing.T) {
 	before := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Before"}}}
 	after := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "After"}}}
 	remote := &configurationMutationRunner{current: before, wanted: after}
-	if err := newFixtureClient(remote).writeConfiguration(context.Background(), after, nil, after, nil); err != nil {
+	client := newFixtureClient(remote)
+	client.AllowNetworkDisruption(true)
+	if err := client.writeConfiguration(context.Background(), after, nil, after, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(remote.apply, "wifi reload") || strings.Contains(remote.apply, "/etc/init.d/network reload") || strings.Contains(remote.apply, "module\\\":\\\"dns") {

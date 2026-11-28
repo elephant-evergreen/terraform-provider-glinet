@@ -384,6 +384,10 @@ func applyConfigurationPlan(plan reloadPlan, config, actual Configuration) reloa
 	return plan
 }
 
+func networkDisruptionRequired(plan reloadPlan) bool {
+	return plan.Reboot || plan.Wireless || plan.Cloud
+}
+
 func (c *Client) writeConfiguration(ctx context.Context, config Configuration, secrets map[string]string, safetyConfig Configuration, service *ServiceChange) error {
 	if !ValidSecretOptions(config, secrets) {
 		return errors.New("Secret options must reference managed sections and supported secret names.")
@@ -431,10 +435,14 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 			plan.Reboot = true
 		}
 	}
+	disruptive := networkDisruptionRequired(plan)
+	if disruptive && !c.allowNetworkDisruption {
+		return errors.New("This change can interrupt the network connection. Confirm a wired recovery path, then set allow_network_disruption = true (or GLINET_ALLOW_NETWORK_DISRUPTION=1) and apply again.")
+	}
 	if c.protection == nil {
 		return errors.New("Router changes require encrypted backup and management-path protection.")
 	}
-	if err := c.protection.Protect(ctx, c.runner, plan.Reboot || plan.Wireless || plan.Cloud); err != nil {
+	if err := c.protection.Protect(ctx, c.runner, disruptive); err != nil {
 		return err
 	}
 	_, err = c.runner.Run(ctx, configurationApplyScript(config, token, plan, secrets))
