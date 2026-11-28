@@ -22,7 +22,7 @@ A row is complete when its status and the managed resources are accurate and the
 | Level | Meaning | Where it is recorded |
 | --- | --- | --- |
 | Fixture | Schema, identity, plan/apply consistency, recovery scripts, and activation rules pass in local tests. Every `Managed` row is at least fixture-verified. | `mise run check` |
-| Hardware-exercised | An explicitly authorized router ran the automated acceptance suite for the listed operations, including create, update, import, destroy, empty plan, an injected-rule rollback, the NTP restart, and an optional reboot. | private verification notes; not published |
+| Hardware-exercised | An explicitly authorized router ran the automated acceptance suite for the listed operations, including create, update, import, destroy, empty plan, an injected-rule rollback, a lost confirmation response, the NTP restart, and an optional reboot. | private verification notes; not published |
 | Hardware-unverified | Everything else, including physical power-loss recovery, an SSH disconnect during a rollback, a restore failure, multi-resource apply timing, and traffic acceptance. | this document and [testing](testing.md) |
 
 Firmware 4.11.x is the verified line. `mise run acceptance` runs the hardware suite against an explicitly authorized router. Do not promote a row to hardware-exercised from fixture results, and do not infer traffic acceptance or power-loss recovery from the suite's configuration checks.

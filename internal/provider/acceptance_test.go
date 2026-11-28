@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -164,6 +165,8 @@ func TestAcceptanceHardware(t *testing.T) {
 	t.Run("service_activation", acceptanceServiceActivation)
 
 	t.Run("rollback", acceptanceRollback)
+
+	t.Run("lost_confirmation", acceptanceLostConfirmation)
 
 	t.Run("reboot", func(t *testing.T) {
 		if os.Getenv("GLINET_ACCEPTANCE_REBOOT") != "1" {
@@ -476,6 +479,78 @@ func acceptanceRollback(t *testing.T) {
 			return
 		}
 	}
+}
+
+// acceptanceLostConfirmation runs a real transaction and discards the
+// confirmation response after the router executes it. The provider must read
+// the durable decision and report the committed change as success.
+func acceptanceLostConfirmation(t *testing.T) {
+	ctx := context.Background()
+	runner := acceptanceRunner(t)
+	protection, err := router.NewProtection(os.Getenv("GLINET_BACKUP_DIRECTORY"), os.Getenv("GLINET_PRIVATE_KEY_FILE"), os.Getenv("GLINET_HOST"), acceptancePort(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := router.NewClient(&lostConfirmationRunner{Runner: runner}, protection)
+	client.SetManagementPort(acceptancePort(t))
+	name := "Acceptance-Confirm-" + acceptanceNonce(t)
+	section := router.Section{
+		Package: "firewall", Type: "redirect", Name: "@redirect[0]",
+		Match: map[string]string{"name": name},
+		Options: map[string]string{
+			"name": name, "target": "DNAT", "src": "wan", "src_dport": "65530",
+			"dest": "lan", "dest_ip": "192.0.2.10", "dest_port": "65530",
+			"proto": "tcp", "enabled": "1", router.ManagedOption: "1",
+		},
+	}
+	if err := client.ApplySections(ctx, router.Configuration{section}, nil); err != nil {
+		t.Fatalf("Cannot create the confirmation-loss redirect: %v", err)
+	}
+	actual, ok, err := client.ReadSection(ctx, section)
+	if err != nil || !ok {
+		t.Fatalf("Cannot read the confirmation-loss redirect: %v", err)
+	}
+	defer func() {
+		deadline := time.Now().Add(7 * time.Minute)
+		for time.Now().Before(deadline) {
+			output, err := runner.Run(context.Background(), "test -e /root/.terraform-provider-glinet-configuration && echo busy || echo clean")
+			if err != nil || strings.TrimSpace(string(output)) == "clean" {
+				break
+			}
+			time.Sleep(5 * time.Second)
+		}
+		cleanup := router.Section{Package: "firewall", Name: actual.Name, Type: "redirect", Absent: true}
+		if err := client.ApplySections(context.Background(), router.Configuration{cleanup}, nil); err != nil {
+			t.Errorf("Cannot remove the confirmation-loss redirect: %v", err)
+		}
+	}()
+	changed := acceptanceCloneSection(actual)
+	changed.Options["dest_port"] = "65531"
+	changed.Match = nil
+	if err := client.ApplySections(ctx, router.Configuration{changed}, nil); err != nil {
+		t.Fatalf("A committed change with a lost confirmation response reported failure: %v", err)
+	}
+	if err := acceptanceObservation(runner, "firewall", name, "dest_port", "65531")(nil); err != nil {
+		t.Fatalf("The committed change is not on the router: %v", err)
+	}
+}
+
+// lostConfirmationRunner forwards every command to the router but discards the
+// response of a confirmation command, as if the SSH connection had dropped
+// after the router executed it.
+type lostConfirmationRunner struct {
+	router.Runner
+}
+
+func (r *lostConfirmationRunner) Run(ctx context.Context, script string) ([]byte, error) {
+	output, err := r.Runner.Run(ctx, script)
+	if err != nil {
+		return output, err
+	}
+	if strings.Contains(script, "ack_state") {
+		return nil, errors.New("The router SSH operation did not complete.")
+	}
+	return output, nil
 }
 
 func acceptanceRedirect(name, port string) string {

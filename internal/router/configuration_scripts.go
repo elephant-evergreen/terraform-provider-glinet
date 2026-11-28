@@ -132,13 +132,6 @@ fi
 `
 }
 
-func cloudCommitPackages(plan reloadPlan) string {
-	if plan.ServiceSnapshot {
-		return " gl-cloud"
-	}
-	return ""
-}
-
 func cloudRequest(plan reloadPlan) string {
 	if plan.Cloud {
 		return cloudSetConfigScript(plan.CloudEnabled) + cloudVerifyScript(plan.CloudEnabled)
