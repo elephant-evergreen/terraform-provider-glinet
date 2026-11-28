@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
@@ -275,4 +276,77 @@ func schemaDefaultValue(attribute schema.Attribute) (attr.Value, bool) {
 		return response.PlanValue, !response.Diagnostics.HasError()
 	}
 	return nil, false
+}
+
+// TestWriteOnlyValuesNeverEnterState keeps write-only secrets out of the
+// object the provider stores, and out of every other attribute.
+func TestWriteOnlyValuesNeverEnterState(t *testing.T) {
+	ctx := context.Background()
+	for _, factory := range New("test")().Resources(ctx) {
+		resource, ok := factory().(*typedResource)
+		if !ok || len(resource.spec.WriteOnly) == 0 {
+			continue
+		}
+		var response frameworkresource.SchemaResponse
+		resource.Schema(ctx, frameworkresource.SchemaRequest{}, &response)
+		attributes := response.Schema.Attributes
+		t.Run(resource.spec.TypeName, func(t *testing.T) {
+			rapid.Check(t, func(t *rapid.T) {
+				values := make(map[string]attr.Value, len(attributes))
+				for name, attribute := range attributes {
+					values[name] = generateAttributeValue(t, name, attribute)
+				}
+				if resource.spec.Validate != nil {
+					if err := resource.spec.Validate(values); err != nil {
+						return
+					}
+				}
+				if resource.spec.ValidateConfig != nil {
+					if err := resource.spec.ValidateConfig(values); err != nil {
+						return
+					}
+				}
+				section, err := resource.spec.Selector(values)
+				if err != nil {
+					return
+				}
+				secrets := map[string]string{}
+				for _, name := range resource.spec.WriteOnly {
+					secret := rapid.StringMatching(`^[A-Za-z0-9!#$%&()*+,-./:;<=>?@[\]^_{|}~]{8,64}$`).Draw(t, "secret-"+name)
+					secrets[name] = secret
+					values[name] = types.StringValue(secret)
+				}
+				object, diagnostics := resource.stateObject(values, section, "token")
+				if diagnostics.HasError() {
+					t.Fatalf("cannot build the state: %v", diagnostics)
+				}
+				applied := object.Attributes()
+				for name, secret := range secrets {
+					if !applied[name].IsNull() {
+						t.Fatalf("write-only %s reached the state", name)
+					}
+					for attribute, value := range applied {
+						if strings.Contains(attributeValueString(value), secret) {
+							t.Fatalf("write-only %s leaked into the %s attribute", name, attribute)
+						}
+					}
+				}
+			})
+		})
+	}
+}
+
+func attributeValueString(value attr.Value) string {
+	switch value := value.(type) {
+	case types.String:
+		return value.ValueString()
+	case types.Set:
+		parts := []string{}
+		for _, element := range value.Elements() {
+			parts = append(parts, attributeValueString(element))
+		}
+		return strings.Join(parts, "\n")
+	default:
+		return ""
+	}
 }

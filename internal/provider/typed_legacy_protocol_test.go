@@ -70,6 +70,12 @@ func protocolServer(t *testing.T, remote *typedFixtureRunner) tfprotov6.Provider
 	return server
 }
 
+// TestLegacyStateFirstUpdateKeepsPlanConsistent drives PlanResourceChange and
+// ApplyResourceChange over the provider protocol. Terraform Core rejects an
+// apply whose result differs from a known planned value, so the test compares
+// every known planned attribute with the applied state and fails on a
+// mismatch, the same way "Provider produced inconsistent result after apply"
+// is decided.
 func TestLegacyStateFirstUpdateKeepsPlanConsistent(t *testing.T) {
 	ctx := context.Background()
 	remote := &typedFixtureRunner{actual: legacySystemNTPState()}
