@@ -849,6 +849,17 @@ func TestConfigurationWorldProbeRequiresCompletedCleanup(t *testing.T) {
 	if got := probe(); got != "confirm" {
 		t.Fatalf("A cleaned-up confirmed transaction reported %q", got)
 	}
+	writeOutcome(t, root, "restored")
+	if err := os.MkdirAll(filepath.Join(root, "lock"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if got := probe(); got != "pending" {
+		t.Fatalf("A restored transaction with its router lock still present reported %q", got)
+	}
+	_ = os.RemoveAll(filepath.Join(root, "lock"))
+	if got := probe(); got != "restored" {
+		t.Fatalf("A cleaned-up restored transaction reported %q", got)
+	}
 	foreign := newConfigurationWorld(t)
 	writeTransaction(t, foreign.base.root, "other")
 	output, err := foreign.run(configurationOutcomeProbe("token"))

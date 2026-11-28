@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
@@ -10,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func NewSystemSSHResource() resource.Resource {
@@ -65,6 +67,25 @@ func NewSystemSSHResource() resource.Resource {
 		},
 		AuthorizeWrite: sshEndpointWritable,
 	})
+}
+
+type sshEnabledValidator struct{}
+
+func (sshEnabledValidator) Description(context.Context) string {
+	return "SSH must stay enabled"
+}
+
+func (sshEnabledValidator) MarkdownDescription(context.Context) string {
+	return "SSH must stay enabled"
+}
+
+func (sshEnabledValidator) ValidateBool(_ context.Context, req validator.BoolRequest, resp *validator.BoolResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if !req.ConfigValue.ValueBool() {
+		resp.Diagnostics.AddAttributeError(req.Path, "SSH must stay enabled", "disabling SSH would remove the provider's management path. Disable SSH from the router console instead.")
+	}
 }
 
 // sshEndpointWritable refuses an SSH change the provider cannot verify. The

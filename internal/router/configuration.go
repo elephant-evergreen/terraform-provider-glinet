@@ -666,10 +666,12 @@ func (c *Client) rollbackTransaction(token string) (transactionOutcome, error) {
 		return outcomeUnknown, err
 	}
 	outcome := parseTransactionOutcome(output)
-	if outcome != outcomePending && outcome != outcomeRestoring {
+	switch outcome {
+	case outcomeRolledBack, outcomeCommitted, outcomePending, outcomeRestoring:
+	default:
 		return outcome, nil
 	}
-	probe := "if [ -f " + quote(resultDir+"/"+token) + " ]; then cat " + quote(resultDir+"/"+token) + "; elif [ -d " + quote(transactionDir) + " ]; then printf pending; else printf missing; fi"
+	probe := configurationOutcomeProbe(token)
 	for {
 		select {
 		case <-ctx.Done():
@@ -689,6 +691,8 @@ func (c *Client) rollbackTransaction(token string) (transactionOutcome, error) {
 			return outcomeCommitted, nil
 		case "cancel":
 			return outcomeCancelled, nil
+		case "superseded":
+			return outcomeSuperseded, nil
 		case "missing":
 			return outcomeUnknown, nil
 		}

@@ -154,3 +154,15 @@ func TestRollbackTransactionPollsUntilOutcome(t *testing.T) {
 		})
 	}
 }
+
+func TestRollbackTransactionWaitsForCleanupAfterRestore(t *testing.T) {
+	runner := &scriptedRunner{outputs: [][]byte{[]byte("restored"), []byte("pending"), []byte("restored")}}
+	client := NewClient(runner, nil)
+	got, err := client.rollbackTransaction("token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != outcomeRolledBack {
+		t.Fatalf("outcome = %v, want rolled back", got)
+	}
+}

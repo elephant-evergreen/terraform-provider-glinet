@@ -140,9 +140,10 @@ func TestRestoreStateMachineModel(t *testing.T) {
 }
 
 // TestTransactionOutcomeModel checks the durable outcome probe against a model
-// of the commit/cleanup state machine: a confirmed transaction is reported only
-// after its transaction directory, lock, and recovery service are gone, while
-// a decided but uncommitted transaction stays pending.
+// of the commit/restore/cleanup state machine: a confirmed transaction and a
+// restored rollback are reported only after the transaction directory, lock,
+// and recovery service are gone, while a decided but uncommitted transaction
+// stays pending.
 func TestTransactionOutcomeModel(t *testing.T) {
 	if flag.Lookup("rapid.checks") != nil {
 		if err := flag.Set("rapid.checks", "40"); err != nil {
@@ -204,13 +205,13 @@ func TestTransactionOutcomeModel(t *testing.T) {
 
 func transactionOutcomeModel(result, dirToken string, actor, lock, retired bool, recovery string) string {
 	if result != "" {
-		if result != "confirm" {
+		if result != "confirm" && result != "restored" {
 			return result
 		}
 		if actor || lock || retired || dirToken == "token" || recovery == "token" {
 			return "pending"
 		}
-		return "confirm"
+		return result
 	}
 	if dirToken == "token" {
 		return "pending"
