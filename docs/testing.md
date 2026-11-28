@@ -30,6 +30,7 @@ The suite:
 - creates, updates, imports, and destroys a firewall redirect, a disabled OpenVPN server profile, a Samba share, and a firewall zone, and checks that each apply leaves an empty plan;
 - injects an undeclared firewall rule during a redirect update, expects the transaction to roll back and the section to be restored, and verifies the injected rule is gone;
 - changes the NTP configuration and checks that the stock time service restarts with a new process;
+- runs a transaction whose confirmation response is discarded after the router executes it, and checks that the committed change is reported as success;
 - reboots the router when `GLINET_ACCEPTANCE_REBOOT=1` is set and waits for the connection to return.
 
 Each step removes the temporary objects it created and does not change singleton stock sections. A test failure before cleanup can leave an `Acceptance-*` object behind; remove it through the stock UI or the provider before the next run. Archive the sanitized result against the exact provider version. The suite is compiled by the ordinary check, so it cannot silently rot.
@@ -47,4 +48,15 @@ The fixture world runs the generated shell scripts, including the recovery worke
 - a restore failure on the router (for example a full flash or a failed package copy);
 - the actual restart count, stop time, and flash writes of a multi-resource apply.
 
-The hardware acceptance suite exercises a rollback and the stock NTP restart. Extend it with these scenarios and record the results in the private verification notes before claiming them. A fixture result is not hardware verification.
+The hardware acceptance suite exercises a rollback and the stock NTP restart. It also runs one automated lost-confirmation case: the confirmation command executes on the router and its SSH response is discarded, and the provider must report the committed change as success. Extend it with the remaining scenarios and record the results in the private verification notes before claiming them. A fixture result is not hardware verification.
+
+## Manual recovery checks
+
+Run these only on an explicitly authorized router with console or physical recovery access, and record the result against the exact build in the private verification notes. They are not part of `mise run acceptance` because they interrupt power or the management connection. Transaction state lives under `/root/.terraform-provider-glinet-configuration`; terminal results live under `/root/.terraform-provider-glinet-results/<token>`.
+
+| Check | Procedure | Invariant to confirm |
+| --- | --- | --- |
+| Interrupted apply | Start an apply of a dedicated test resource and wait for `/root/.terraform-provider-glinet-configuration/armed` (or for `activate` after that), then remove power. Restore power and wait for SSH to return. Repeat at least five times across the phases (before activation, during the reload, after activation). | The test section holds either its previous or its new value, never a mix. The result record is one of `confirm`, `cancel`, `restored`, or `restore_failed`, or absent when the transaction never armed. The transaction directory and recovery service are gone after the recovery window, and the next plan is empty or shows only the intended change. |
+| Lost confirmation | Run the acceptance suite's `lost_confirmation` case. | The apply succeeds, the section shows the new value, and the next plan is empty. |
+| Disconnected provider | Start an apply that will roll back (the injected-rule pattern from `acceptanceRollback`), wait for `/root/.terraform-provider-glinet-configuration/armed`, and kill the provider process. Reconnect with a fresh client. | The router records `restored` (or `restore_failed` if the restore truly failed), the previous section value is back, and no `stuck` record remains once recovery finishes. Repeating the read is safe. |
+| Restore failure | Use a disposable lab device and a controlled fault that makes a snapshot copy fail. Never run this on a router in use. | The result record is `restore_failed`, the snapshot and recovery service remain, and the provider reports that the router could not restore the configuration. |
