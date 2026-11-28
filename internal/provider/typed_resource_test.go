@@ -377,6 +377,7 @@ func TestOwnerConflict(t *testing.T) {
 func TestTypedCreateRecordsOwnerToken(t *testing.T) {
 	remote := &typedFixtureRunner{}
 	client := router.NewClient(remote, fixtureProtection{})
+	client.AllowNetworkDisruption(true)
 	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
 	config := `resource "glinet_network_interface" "test" {
   name            = "guest"
