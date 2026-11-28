@@ -103,3 +103,51 @@ func FuzzValidOption(f *testing.F) {
 		}
 	})
 }
+
+func FuzzMergeManagedConfiguration(f *testing.F) {
+	f.Add("full:rule0|rule|firewall\nchanges:rule0|rule|firewall|0\nchanges:rule1|rule|firewall|1")
+	f.Add("full:a|rule|firewall\nfull:b|rule|firewall\nchanges:a|rule|firewall|1")
+	f.Fuzz(func(t *testing.T, spec string) {
+		full, changes := decodeConfigurationSpec(spec)
+		merged := mergeManagedConfiguration(full, changes)
+		for _, change := range changes {
+			found := false
+			for _, section := range merged {
+				if section.Name == change.Name && section.Package == change.Package && section.Type == change.Type {
+					found = true
+					break
+				}
+			}
+			if change.Absent && found {
+				t.Fatalf("absent change %q remained in the merged configuration", change.Name)
+			}
+			if !change.Absent && !found {
+				t.Fatalf("present change %q is missing from the merged configuration", change.Name)
+			}
+		}
+	})
+}
+
+func decodeConfigurationSpec(spec string) (Configuration, Configuration) {
+	var full, changes Configuration
+	for _, line := range strings.Split(spec, "\n") {
+		parts := strings.Split(line, "|")
+		if len(parts) < 3 {
+			continue
+		}
+		kind, name, sectionType := parts[0], parts[1], parts[2]
+		pkg := "firewall"
+		if len(parts) > 3 {
+			pkg = parts[3]
+		}
+		section := Section{Package: pkg, Name: name, Type: sectionType, Options: map[string]string{"name": name}}
+		switch kind {
+		case "full":
+			full = append(full, section)
+		case "changes":
+			section.Absent = len(parts) > 4 && parts[4] == "1"
+			changes = append(changes, section)
+		}
+	}
+	return full, changes
+}

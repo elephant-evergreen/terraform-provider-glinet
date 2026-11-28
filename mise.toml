@@ -25,6 +25,7 @@ go test ./internal/router -run '^FuzzShellQuote$' -fuzz '^FuzzShellQuote$' -fuzz
 go test ./internal/router -run '^FuzzLuaQuote$' -fuzz '^FuzzLuaQuote$' -fuzztime "$fuzztime"
 go test ./internal/router -run '^FuzzSectionValidation$' -fuzz '^FuzzSectionValidation$' -fuzztime "$fuzztime"
 go test ./internal/router -run '^FuzzValidOption$' -fuzz '^FuzzValidOption$' -fuzztime "$fuzztime"
+go test ./internal/router -run '^FuzzMergeManagedConfiguration$' -fuzz '^FuzzMergeManagedConfiguration$' -fuzztime "$fuzztime"
 go test ./internal/provider -run '^FuzzFirewallRuleRoundTrip$' -fuzz '^FuzzFirewallRuleRoundTrip$' -fuzztime "$fuzztime"
 go test ./internal/provider -run '^FuzzReconcileFirewallRules$' -fuzz '^FuzzReconcileFirewallRules$' -fuzztime "$fuzztime"
 '''
@@ -35,3 +36,7 @@ run = '''
 test "${GLINET_ACCEPTANCE:-}" = 1 || { echo "Set GLINET_ACCEPTANCE=1 and the GLINET_* connection variables. See docs/testing.md." >&2; exit 2; }
 TF_ACC=1 go test -tags acceptance -run '^TestAcceptanceHardware$' -count=1 -v -timeout 30m ./internal/provider
 '''
+
+[tasks.bench]
+description = "Run the provider benchmarks"
+run = "go test -run '^$' -bench . -benchmem ./..."

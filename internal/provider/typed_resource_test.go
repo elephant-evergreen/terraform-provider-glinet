@@ -340,3 +340,14 @@ func TestDeleteRequiresOwnershipMarker(t *testing.T) {
 		})
 	}
 }
+
+func TestReleasedSectionIsNotWritable(t *testing.T) {
+	if !releasedFromManagement(router.Section{Options: map[string]string{router.ManagedOption: "0"}}) {
+		t.Fatal("released marker was not detected")
+	}
+	for _, options := range []map[string]string{{router.ManagedOption: "1"}, {}} {
+		if releasedFromManagement(router.Section{Options: options}) {
+			t.Fatalf("managed marker %v was treated as released", options)
+		}
+	}
+}

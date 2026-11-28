@@ -118,7 +118,11 @@ The provider is the only owner of the sections it manages. Do not overlap typed 
 
 ## VPN status
 
-WireGuard remains experimental. OpenVPN resources are available, and the OpenVPN server profile is covered by the hardware acceptance suite.
+WireGuard remains experimental.
+
+## State upgrades
+
+Change an attribute's type or meaning only with a schema version bump and a state upgrader. Set `SchemaVersion` and `UpgradeState` on the typed spec; the framework calls the upgrader for the previous version before it reads the state. Do not rename or retype an attribute without an upgrader, because existing states fail to decode. OpenVPN resources are available, and the OpenVPN server profile is covered by the hardware acceptance suite.
 
 WireGuard resources:
 
