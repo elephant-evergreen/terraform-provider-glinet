@@ -137,27 +137,14 @@ func TestEveryManagedPackageHasActivationContract(t *testing.T) {
 	}
 }
 
-func TestDropbearActivationIsDeferredOnlyForEndpointChanges(t *testing.T) {
-	stable := Configuration{{Package: "dropbear", Type: "dropbear", Name: "@dropbear[0]", Options: map[string]string{"enable": "1", "Port": "22"}}}
-	plan := func() reloadPlan {
-		value := reloadPlan{}
-		addService(&value, dropbearService)
-		return value
+func TestDropbearActivatesInsideTheTransaction(t *testing.T) {
+	plan := reloadPlan{}
+	addService(&plan, dropbearService)
+	script := configurationReload(plan)
+	if !strings.Contains(script, "/etc/init.d/dropbear reload") {
+		t.Fatalf("dropbear activation is missing from the transaction reload:\n%s", script)
 	}
-	if got := resolveDeferred(plan(), stable, 22); got.Services[0].Deferred {
-		t.Fatal("a change that keeps the management endpoint was deferred")
-	}
-	if got := resolveDeferred(plan(), stable, 2222); !got.Services[0].Deferred {
-		t.Fatal("a port change was activated inside the transaction")
-	}
-	disabled := Configuration{{Package: "dropbear", Type: "dropbear", Name: "@dropbear[0]", Options: map[string]string{"enable": "0", "Port": "22"}}}
-	if got := resolveDeferred(plan(), disabled, 22); !got.Services[0].Deferred {
-		t.Fatal("disabling SSH was activated inside the transaction")
-	}
-	if got := resolveDeferred(plan(), stable, 0); !got.Services[0].Deferred {
-		t.Fatal("an unknown management port was activated inside the transaction")
-	}
-	if strings.Contains(configurationReload(reloadPlan{Services: []serviceAction{{Name: "dropbear", Deferred: true}}}), "dropbear") {
-		t.Fatal("a deferred service ran inside the transaction reload")
+	if !strings.Contains(script, "pidof dropbear") {
+		t.Fatalf("dropbear activation does not wait for the process:\n%s", script)
 	}
 }

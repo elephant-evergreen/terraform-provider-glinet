@@ -2,6 +2,8 @@ package router
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -128,12 +130,12 @@ func (c *Client) readRefreshState(ctx context.Context) (uciState, error) {
 
 // OwnerClaim is the ownership the caller observed before a write. The router
 // re-checks it inside the transaction lock, so a section claimed by another
-// state between the read and the write is refused instead of overwritten.
+// state between the read and the write is refused instead of overwritten. An
+// empty Token means the section had no owner token.
 type OwnerClaim struct {
 	Package string
 	Section string
 	Token   string
-	Unowned bool
 }
 
 func validateOwnerClaim(claim *OwnerClaim) error {
@@ -143,10 +145,16 @@ func validateOwnerClaim(claim *OwnerClaim) error {
 	if !validPackageName(claim.Package) || !validPackageName(claim.Section) {
 		return errors.New("The ownership claim must name a valid UCI package and section.")
 	}
-	if claim.Unowned == (claim.Token != "") {
-		return errors.New("The ownership claim must require an unowned section or an expected token.")
-	}
 	return nil
+}
+
+// AnonymousSectionName is the section name the provider creates for a missing
+// anonymous selector. The provider can therefore claim the section before the
+// first write, so a concurrent create is refused instead of overwritten.
+func AnonymousSectionName(packageName, sectionType string, match map[string]string) string {
+	identity, _ := json.Marshal([]any{packageName, sectionType, match})
+	sum := sha256.Sum256(identity)
+	return fmt.Sprintf("tf_glinet_%x", sum[:8])
 }
 
 // ApplySections writes the given sections as one recovery-protected UCI

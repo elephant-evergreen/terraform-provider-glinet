@@ -11,7 +11,7 @@
 | Recovery failure fixtures | A failed copy or a failed service restart never reports a completed rollback; the router records `restore_failed` when it stops retrying and keeps the snapshot and recovery service. A lost confirmation response resolves to success only when the router recorded a confirmed transaction |
 | Ownership fixtures | Forget clears the owner token on the router; a concurrent owner claim is refused with exit 78 before the transaction starts; the typed fixture applies the same token rules |
 | Activation audit | Every package in the allowed UCI surface has a reload path, a service activation, a cloud call, or a recorded exemption; the SSH endpoint decision is tested separately |
-| Property tests | Rapid generates attribute values, including non-default values filtered through the schema validators. Selector/load round trips preserve every explicit value, writes use only registered options, and the second round trip is stable. Write-only secrets never enter the state or another attribute. The managed-configuration merge keeps untouched sections identical, and the ordered firewall policy preserves the plan and converges when reapplied |
+| Property tests | Rapid generates attribute values, including non-default values filtered through the schema validators and retried until the resource's own validation accepts them. Each resource logs how many of the generated configurations were actually verified, and a resource that verifies none fails. Selector/load round trips preserve every explicit value, writes use only registered options, and the second round trip is stable. Write-only secrets never enter the state or another attribute. The managed-configuration merge keeps untouched sections identical, and the ordered firewall policy preserves the plan and converges when reapplied |
 | Firewall fixtures and mutation controls | All filter and nat entry chains, declared/missing/reordered rules, nested counter-only branches, and rejection of undeclared actions or branch cycles |
 | Native UCI fixture on a dedicated router | Actual libuci behavior in isolated temporary configuration; this does not demonstrate network activation or physical recovery |
 | GoodCloud service fixtures | Stock `cloud.set_config` invocation, stop verification, service snapshot and restore, configuration/runtime mismatch detection, rollback failure retention, and rollback outcomes in a local command world |
@@ -41,7 +41,7 @@ Fixture success and read-only firewall captures do not establish physical power-
 
 ## Not yet verified on hardware
 
-The fixture world runs the generated shell scripts, including the recovery worker, restore script, and deferred activation, in a local command environment. It cannot prove the behavior of the physical device:
+The fixture world runs the generated shell scripts, including the recovery worker and restore script, in a local command environment. It cannot prove the behavior of the physical device:
 
 - a power loss during a configuration transaction, including the restore resume path;
 - an SSH disconnect during a rollback, including the endpoint-changing SSH activation;

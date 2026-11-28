@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
@@ -190,6 +191,15 @@ func TestLegacyStateFirstUpdateKeepsPlanConsistent(t *testing.T) {
 	defer remote.mu.Unlock()
 	if len(remote.actual) != 1 || remote.actual[0].Options[router.OwnerTokenOption] != token {
 		t.Fatalf("router token does not match the applied state: %+v", remote.actual)
+	}
+	guard := false
+	for _, script := range remote.applies {
+		if strings.Contains(script, "uci -q get 'system.ntp.terraform_owner_id'") {
+			guard = true
+		}
+	}
+	if !guard {
+		t.Fatal("the legacy update did not re-check the observed owner inside the transaction")
 	}
 }
 

@@ -19,10 +19,27 @@ import (
 	"pgregory.net/rapid"
 )
 
+// propertyHints biases well-known attribute names toward values the
+// resource's own validation accepts, so format-checked resources are actually
+// exercised instead of being rejected in every check.
+var propertyHints = map[string][]string{
+	"mac":       {"02:00:00:00:00:01", "02:00:00:00:00:02"},
+	"ip":        {"192.0.2.10", "192.0.2.11"},
+	"target":    {"192.0.2.0/24", "2001:db8::/32", "10.0.0.0/8"},
+	"gateway":   {"192.0.2.1", "2001:db8::1"},
+	"hostname":  {"example-host", "router"},
+	"section":   {"example", "guest"},
+	"name":      {"example", "guest"},
+	"interface": {"lan", "wan"},
+}
+
 var propertyPool = []string{
 	"0", "1", "lan", "wan", "guest", "ap", "none", "REJECT", "ACCEPT", "DROP",
 	"ipv4", "ipv6", "any", "sae", "psk2", "auto", "6", "11", "HE40", "*",
-	"example", "192.168.9.1", "02:00:00:00:00:01", "ethernet", "static",
+	"example", "example-host", "example.com", "192.168.9.1", "02:00:00:00:00:01",
+	"ethernet", "static", "192.0.2.0/24", "2001:db8::/32", "10.0.0.0/8",
+	"192.0.2.1", "2001:db8::1", "br-lan", "wg0", "tcpudp", "udp", "icmp",
+	"access", "trunk", "server", "client", "pppoe", "dhcp", "max", "medium",
 }
 
 func TestTypedSelectorLoadIsStable(t *testing.T) {
@@ -36,21 +53,14 @@ func TestTypedSelectorLoadIsStable(t *testing.T) {
 		resource.Schema(ctx, frameworkresource.SchemaRequest{}, &response)
 		attributes := response.Schema.Attributes
 		t.Run(resource.spec.TypeName, func(t *testing.T) {
+			generated, accepted := 0, 0
 			rapid.Check(t, func(t *rapid.T) {
-				values := make(map[string]attr.Value, len(attributes))
-				for name, attribute := range attributes {
-					values[name] = generateAttributeValue(t, name, attribute)
+				generated++
+				values, ok := generateAcceptedValues(t, resource, attributes)
+				if !ok {
+					return
 				}
-				if resource.spec.Validate != nil {
-					if err := resource.spec.Validate(values); err != nil {
-						return
-					}
-				}
-				if resource.spec.ValidateConfig != nil {
-					if err := resource.spec.ValidateConfig(values); err != nil {
-						return
-					}
-				}
+				accepted++
 				section, err := resource.spec.Selector(values)
 				if err != nil {
 					t.Fatalf("%s cannot select an accepted configuration: %v", resource.spec.TypeName, err)
@@ -84,8 +94,36 @@ func TestTypedSelectorLoadIsStable(t *testing.T) {
 					t.Fatalf("%s selector does not reach a stable form:\nsecond: %#v\nthird: %#v", resource.spec.TypeName, second, third)
 				}
 			})
+			t.Logf("%s: %d of %d generated configurations passed validation", resource.spec.TypeName, accepted, generated)
+			if accepted == 0 {
+				t.Fatalf("%s: no generated configuration passed validation, so the property verified nothing", resource.spec.TypeName)
+			}
 		})
 	}
+}
+
+// generateAcceptedValues retries value generation until the resource accepts
+// the configuration, so the property measures how many checks actually
+// exercised the resource instead of silently skipping invalid draws.
+func generateAcceptedValues(t *rapid.T, resource *typedResource, attributes map[string]schema.Attribute) (map[string]attr.Value, bool) {
+	for attempt := 0; attempt < 8; attempt++ {
+		values := make(map[string]attr.Value, len(attributes))
+		for name, attribute := range attributes {
+			values[name] = generateAttributeValue(t, name, attribute)
+		}
+		if resource.spec.Validate != nil {
+			if err := resource.spec.Validate(values); err != nil {
+				continue
+			}
+		}
+		if resource.spec.ValidateConfig != nil {
+			if err := resource.spec.ValidateConfig(values); err != nil {
+				continue
+			}
+		}
+		return values, true
+	}
+	return nil, false
 }
 
 // preservesMeaning keeps every explicit setting through a selector/load round
@@ -139,7 +177,9 @@ func generateAttributeValue(t *rapid.T, name string, attribute schema.Attribute)
 		}
 		for attempt := 0; attempt < 8; attempt++ {
 			var candidate types.String
-			if rapid.Bool().Draw(t, fmt.Sprintf("%s-%d-pool", name, attempt)) {
+			if hints, ok := propertyHints[name]; ok && rapid.Bool().Draw(t, fmt.Sprintf("%s-%d-hint", name, attempt)) {
+				candidate = types.StringValue(rapid.SampledFrom(hints).Draw(t, fmt.Sprintf("%s-%d", name, attempt)))
+			} else if rapid.Bool().Draw(t, fmt.Sprintf("%s-%d-pool", name, attempt)) {
 				candidate = types.StringValue(rapid.SampledFrom(propertyPool).Draw(t, fmt.Sprintf("%s-%d", name, attempt)))
 			} else {
 				candidate = types.StringValue(rapid.StringMatching(`^[A-Za-z0-9 ._:/'"$-]{0,16}$`).Draw(t, fmt.Sprintf("%s-%d", name, attempt)))
@@ -291,21 +331,14 @@ func TestWriteOnlyValuesNeverEnterState(t *testing.T) {
 		resource.Schema(ctx, frameworkresource.SchemaRequest{}, &response)
 		attributes := response.Schema.Attributes
 		t.Run(resource.spec.TypeName, func(t *testing.T) {
+			generated, accepted := 0, 0
 			rapid.Check(t, func(t *rapid.T) {
-				values := make(map[string]attr.Value, len(attributes))
-				for name, attribute := range attributes {
-					values[name] = generateAttributeValue(t, name, attribute)
+				generated++
+				values, ok := generateAcceptedValues(t, resource, attributes)
+				if !ok {
+					return
 				}
-				if resource.spec.Validate != nil {
-					if err := resource.spec.Validate(values); err != nil {
-						return
-					}
-				}
-				if resource.spec.ValidateConfig != nil {
-					if err := resource.spec.ValidateConfig(values); err != nil {
-						return
-					}
-				}
+				accepted++
 				section, err := resource.spec.Selector(values)
 				if err != nil {
 					return
@@ -332,6 +365,10 @@ func TestWriteOnlyValuesNeverEnterState(t *testing.T) {
 					}
 				}
 			})
+			t.Logf("%s: %d of %d generated configurations passed validation", resource.spec.TypeName, accepted, generated)
+			if accepted == 0 {
+				t.Fatalf("%s: no generated configuration passed validation, so the property verified nothing", resource.spec.TypeName)
+			}
 		})
 	}
 }

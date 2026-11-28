@@ -28,12 +28,13 @@ A provider without owner-token support can rewrite a section without the token. 
 
 ## Concurrent writers
 
-Reading the owner and writing the section are not one step, so two Terraform states could both observe an unowned section and then write it in turn. The provider therefore re-checks the ownership it observed after the router-side transaction lock is acquired and before it prepares the transaction:
+Reading the owner and writing the section are not one step, so two Terraform states could both observe an unowned section and then write it in turn. The provider therefore records the owner token it observed and re-checks it after the router-side transaction lock is acquired and before it prepares the transaction:
 
-- Create requires that the section still has no owner token.
-- Update, Delete, and Forget require that the section still has no token or the token recorded in the state.
+- The claim holds the token currently on the router, or an empty token when the section has none or does not exist yet.
+- The router token must still match. A token that disappeared is rewritten, because a provider without token support can drop it; a token that appeared is refused.
+- An anonymous section that does not exist yet is claimed by the deterministic name the provider creates, so two states cannot both create it.
 
-A section claimed by another state in between is refused with "owned by another Terraform state", before any configuration changes, so the plan can be re-run without inspecting a partially applied transaction.
+This covers Create, Update, Delete, and Forget, including a legacy state without a token. A section claimed by another state in between is refused with "owned by another Terraform state", before any configuration changes, so the plan can be re-run without inspecting a partially applied transaction.
 
 ## Legacy states
 

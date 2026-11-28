@@ -747,7 +747,7 @@ func TestConfigurationWorldOwnershipGuardRejectsConcurrentWriter(t *testing.T) {
 	uci := "#!/bin/sh\ncase \"$*\" in\n *terraform_owner_id*) printf foreign ;;\nesac\nexit 0\n"
 	_ = os.WriteFile(filepath.Join(root, "bin", "uci"), []byte(uci), 0700)
 	spec := Configuration{{Package: "system", Name: "system", Type: "system", Options: map[string]string{"hostname": "router"}}}
-	script := configurationApplyScript(spec, "token", reloadPlan{}, &OwnerClaim{Package: "system", Section: "system", Unowned: true})
+	script := configurationApplyScript(spec, "token", reloadPlan{}, &OwnerClaim{Package: "system", Section: "system", Token: ""})
 	_, err := f.run(script)
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 78 {
@@ -779,48 +779,76 @@ func TestConfigurationWorldOwnershipGuardAcceptsObservedOwner(t *testing.T) {
 	}
 }
 
-func TestConfigurationWorldDeferredActivationRunsAfterConfirmation(t *testing.T) {
+func TestConfigurationWorldOwnershipGuardAcceptsRewrittenToken(t *testing.T) {
 	f := newConfigurationWorld(t)
 	root := f.base.root
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
-	counter := filepath.Join(root, "dropbear-count")
-	service := "#!/bin/sh\nprintf x >> " + quote(counter) + "\n"
-	_ = os.WriteFile(filepath.Join(root, "service-dropbear"), []byte(service), 0700)
-	spec := Configuration{{Package: "dropbear", Type: "dropbear", Name: "@dropbear[0]", Options: map[string]string{"enable": "1", "Port": "2222"}}}
-	plan := reloadPlan{Services: []serviceAction{{Name: "dropbear", Command: "reload", Deferred: true}}}
-	script := configurationApplyScript(spec, "token", plan, nil)
-	script = strings.Replace(script, configurationLua(spec, true), "printf changed > "+quote(root+"/dropbear")+"\n", 1)
-	script = replaceSleep(script, "sleep 5", "sleep 0")
+	uci := "#!/bin/sh\nexit 0\n"
+	_ = os.WriteFile(filepath.Join(root, "bin", "uci"), []byte(uci), 0700)
+	spec := Configuration{{Package: "system", Name: "system", Type: "system", Options: map[string]string{"hostname": "router"}}}
+	script := configurationApplyScript(spec, "token", reloadPlan{}, &OwnerClaim{Package: "system", Section: "system", Token: "token"})
+	script = strings.Replace(script, configurationLua(spec, true), "exit 0\n", 1)
+	script = strings.Replace(script, "start-stop-daemon -S -b -m -p "+quote(root+"/transaction/pid"), "true", 1)
 	if out, err := f.run(script); err != nil {
-		t.Fatalf("Apply failed: %s %v", out, err)
+		t.Fatalf("A wiped token was not adopted for rewriting: %s %v", out, err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "transaction", "ready")); err != nil {
-		t.Fatal("Apply never became ready")
+}
+
+func TestConfigurationWorldOwnershipGuardRejectsNewOwnerAfterEmptyObservation(t *testing.T) {
+	f := newConfigurationWorld(t)
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	uci := "#!/bin/sh\ncase \"$*\" in\n *terraform_owner_id*) printf adopted ;;\nesac\nexit 0\n"
+	_ = os.WriteFile(filepath.Join(root, "bin", "uci"), []byte(uci), 0700)
+	spec := Configuration{{Package: "system", Name: "system", Type: "system", Options: map[string]string{"hostname": "router"}}}
+	script := configurationApplyScript(spec, "token", reloadPlan{}, &OwnerClaim{Package: "system", Section: "system", Token: ""})
+	_, err := f.run(script)
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 78 {
+		t.Fatalf("An owner that appeared after an empty observation was accepted: %v", err)
 	}
-	if _, err := os.Stat(counter); !os.IsNotExist(err) {
-		t.Fatal("Deferred activation ran inside the transaction")
-	}
-	if out, err := f.run(configurationConfirmScriptWithPlan("token", spec, plan, nil)); err != nil {
-		t.Fatalf("Confirmation failed: %s %v", out, err)
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		data, err := os.ReadFile(filepath.Join(root, "results", "token.activation"))
-		if err == nil && string(data) == "0" {
-			break
+}
+
+func TestConfigurationWorldProbeRequiresCompletedCleanup(t *testing.T) {
+	f := newConfigurationWorld(t)
+	root := f.base.root
+	probe := func() string {
+		output, err := f.run(configurationOutcomeProbe("token"))
+		if err != nil {
+			t.Fatalf("Probe failed: %s %v", output, err)
 		}
-		time.Sleep(20 * time.Millisecond)
+		return strings.TrimSpace(string(output))
 	}
-	data, err := os.ReadFile(filepath.Join(root, "results", "token.activation"))
-	if err != nil || string(data) != "0" {
-		t.Fatalf("Deferred activation did not record success: %q %v", data, err)
+	if got := probe(); got != "missing" {
+		t.Fatalf("Empty world probe = %q", got)
 	}
-	if out, err := f.run(configurationConfirmScriptWithPlan("token", spec, plan, nil)); err != nil {
-		t.Fatalf("Repeated confirmation failed: %s %v", out, err)
+	writeTransaction(t, root, "token")
+	writeFile(t, filepath.Join(root, "transaction", "decision"), "confirm")
+	if got := probe(); got != "pending" {
+		t.Fatalf("A decided but unrecorded transaction reported %q", got)
 	}
-	time.Sleep(100 * time.Millisecond)
-	count, err := os.ReadFile(counter)
-	if err != nil || string(count) != "x" {
-		t.Fatalf("Deferred activation ran %d times: %q %v", len(count), count, err)
+	writeOutcome(t, root, "confirm")
+	if got := probe(); got != "pending" {
+		t.Fatalf("A confirmed transaction with its snapshot still present reported %q", got)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "lock-actor-token"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if got := probe(); got != "pending" {
+		t.Fatalf("A transaction with a live worker reported %q", got)
+	}
+	_ = os.RemoveAll(filepath.Join(root, "lock-actor-token"))
+	_ = os.RemoveAll(filepath.Join(root, "transaction"))
+	if got := probe(); got != "confirm" {
+		t.Fatalf("A cleaned-up confirmed transaction reported %q", got)
+	}
+	foreign := newConfigurationWorld(t)
+	writeTransaction(t, foreign.base.root, "other")
+	output, err := foreign.run(configurationOutcomeProbe("token"))
+	if err != nil {
+		t.Fatalf("Probe failed: %s %v", output, err)
+	}
+	if got := strings.TrimSpace(string(output)); got != "superseded" {
+		t.Fatalf("A foreign transaction reported %q", got)
 	}
 }

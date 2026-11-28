@@ -18,8 +18,8 @@ func NewSystemSSHResource() resource.Resource {
 		Description: "Manage the stock OpenWrt dropbear SSH service. Destroy releases ownership and preserves the firmware section.",
 		NoDelete:    true,
 		Attributes: map[string]schema.Attribute{
-			"enabled":            schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable the SSH service."},
-			"port":               schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(22), MarkdownDescription: "SSH port."},
+			"enabled":            schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable the SSH service. Disabling it is refused because it removes the provider's management path; use the router console."},
+			"port":               schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(22), MarkdownDescription: "SSH port. It must match the provider's configured port. Moving the endpoint is refused; change it from the router console and update the provider configuration and known_hosts entry."},
 			"password_auth":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Allow password authentication."},
 			"root_password_auth": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Allow root password authentication."},
 			"interface":          schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Restrict SSH to an interface; empty leaves it unrestricted."},
@@ -63,20 +63,27 @@ func NewSystemSSHResource() resource.Resource {
 			}
 			return nil
 		},
-		Advisory: sshManagementAdvisory,
+		AuthorizeWrite: sshEndpointWritable,
 	})
 }
 
-// sshManagementAdvisory warns when a planned SSH change may remove the
-// management path before the provider can verify the new endpoint.
-func sshManagementAdvisory(plan, state map[string]attr.Value, creating bool, managementPort int) string {
-	if !boolOf(plan, "enabled", true) {
-		return "This change disables SSH, so it removes the provider's management path. The provider applies it after the transaction commits and cannot verify or reverse it. Re-enable SSH from the router console, and apply this change on its own."
+// sshEndpointWritable refuses an SSH change the provider cannot verify. The
+// management path must stay on the endpoint the provider is connected through,
+// so moving or disabling SSH is a console operation, not a Terraform one.
+func sshEndpointWritable(client *router.Client, values map[string]attr.Value) error {
+	if !boolOf(values, "enabled", true) {
+		return fmt.Errorf("disabling SSH would remove the provider's management path. Disable SSH from the router console instead.")
 	}
-	port := int64Of(plan, "port")
-	changed := creating || int64Of(state, "port") != port
-	if !changed || (managementPort != 0 && port == int64(managementPort)) {
-		return ""
+	if client == nil {
+		return nil
 	}
-	return fmt.Sprintf("SSH will listen on port %d after the transaction commits. The provider cannot verify or revert the new endpoint, so update the provider's port and known_hosts entry (or use the router console) before the next operation. Apply this change on its own; the remaining resources in the same apply may fail once the port changes.", port)
+	management := client.ManagementPort()
+	if management == 0 {
+		return nil
+	}
+	port := int64Of(values, "port")
+	if port != int64(management) {
+		return fmt.Errorf("SSH port %d does not match the provider's management port %d. Change the endpoint from the router console, then update the provider's port and known_hosts entry.", port, management)
+	}
+	return nil
 }

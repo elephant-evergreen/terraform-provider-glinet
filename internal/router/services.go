@@ -1,14 +1,11 @@
 package router
 
-import "strconv"
-
 type serviceAction struct {
 	Name         string
 	Process      string
 	EnabledCheck string
 	Command      string
 	Optional     bool
-	Deferred     bool
 	Disruptive   bool
 }
 
@@ -42,26 +39,6 @@ func (s serviceAction) script() string {
 	return body
 }
 
-// deferredScript activates a service after the transaction is confirmed. It
-// records the result instead of failing the already committed transaction.
-func (s serviceAction) deferredScript(result string) string {
-	body := "rc=0\n"
-	if s.Optional {
-		body += "if [ -x " + s.path() + " ]; then\n"
-	}
-	body += s.path() + " " + s.command() + " >/dev/null 2>&1 || rc=1\n"
-	if s.Process != "" && s.EnabledCheck != "" {
-		body += "if [ \"$rc\" = 0 ] && " + s.EnabledCheck + "; then\n"
-		body += "for _ in 1 2 3 4 5 6 7 8 9 10; do pidof " + s.Process + " >/dev/null 2>&1 && break; sleep 1; done\n"
-		body += "pidof " + s.Process + " >/dev/null 2>&1 || rc=1\n"
-		body += "fi\n"
-	}
-	if s.Optional {
-		body += "fi\n"
-	}
-	return body + "printf '%s' \"$rc\" > " + quote(result) + "\n"
-}
-
 var (
 	sambaService       = serviceAction{Name: "samba4"}
 	openvpnService     = serviceAction{Name: "openvpn", Process: "openvpn", EnabledCheck: `uci show openvpn 2>/dev/null | grep -q "\.enabled='1'"`}
@@ -91,7 +68,7 @@ var (
 	systemLEDService   = serviceAction{Name: "led", Optional: true}
 	mtkhnatService     = serviceAction{Name: "mtkhnat", Optional: true}
 	wireguardService   = serviceAction{Name: "wireguard_server", Optional: true}
-	dropbearService    = serviceAction{Name: "dropbear", Command: "reload", Process: "dropbear", EnabledCheck: `[ "$(uci -q get dropbear.@dropbear[0].enable)" = 1 ]`, Deferred: true, Disruptive: true}
+	dropbearService    = serviceAction{Name: "dropbear", Command: "reload", Process: "dropbear", EnabledCheck: `[ "$(uci -q get dropbear.@dropbear[0].enable)" = 1 ]`, Disruptive: true}
 )
 
 func serviceFor(section Section) (serviceAction, bool) {
@@ -168,33 +145,4 @@ func addService(plan *reloadPlan, action serviceAction) {
 		}
 	}
 	plan.Services = append(plan.Services, action)
-}
-
-// resolveDeferred decides whether an activation has to wait for the confirmed
-// transaction. The SSH service waits only when activating it would move or
-// close the endpoint the provider is connected through.
-func resolveDeferred(plan reloadPlan, config Configuration, managementPort int) reloadPlan {
-	for i := range plan.Services {
-		if plan.Services[i].Name != dropbearService.Name || !plan.Services[i].Deferred {
-			continue
-		}
-		plan.Services[i].Deferred = dropbearEndpointChange(config, managementPort)
-	}
-	return plan
-}
-
-func dropbearEndpointChange(config Configuration, managementPort int) bool {
-	for _, section := range config {
-		if section.Package != "dropbear" || section.Type != "dropbear" {
-			continue
-		}
-		if section.Options["enable"] == "0" {
-			return true
-		}
-		if managementPort == 0 {
-			return true
-		}
-		return section.Options["Port"] != strconv.Itoa(managementPort)
-	}
-	return false
 }

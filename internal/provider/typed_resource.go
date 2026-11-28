@@ -31,7 +31,7 @@ type typedSpec struct {
 	Validate                  func(map[string]attr.Value) error
 	ValidateConfig            func(map[string]attr.Value) error
 	ModifyPlan                func(plan, config, state map[string]attr.Value, creating bool) (map[string]attr.Value, error)
-	Advisory                  func(plan, state map[string]attr.Value, creating bool, managementPort int) string
+	AuthorizeWrite            func(*router.Client, map[string]attr.Value) error
 	PreserveUnset             []string
 	UpdateSelector            func(plan, state map[string]attr.Value) (router.Section, error)
 	Secrets                   func(map[string]attr.Value) map[string]string
@@ -189,15 +189,6 @@ func (r *typedResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	preserveUnsetAttributes(values, config.Attributes(), stateValues, r.spec.PreserveUnset)
 	r.preserveIdentity(values, stateValues)
 	preserveOwner(values, stateValues)
-	if r.spec.Advisory != nil {
-		managementPort := 0
-		if r.client != nil {
-			managementPort = r.client.ManagementPort()
-		}
-		if message := r.spec.Advisory(values, stateValues, req.State.Raw.IsNull(), managementPort); message != "" {
-			resp.Diagnostics.AddWarning("Management path change", message)
-		}
-	}
 	if r.spec.ModifyPlan != nil {
 		updated, err := r.spec.ModifyPlan(values, config.Attributes(), stateValues, req.State.Raw.IsNull())
 		if err != nil {
@@ -282,6 +273,10 @@ func (r *typedResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Invalid configuration", err.Error())
 		return
 	}
+	if err := r.authorize(values); err != nil {
+		resp.Diagnostics.AddError("Cannot change this resource", err.Error())
+		return
+	}
 	section, err := r.spec.Selector(values)
 	if err != nil {
 		resp.Diagnostics.AddError("Cannot build section", err.Error())
@@ -316,7 +311,7 @@ func (r *typedResource) Create(ctx context.Context, req resource.CreateRequest, 
 		section.Options = map[string]string{}
 	}
 	router.SetManagedOwner(section.Options, token)
-	claim := ownershipClaim(section.Package, resolvedSectionName(section, existing, found), "", true)
+	claim := ownershipClaim(section.Package, resolvedSectionName(section, existing, found), observedOwner(existing.Options, found))
 	if err := r.client.ApplySectionsOwned(ctx, router.Configuration{section}, r.secrets(values), claim); err != nil {
 		resp.Diagnostics.AddError("Cannot apply section", err.Error())
 		return
@@ -390,6 +385,10 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Invalid configuration", err.Error())
 		return
 	}
+	if err := r.authorize(values); err != nil {
+		resp.Diagnostics.AddError("Cannot change this resource", err.Error())
+		return
+	}
 	section, err := r.updateSection(ctx, values, req.State)
 	if err != nil {
 		resp.Diagnostics.AddError("Cannot build section", err.Error())
@@ -426,13 +425,7 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		section.Options = map[string]string{}
 	}
 	router.SetManagedOwner(section.Options, token)
-	var claim *router.OwnerClaim
-	switch {
-	case stateOwner != "":
-		claim = ownershipClaim(section.Package, resolvedSectionName(section, existing, found), stateOwner, false)
-	case !found:
-		claim = ownershipClaim(section.Package, resolvedSectionName(section, existing, found), "", true)
-	}
+	claim := ownershipClaim(section.Package, resolvedSectionName(section, existing, found), observedOwner(existing.Options, found))
 	if err := r.client.ApplySectionsOwned(ctx, router.Configuration{section}, r.secrets(values), claim); err != nil {
 		resp.Diagnostics.AddError("Cannot apply section", err.Error())
 		return
@@ -520,10 +513,7 @@ func (r *typedResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		resp.Diagnostics.AddError("Section is owned by another configuration", "The router section "+actual.Name+" is managed by a different Terraform state. Release it from that configuration before destroying it here.")
 		return
 	}
-	var claim *router.OwnerClaim
-	if stateOwner != "" {
-		claim = ownershipClaim(actual.Package, actual.Name, stateOwner, false)
-	}
+	claim := ownershipClaim(actual.Package, actual.Name, router.ManagedOwner(actual.Options))
 	if r.spec.NoDelete {
 		if err := r.client.ForgetSection(ctx, section, claim); err != nil {
 			resp.Diagnostics.AddError("Cannot release section ownership", err.Error())
@@ -580,6 +570,13 @@ func (r *typedResource) ImportState(ctx context.Context, req resource.ImportStat
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, object)...)
+}
+
+func (r *typedResource) authorize(values map[string]attr.Value) error {
+	if r.spec.AuthorizeWrite == nil {
+		return nil
+	}
+	return r.spec.AuthorizeWrite(r.client, values)
 }
 
 func (r *typedResource) validate(values map[string]attr.Value) error {
@@ -669,16 +666,23 @@ func resolvedSectionName(selector, actual router.Section, found bool) string {
 		return actual.Name
 	}
 	if isAnonymousSection(selector.Name) {
-		return ""
+		return router.AnonymousSectionName(selector.Package, selector.Type, selector.Match)
 	}
 	return selector.Name
 }
 
-func ownershipClaim(packageName, sectionName, token string, unowned bool) *router.OwnerClaim {
+func observedOwner(options map[string]string, found bool) string {
+	if !found {
+		return ""
+	}
+	return router.ManagedOwner(options)
+}
+
+func ownershipClaim(packageName, sectionName, token string) *router.OwnerClaim {
 	if sectionName == "" || isAnonymousSection(sectionName) {
 		return nil
 	}
-	return &router.OwnerClaim{Package: packageName, Section: sectionName, Token: token, Unowned: unowned}
+	return &router.OwnerClaim{Package: packageName, Section: sectionName, Token: token}
 }
 
 type nonEmptyStringValidator struct{}
