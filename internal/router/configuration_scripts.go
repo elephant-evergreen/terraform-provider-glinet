@@ -318,9 +318,9 @@ touch activate
 }
 
 // configurationOutcomeProbe reads the durable transaction state without
-// requesting a rollback. A confirmed transaction counts only after its cleanup
-// removed the transaction directory, lock, and recovery service, so the next
-// resource cannot collide with leftovers.
+// requesting a rollback. A confirmed transaction and a restored rollback count
+// only after cleanup removed the transaction directory, lock, and recovery
+// service, so the next resource cannot collide with leftovers.
 func configurationOutcomeProbe(token string) string {
 	result := quote(resultDir + "/" + token)
 	actor := quote(configurationLock + "-actor-" + token)
@@ -331,15 +331,17 @@ func configurationOutcomeProbe(token string) string {
 	quoted := quote(token)
 	return "if [ -f " + result + " ]; then\n" +
 		"outcome=$(cat " + result + ")\n" +
-		"if [ \"$outcome\" = " + quote(recordConfirm) + " ]; then\n" +
+		"case \"$outcome\" in\n" +
+		quote(recordConfirm) + "|" + quote(recordRestored) + ")\n" +
 		"pending=0\n" +
 		"[ -d " + lock + " ] && pending=1\n" +
 		"[ -d " + actor + " ] && pending=1\n" +
 		"[ -d " + retired + " ] && pending=1\n" +
 		"[ \"$(cat " + dir + "/token 2>/dev/null || true)\" = " + quoted + " ] && pending=1\n" +
 		"grep -F " + quoted + " " + recovery + " >/dev/null 2>&1 && pending=1\n" +
-		"if [ \"$pending\" = 1 ]; then printf pending; else printf '%s' \"$outcome\"; fi\n" +
-		"else printf '%s' \"$outcome\"; fi\n" +
+		"if [ \"$pending\" = 1 ]; then printf pending; else printf '%s' \"$outcome\"; fi ;;\n" +
+		"*) printf '%s' \"$outcome\" ;;\n" +
+		"esac\n" +
 		"elif [ -d " + dir + " ] && [ \"$(cat " + dir + "/token 2>/dev/null || true)\" = " + quoted + " ]; then printf pending\n" +
 		"elif [ -d " + dir + " ]; then printf superseded\n" +
 		"else printf missing; fi"
