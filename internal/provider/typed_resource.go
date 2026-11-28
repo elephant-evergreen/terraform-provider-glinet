@@ -187,9 +187,7 @@ func (r *typedResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	}
 	preserveUnsetAttributes(values, config.Attributes(), stateValues, r.spec.PreserveUnset)
 	r.preserveIdentity(values, stateValues)
-	if owner, ok := stateValues["owner"]; ok && !owner.IsNull() {
-		values["owner"] = owner
-	}
+	preserveOwner(values, stateValues)
 	if r.spec.ModifyPlan != nil {
 		updated, err := r.spec.ModifyPlan(values, config.Attributes(), stateValues, req.State.Raw.IsNull())
 		if err != nil {
@@ -202,6 +200,12 @@ func (r *typedResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	resp.Diagnostics.Append(diagnostics...)
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, object)...)
+	}
+}
+
+func preserveOwner(values, stateValues map[string]attr.Value) {
+	if owner, ok := stateValues["owner"]; ok {
+		values["owner"] = owner
 	}
 }
 
