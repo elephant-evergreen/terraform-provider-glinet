@@ -37,4 +37,4 @@ Support Flint 2 (GL-MT6000) on stock firmware 4.11.x in router mode. Do not broa
 
 ## CI
 
-Keep one Check workflow. Add independent checks as parallel jobs inside it instead of creating another workflow.
+Keep one Check workflow. Add independent checks as parallel jobs inside it instead of creating another workflow. Keep `.github/workflows/actions.lock` in sync with the workflow `uses` refs: run `gh actions-lock` after changing a workflow, and let the Check workflow run `gh actions-lock --verify`.
