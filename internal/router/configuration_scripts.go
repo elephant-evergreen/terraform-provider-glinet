@@ -311,16 +311,8 @@ func configurationRollbackScript(token string) string {
 		"    *) printf missing; exit 0 ;;\n" +
 		"  esac\n" +
 		"fi\n" +
-		"ln recover decision 2>/dev/null || true\n" +
-		"for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do\n" +
-		"  if [ ! -d \"$dir\" ] || [ \"$(cat \"$dir/token\" 2>/dev/null || true)\" != " + quote(token) + " ]; then\n" +
-		"    if [ -f " + result + " ] && [ \"$(cat " + result + ")\" = rollback ]; then printf rolled_back; exit 0; fi\n" +
-		"    if [ -f " + result + " ] && [ \"$(cat " + result + ")\" = confirm ]; then printf committed; exit 0; fi\n" +
-		"    printf missing; exit 0\n" +
-		"  fi\n" +
-		"  sleep 10\n" +
-		"done\n" +
-		"printf timeout\n" +
+		"ln \"$dir/recover\" \"$dir/decision\" 2>/dev/null || true\n" +
+		"printf pending\n" +
 		"exit 0\n"
 }
 

@@ -487,6 +487,7 @@ const (
 	outcomeCommitted
 	outcomeCancelled
 	outcomeSuperseded
+	outcomePending
 )
 
 func parseTransactionOutcome(output []byte) transactionOutcome {
@@ -499,6 +500,8 @@ func parseTransactionOutcome(output []byte) transactionOutcome {
 		return outcomeCancelled
 	case "superseded":
 		return outcomeSuperseded
+	case "pending":
+		return outcomePending
 	default:
 		return outcomeUnknown
 	}
@@ -526,7 +529,32 @@ func (c *Client) rollbackTransaction(token string) (transactionOutcome, error) {
 	if err != nil {
 		return outcomeUnknown, err
 	}
-	return parseTransactionOutcome(output), nil
+	outcome := parseTransactionOutcome(output)
+	if outcome != outcomePending {
+		return outcome, nil
+	}
+	probe := "if [ -f " + quote(resultDir+"/"+token) + " ]; then cat " + quote(resultDir+"/"+token) + "; elif [ -d " + quote(transactionDir) + " ]; then printf pending; else printf missing; fi"
+	for {
+		select {
+		case <-ctx.Done():
+			return outcomeUnknown, ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+		output, err := c.runner.Run(ctx, probe)
+		if err != nil {
+			return outcomeUnknown, err
+		}
+		switch strings.TrimSpace(string(output)) {
+		case "rollback":
+			return outcomeRolledBack, nil
+		case "confirm":
+			return outcomeCommitted, nil
+		case "cancel":
+			return outcomeCancelled, nil
+		case "missing":
+			return outcomeUnknown, nil
+		}
+	}
 }
 
 func sameSectionExceptManagedMarker(a, b Section) bool {

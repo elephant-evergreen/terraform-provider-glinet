@@ -1,11 +1,11 @@
 package router
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestParseTransactionOutcome(t *testing.T) {
@@ -49,12 +49,8 @@ func TestRollbackScriptReportsOutcome(t *testing.T) {
 		}, "committed"},
 		{"rollback request", func(t *testing.T, root string) {
 			writeTransaction(t, root, "token")
-			go func() {
-				time.Sleep(250 * time.Millisecond)
-				_ = os.RemoveAll(filepath.Join(root, "transaction"))
-				writeOutcome(t, root, "rollback")
-			}()
-		}, "rolled_back"},
+			writeFile(t, filepath.Join(root, "transaction", "recover"), "rollback")
+		}, "pending"},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -69,6 +65,12 @@ func TestRollbackScriptReportsOutcome(t *testing.T) {
 			}
 			if got := string(output); got != test.want {
 				t.Fatalf("Rollback outcome = %q, want %q", got, test.want)
+			}
+			if test.name == "rollback request" {
+				decision, err := os.ReadFile(filepath.Join(root, "transaction", "decision"))
+				if err != nil || string(decision) != "rollback" {
+					t.Fatalf("Rollback request did not write the decision: %q %v", decision, err)
+				}
 			}
 		})
 	}
@@ -106,5 +108,40 @@ func replaceSleep(script, old, new string) string {
 			return script
 		}
 		script = next
+	}
+}
+
+type scriptedRunner struct {
+	outputs [][]byte
+	index   int
+}
+
+func (r *scriptedRunner) Run(context.Context, string) ([]byte, error) {
+	if r.index >= len(r.outputs) {
+		return []byte("pending"), nil
+	}
+	output := r.outputs[r.index]
+	r.index++
+	return output, nil
+}
+
+func TestRollbackTransactionPollsUntilOutcome(t *testing.T) {
+	for name, want := range map[string]transactionOutcome{
+		"rollback": outcomeRolledBack,
+		"confirm":  outcomeCommitted,
+		"cancel":   outcomeCancelled,
+		"missing":  outcomeUnknown,
+	} {
+		t.Run(name, func(t *testing.T) {
+			runner := &scriptedRunner{outputs: [][]byte{[]byte("pending"), []byte(name)}}
+			client := NewClient(runner, nil)
+			got, err := client.rollbackTransaction("token")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != want {
+				t.Fatalf("outcome = %v, want %v", got, want)
+			}
+		})
 	}
 }
