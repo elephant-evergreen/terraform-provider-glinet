@@ -347,6 +347,38 @@ func ValidSecretOptions(config Configuration, secrets map[string]string) bool {
 	return true
 }
 
+func applyConfigurationPlan(plan reloadPlan, config, actual Configuration) reloadPlan {
+	for i, s := range config {
+		if reflect.DeepEqual(s, actual[i]) || sameSectionExceptManagedMarker(s, actual[i]) {
+			continue
+		}
+		switch s.Package {
+		case "network", "eth_ports_config_map":
+			plan.Reboot = true
+		case "wireless":
+			plan.Wireless = true
+			if s.Absent || actual[i].Missing {
+				plan.Reboot = true
+			}
+			for _, key := range []string{"device", "network", "ifname", "mode"} {
+				if s.Options[key] != actual[i].Options[key] {
+					plan.Reboot = true
+				}
+			}
+		case "gl-dns-v2":
+			plan.DNS = true
+		case "dhcp":
+			plan.DHCP = true
+		case "firewall":
+			plan.Firewall = true
+		}
+		if service, ok := serviceFor(s); ok {
+			addService(&plan, service)
+		}
+	}
+	return plan
+}
+
 func (c *Client) writeConfiguration(ctx context.Context, config Configuration, secrets map[string]string, safetyConfig Configuration, service *ServiceChange) error {
 	if !ValidSecretOptions(config, secrets) {
 		return errors.New("Secret options must reference managed sections and supported secret names.")
@@ -385,31 +417,7 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 			plan.CloudEnabled = *service.Cloud
 		}
 	}
-	for i, s := range config {
-		if reflect.DeepEqual(s, actual[i]) || sameSectionExceptManagedMarker(s, actual[i]) {
-			continue
-		}
-		switch s.Package {
-		case "network", "eth_ports_config_map":
-			plan.Reboot = true
-		case "wireless":
-			plan.Wireless = true
-			if s.Absent || actual[i].Missing {
-				plan.Reboot = true
-			}
-			for _, key := range []string{"device", "network", "ifname", "mode"} {
-				if s.Options[key] != actual[i].Options[key] {
-					plan.Reboot = true
-				}
-			}
-		case "gl-dns-v2":
-			plan.DNS = true
-		case "dhcp":
-			plan.DHCP = true
-		case "firewall":
-			plan.Firewall = true
-		}
-	}
+	plan = applyConfigurationPlan(plan, config, actual)
 	for key := range secrets {
 		switch {
 		case strings.HasPrefix(key, "wireless."):
@@ -600,7 +608,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"network.route":                     "interface target netmask gateway metric table source onlink mtu type",
 		"network.route6":                    "interface target gateway metric table source onlink mtu type",
 		"system.system":                     "hostname timezone zonename log_size log_proto log_ip log_remote log_port log_file log_trailer_null conloglevel cronloglevel",
-		"system.timeserver":                 "enabled server use_dhcp interface",
+		"system.timeserver":                 "enabled enable_server server use_dhcp interface",
 		"system.led":                        "name sysfs trigger dev mode default delayon delayoff",
 		"dropbear.dropbear":                 "enable Port PasswordAuth RootPasswordAuth Interface IdleTimeout GatewayPorts Banner MaxAuthTries",
 		"upnpd.upnpd":                       "enabled internal_iface external_iface secure_mode download upload log_output",

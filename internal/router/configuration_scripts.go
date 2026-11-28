@@ -26,6 +26,7 @@ type reloadPlan struct {
 	Cloud           bool
 	CloudEnabled    bool
 	ServiceSnapshot bool
+	Services        []serviceAction
 }
 
 func configurationReload(plan reloadPlan) string {
@@ -43,6 +44,9 @@ func configurationReload(plan reloadPlan) string {
 	}
 	if plan.Reboot || plan.Firewall {
 		script += "/etc/init.d/firewall restart\n"
+	}
+	for _, service := range plan.Services {
+		script += service.script()
 	}
 	return script
 }

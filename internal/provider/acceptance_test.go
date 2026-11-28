@@ -161,6 +161,8 @@ func TestAcceptanceHardware(t *testing.T) {
 		})
 	})
 
+	t.Run("service_activation", acceptanceServiceActivation)
+
 	t.Run("rollback", acceptanceRollback)
 
 	t.Run("reboot", func(t *testing.T) {
@@ -315,6 +317,69 @@ func assertAcceptanceClean(t *testing.T, ctx context.Context) {
 			t.Fatalf("%s is not clean: %s", check.name, strings.TrimSpace(string(output)))
 		}
 	}
+}
+
+func acceptanceServiceActivation(t *testing.T) {
+	ctx := context.Background()
+	client := acceptanceClient(t)
+	runner := acceptanceRunner(t)
+	section := router.Section{Package: "system", Type: "timeserver", Name: "ntp"}
+	actual, ok, err := client.ReadSection(ctx, section)
+	if err != nil || !ok {
+		t.Fatalf("Cannot read the NTP section: %v", err)
+	}
+	original := acceptanceCloneSection(actual)
+	defer func() {
+		if err := client.ApplySections(context.Background(), router.Configuration{original}, nil); err != nil {
+			t.Errorf("Cannot restore the NTP section: %v", err)
+		}
+	}()
+	changed := acceptanceCloneSection(actual)
+	if changed.Lists == nil {
+		changed.Lists = map[string][]string{}
+	}
+	changed.Lists["server"] = append(changed.Lists["server"], "192.0.2.1")
+	before := acceptancePID(t, runner, "chronyd")
+	if err := client.ApplySections(ctx, router.Configuration{changed}, nil); err != nil {
+		t.Fatalf("Cannot change the NTP configuration: %v", err)
+	}
+	if after := acceptanceWaitPID(t, runner, "chronyd", before, 30*time.Second); after == "" {
+		t.Fatal("chronyd did not restart after the NTP change")
+	}
+}
+
+func acceptanceCloneSection(section router.Section) router.Section {
+	clone := section
+	clone.Options = map[string]string{}
+	for key, value := range section.Options {
+		clone.Options[key] = value
+	}
+	clone.Lists = map[string][]string{}
+	for key, values := range section.Lists {
+		clone.Lists[key] = append([]string(nil), values...)
+	}
+	return clone
+}
+
+func acceptancePID(t *testing.T, runner *router.SSH, name string) string {
+	t.Helper()
+	output, err := runner.Run(context.Background(), "pidof "+name+" 2>/dev/null | awk '{print $1}'")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+
+func acceptanceWaitPID(t *testing.T, runner *router.SSH, name, before string, timeout time.Duration) string {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if pid := acceptancePID(t, runner, name); pid != "" && pid != before {
+			return pid
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return ""
 }
 
 func acceptanceRollback(t *testing.T) {
