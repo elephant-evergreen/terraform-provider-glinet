@@ -36,6 +36,8 @@ type typedSpec struct {
 	RequireExisting           bool
 	NoDelete                  bool
 	DeleteBehaviorDescription string
+	SchemaVersion             int64
+	UpgradeState              func(context.Context, resource.UpgradeStateRequest, *resource.UpgradeStateResponse)
 }
 
 type typedResource struct {
@@ -51,6 +53,7 @@ var (
 	_ resource.ResourceWithImportState    = &typedResource{}
 	_ resource.ResourceWithValidateConfig = &typedResource{}
 	_ resource.ResourceWithModifyPlan     = &typedResource{}
+	_ resource.ResourceWithUpgradeState   = &typedResource{}
 )
 
 func newTypedResource(spec typedSpec) resource.Resource {
@@ -86,6 +89,7 @@ func newTypedResource(spec typedSpec) resource.Resource {
 		schema: schema.Schema{
 			MarkdownDescription: spec.Description,
 			Attributes:          attributes,
+			Version:             spec.SchemaVersion,
 		},
 	}
 }
@@ -96,6 +100,15 @@ func (r *typedResource) Metadata(_ context.Context, req resource.MetadataRequest
 
 func (r *typedResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = r.schema
+}
+
+func (r *typedResource) UpgradeState(context.Context) map[int64]resource.StateUpgrader {
+	if r.spec.UpgradeState == nil || r.schema.Version == 0 {
+		return nil
+	}
+	return map[int64]resource.StateUpgrader{
+		r.schema.Version - 1: {StateUpgrader: r.spec.UpgradeState},
+	}
 }
 
 func (r *typedResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -331,6 +344,15 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Cannot build section", err.Error())
 		return
 	}
+	existing, found, err := r.client.ReadSection(ctx, section)
+	if err != nil {
+		resp.Diagnostics.AddError("Cannot read section before update", err.Error())
+		return
+	}
+	if found && releasedFromManagement(existing) {
+		resp.Diagnostics.AddError("Section was released from provider management", "The router section "+existing.Name+" is no longer managed by this configuration. Import it again before changing it.")
+		return
+	}
 	if section.Options == nil {
 		section.Options = map[string]string{}
 	}
@@ -368,6 +390,10 @@ func (r *typedResource) updateSection(ctx context.Context, values map[string]att
 		}
 	}
 	return r.spec.UpdateSelector(values, stateValues)
+}
+
+func releasedFromManagement(section router.Section) bool {
+	return section.Options[router.ManagedOption] == "0"
 }
 
 func (r *typedResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
