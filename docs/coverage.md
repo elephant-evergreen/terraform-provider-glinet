@@ -8,7 +8,7 @@ Every row is a terminal state: `Managed` when the stock-exposed declarative sett
 
 | Status | Meaning |
 | --- | --- |
-| Managed | The stock-exposed declarative settings are represented by a resource or attribute and covered by provider tests and docs. |
+| Managed | The stock-exposed declarative settings are represented by a resource or attribute and covered by provider tests and docs. Service activation and runtime verification are tracked separately from this matrix. |
 | Action | One-shot operation exposed as a Terraform action. |
 | Read-only | Observation only; exposed or intended as a data source. |
 | Out of scope | No Terraform-ownable surface: unpublished field schema, account-bound activation, file-based configuration, or runtime state. The reason is recorded in the row. |

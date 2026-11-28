@@ -25,7 +25,6 @@ The suite:
 
 Each step removes the temporary objects it created and does not change singleton stock sections. A test failure before cleanup can leave an `Acceptance-*` object behind; remove it through the stock UI or the provider before the next run. Archive the sanitized result against the exact provider version. The suite is compiled by the ordinary check, so it cannot silently rot.
 
-Traffic acceptance uses separate clients
 Traffic acceptance uses separate clients on each declared network. Check permitted and rejected network pairs, router management restrictions, private WAN ranges, DNS forwarding, and the declared management exceptions. It may switch SSIDs or use dedicated endpoints, but is never a dependency of normal Terraform operations. Synthetic probes and packet counters alone do not establish end-to-end connectivity.
 
 Fixture success and read-only firewall captures do not establish physical power-loss recovery, a complete traffic matrix, or compatibility with other devices and firmware.

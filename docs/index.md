@@ -26,7 +26,7 @@ terraform {
   required_providers {
     glinet = {
       source  = "elephant-evergreen/glinet"
-      version = "~> 0.1.2"
+      version = "~> 0.2"
     }
   }
 }
