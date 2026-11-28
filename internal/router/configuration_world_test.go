@@ -783,7 +783,7 @@ func TestConfigurationWorldOwnershipGuardAcceptsRewrittenToken(t *testing.T) {
 	f := newConfigurationWorld(t)
 	root := f.base.root
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
-	uci := "#!/bin/sh\nexit 0\n"
+	uci := "#!/bin/sh\ncase \"$*\" in\n *terraform_owner_id*) exit 0 ;;\n *terraform_owner*) printf 1 ;;\nesac\nexit 0\n"
 	_ = os.WriteFile(filepath.Join(root, "bin", "uci"), []byte(uci), 0700)
 	spec := Configuration{{Package: "system", Name: "system", Type: "system", Options: map[string]string{"hostname": "router"}}}
 	script := configurationApplyScript(spec, "token", reloadPlan{}, &OwnerClaim{Package: "system", Section: "system", Token: "token"})
@@ -791,6 +791,25 @@ func TestConfigurationWorldOwnershipGuardAcceptsRewrittenToken(t *testing.T) {
 	script = strings.Replace(script, "start-stop-daemon -S -b -m -p "+quote(root+"/transaction/pid"), "true", 1)
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("A wiped token was not adopted for rewriting: %s %v", out, err)
+	}
+}
+
+func TestConfigurationWorldOwnershipGuardRejectsExplicitRelease(t *testing.T) {
+	for name, marker := range map[string]string{"released": "0", "unmanaged": ""} {
+		t.Run(name, func(t *testing.T) {
+			f := newConfigurationWorld(t)
+			root := f.base.root
+			_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+			uci := "#!/bin/sh\ncase \"$*\" in\n *terraform_owner_id*) exit 0 ;;\n *terraform_owner*) printf '%s' " + quote(marker) + " ;;\nesac\nexit 0\n"
+			_ = os.WriteFile(filepath.Join(root, "bin", "uci"), []byte(uci), 0700)
+			spec := Configuration{{Package: "system", Name: "system", Type: "system", Options: map[string]string{"hostname": "router"}}}
+			script := configurationApplyScript(spec, "token", reloadPlan{}, &OwnerClaim{Package: "system", Section: "system", Token: "token"})
+			_, err := f.run(script)
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 78 {
+				t.Fatalf("A %s section was rewritten over a lost token: %v", name, err)
+			}
+		})
 	}
 }
 
@@ -868,5 +887,45 @@ func TestConfigurationWorldProbeRequiresCompletedCleanup(t *testing.T) {
 	}
 	if got := strings.TrimSpace(string(output)); got != "superseded" {
 		t.Fatalf("A foreign transaction reported %q", got)
+	}
+}
+
+func TestConfigurationWorldInterruptedPreparationIsDiscarded(t *testing.T) {
+	f := newConfigurationWorld(t)
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
+	script := configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, nil)
+	script = strings.Replace(script, configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	script = strings.Replace(script, "trap 'if [ \"$transferred\" = 0 ]", "trap '' EXIT #", 1)
+	script = strings.Replace(script, "mv "+quote(transactionDir+"-preparing-token")+" "+quote(transactionDir)+" || exit 73", "exit 0", 1)
+	if out, err := f.run(script); err != nil {
+		t.Fatalf("Interrupted preparation failed: %s %v", out, err)
+	}
+	stage := filepath.Join(root, "transaction-preparing-token")
+	if _, err := os.Stat(stage); err != nil {
+		t.Fatal("Interrupted preparation did not leave its staging directory")
+	}
+	if _, err := os.Stat(filepath.Join(root, "transaction")); !os.IsNotExist(err) {
+		t.Fatal("Interrupted preparation published the transaction directory")
+	}
+	if _, err := os.Stat(filepath.Join(root, "recovery")); err != nil {
+		t.Fatal("Interrupted preparation did not enable the recovery service")
+	}
+	_ = os.RemoveAll(filepath.Join(root, "lock"))
+	service, err := os.ReadFile(filepath.Join(root, "recovery"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := f.run(string(service) + "\nstart\n"); err != nil {
+		t.Fatalf("Boot cleanup failed: %s %v", out, err)
+	}
+	for _, name := range []string{"transaction", "transaction-preparing-token", "recovery", "lock"} {
+		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+			t.Fatalf("Boot cleanup left %s", name)
+		}
+	}
+	if out, err := f.run(configurationStableReadScript(spec, nil)); err != nil {
+		t.Fatalf("The router still refuses a new transaction after the interrupted preparation: %s %v", out, err)
 	}
 }

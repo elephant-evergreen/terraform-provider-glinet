@@ -31,7 +31,7 @@ A provider without owner-token support can rewrite a section without the token. 
 Reading the owner and writing the section are not one step, so two Terraform states could both observe an unowned section and then write it in turn. The provider therefore records the owner token it observed and re-checks it after the router-side transaction lock is acquired and before it prepares the transaction:
 
 - The claim holds the token currently on the router, or an empty token when the section has none or does not exist yet.
-- The router token must still match. A token that disappeared is rewritten, because a provider without token support can drop it; a token that appeared is refused.
+- The router token must still match. A token that disappeared is rewritten only while the managed marker is still `1`, which is what a provider without token support leaves behind. A marker of `0` (an explicit Forget) or no marker at all is refused, so a released section cannot be overwritten by a stale write.
 - An anonymous section that does not exist yet is claimed by the deterministic name the provider creates, so two states cannot both create it.
 
 This covers Create, Update, Delete, and Forget, including a legacy state without a token. A section claimed by another state in between is refused with "owned by another Terraform state", before any configuration changes, so the plan can be re-run without inspecting a partially applied transaction.
@@ -49,4 +49,4 @@ Two resources use the marker without an owner token:
 
 ## Limitation
 
-A boolean marker alone cannot distinguish two Terraform states. Owner tokens cover sections created by a state, but importing a section that another state already manages adopts its token, so both states treat each other as the same owner. Importing is an explicit adoption decision. Keep one Terraform state per router configuration and use separate states only for disjoint sections.
+A boolean marker alone cannot distinguish two Terraform states. Owner tokens cover sections created by a state, but importing a section that another state already manages adopts its token, so both states treat each other as the same owner. Importing is an explicit adoption decision. The safety checks run before the transaction lock, so a second state that changes a different section in that window is not detected by them; keep one Terraform state per router configuration and use separate states only for disjoint sections.

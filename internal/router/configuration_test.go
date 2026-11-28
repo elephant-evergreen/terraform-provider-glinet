@@ -248,8 +248,8 @@ func TestMissingWiFiRequiresExplicitCredentialRestoration(t *testing.T) {
 		t.Fatalf("Missing Wi-Fi was recreated without a key: %v", err)
 	}
 	script := configurationApplyScript(desired, "token", reloadPlan{}, nil)
-	if !strings.Contains(script, " enable\nsync\ntransferred=1") || !strings.Contains(script, "touch started\n  sync\n") {
-		t.Fatal("Recovery was not persisted before activation and mutation")
+	if !strings.Contains(script, " enable\nsync\nmv ") || !strings.Contains(script, "\nsync\ntransferred=1") || !strings.Contains(script, "touch started\n  sync\n") {
+		t.Fatal("Recovery was not persisted and published before activation and mutation")
 	}
 }
 
