@@ -39,7 +39,7 @@ func (p *glinetProvider) Metadata(_ context.Context, _ provider.MetadataRequest,
 
 func (p *glinetProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manage network interfaces, Wi-Fi, DHCP, DNS, and firewall settings on GL.iNet Flint 2 (GL-MT6000) running stock firmware 4.11.x in router mode. The provider connects over verified SSH; stable 4.11.x builds outside the verified set are allowed with a warning.",
+		MarkdownDescription: "Manage network interfaces, Wi-Fi, DHCP, DNS, firewall, and system settings on GL.iNet Flint 2 (GL-MT6000) running stock firmware 4.11.x in router mode. The provider connects over verified SSH; other firmware minors are rejected.",
 		Attributes: map[string]schema.Attribute{
 			"host":             schema.StringAttribute{Optional: true, MarkdownDescription: "Router hostname or IP address. Falls back to `GLINET_HOST`."},
 			"port":             schema.Int64Attribute{Optional: true, MarkdownDescription: "SSH port. Falls back to `GLINET_PORT`, then `22`."},

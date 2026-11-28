@@ -14,10 +14,18 @@ Ordinary `terraform plan` reads the router and checks its generated and active f
 
 ## Independent hardware acceptance
 
-Use an explicitly authorized dedicated Flint 2 with stock firmware 4.11.x, an external encrypted recovery backup, and a tested wired recovery connection. Record the exact build; the 4.11 line is the verified line, and other minors remain unsupported. Keep credentials and router exports outside Git and public logs.
+Run `mise run acceptance` against an explicitly authorized dedicated Flint 2 with stock firmware 4.11.x, an external encrypted recovery backup, and a tested wired recovery connection. The suite is opt-in: it requires `GLINET_ACCEPTANCE=1` and the `GLINET_*` connection variables, and it never runs in ordinary CI. Record the exact build in the private verification notes; the 4.11 line is the verified line.
 
-Verify an actual CRUD/import/drift cycle, clean plans after apply, an intentional failed confirmation and rollback, and recovery across SSH disconnection and reboot. Check default policies and generated/running firewall differences with one declared redirect. Archive sanitized results against the exact provider version.
+The suite:
 
+- verifies the model, the firmware line, router mode, and a clean transaction state;
+- creates, updates, imports, and destroys a firewall redirect, a disabled OpenVPN server profile, a Samba share, and a firewall zone, and checks that each apply leaves an empty plan;
+- injects an undeclared firewall rule during a redirect update, expects the transaction to roll back and the section to be restored, and verifies the injected rule is gone;
+- reboots the router when `GLINET_ACCEPTANCE_REBOOT=1` is set and waits for the connection to return.
+
+Each step removes the temporary objects it created and does not change singleton stock sections. A test failure before cleanup can leave an `Acceptance-*` object behind; remove it through the stock UI or the provider before the next run. Archive the sanitized result against the exact provider version. The suite is compiled by the ordinary check, so it cannot silently rot.
+
+Traffic acceptance uses separate clients
 Traffic acceptance uses separate clients on each declared network. Check permitted and rejected network pairs, router management restrictions, private WAN ranges, DNS forwarding, and the declared management exceptions. It may switch SSIDs or use dedicated endpoints, but is never a dependency of normal Terraform operations. Synthetic probes and packet counters alone do not establish end-to-end connectivity.
 
 Fixture success and read-only firewall captures do not establish physical power-loss recovery, a complete traffic matrix, or compatibility with other devices and firmware.
