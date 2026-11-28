@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -67,6 +69,10 @@ func newTypedResource(spec typedSpec) resource.Resource {
 	if description == "" {
 		description = "Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved."
 	}
+	attributes["owner"] = schema.StringAttribute{
+		Computed:            true,
+		MarkdownDescription: "Owner token recorded with the router section. It detects another Terraform state that manages the same section.",
+	}
 	attributes["delete_behavior"] = schema.StringAttribute{
 		Optional: true, Computed: true, Default: stringdefault.StaticString("forget"),
 		MarkdownDescription: description,
@@ -76,9 +82,10 @@ func newTypedResource(spec typedSpec) resource.Resource {
 		"id":              types.StringType,
 		"uci_section":     types.StringType,
 		"delete_behavior": types.StringType,
+		"owner":           types.StringType,
 	}
 	for name, attribute := range attributes {
-		if name == "id" || name == "uci_section" || name == "delete_behavior" {
+		if name == "id" || name == "uci_section" || name == "delete_behavior" || name == "owner" {
 			continue
 		}
 		attrTypes[name] = attribute.GetType()
@@ -180,6 +187,9 @@ func (r *typedResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	}
 	preserveUnsetAttributes(values, config.Attributes(), stateValues, r.spec.PreserveUnset)
 	r.preserveIdentity(values, stateValues)
+	if owner, ok := stateValues["owner"]; ok && !owner.IsNull() {
+		values["owner"] = owner
+	}
 	if r.spec.ModifyPlan != nil {
 		updated, err := r.spec.ModifyPlan(values, config.Attributes(), stateValues, req.State.Raw.IsNull())
 		if err != nil {
@@ -272,10 +282,24 @@ func (r *typedResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 	}
+	existing, found, err := r.client.ReadSection(ctx, section)
+	if err != nil {
+		resp.Diagnostics.AddError("Cannot read section before create", err.Error())
+		return
+	}
+	if found && router.ManagedOwner(existing.Options) != "" {
+		resp.Diagnostics.AddError("Section is owned by another configuration", "The router section "+existing.Name+" is already managed by another Terraform state. Import it or remove it from the other configuration before creating it here.")
+		return
+	}
+	token, err := newOwnerToken()
+	if err != nil {
+		resp.Diagnostics.AddError("Cannot generate the ownership token", err.Error())
+		return
+	}
 	if section.Options == nil {
 		section.Options = map[string]string{}
 	}
-	section.Options[router.ManagedOption] = "1"
+	router.SetManagedOwner(section.Options, token)
 	if err := r.client.ApplySections(ctx, router.Configuration{section}, r.secrets(values)); err != nil {
 		resp.Diagnostics.AddError("Cannot apply section", err.Error())
 		return
@@ -285,7 +309,7 @@ func (r *typedResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Cannot read the applied section", "The section could not be read back after the change.")
 		return
 	}
-	object, diagnostics := r.stateObject(values, actual)
+	object, diagnostics := r.stateObject(values, actual, token)
 	resp.Diagnostics.Append(diagnostics...)
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.State.Set(ctx, object)...)
@@ -317,7 +341,17 @@ func (r *typedResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		resp.State.RemoveResource(ctx)
 		return
 	}
-	object, diagnostics := r.stateObject(values, actual)
+	stateOwner := ownerFromValues(values)
+	routerOwner := router.ManagedOwner(actual.Options)
+	if ownerConflict(routerOwner, stateOwner) {
+		resp.Diagnostics.AddError("Section is owned by another configuration", "The router section "+actual.Name+" is managed by a different Terraform state (owner token "+routerOwner+"). Remove it from that configuration or import it there before changing it here.")
+		return
+	}
+	owner := stateOwner
+	if owner == "" {
+		owner = routerOwner
+	}
+	object, diagnostics := r.stateObject(values, actual, owner)
 	resp.Diagnostics.Append(diagnostics...)
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.State.Set(ctx, object)...)
@@ -349,14 +383,32 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Cannot read section before update", err.Error())
 		return
 	}
+	var stateObject types.Object
+	resp.Diagnostics.Append(req.State.Get(ctx, &stateObject)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	stateOwner := ownerFromValues(stateObject.Attributes())
 	if found && releasedFromManagement(existing) {
 		resp.Diagnostics.AddError("Section was released from provider management", "The router section "+existing.Name+" is no longer managed by this configuration. Import it again before changing it.")
 		return
 	}
+	if found && ownerConflict(router.ManagedOwner(existing.Options), stateOwner) {
+		resp.Diagnostics.AddError("Section is owned by another configuration", "The router section "+existing.Name+" is managed by a different Terraform state. Remove it from that configuration or import it there before changing it here.")
+		return
+	}
+	token := stateOwner
+	if token == "" {
+		token, err = newOwnerToken()
+		if err != nil {
+			resp.Diagnostics.AddError("Cannot generate the ownership token", err.Error())
+			return
+		}
+	}
 	if section.Options == nil {
 		section.Options = map[string]string{}
 	}
-	section.Options[router.ManagedOption] = "1"
+	router.SetManagedOwner(section.Options, token)
 	if err := r.client.ApplySections(ctx, router.Configuration{section}, r.secrets(values)); err != nil {
 		resp.Diagnostics.AddError("Cannot apply section", err.Error())
 		return
@@ -366,7 +418,7 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Cannot read the applied section", "The section could not be read back after the change.")
 		return
 	}
-	object, diagnostics := r.stateObject(values, actual)
+	object, diagnostics := r.stateObject(values, actual, token)
 	resp.Diagnostics.Append(diagnostics...)
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.State.Set(ctx, object)...)
@@ -390,6 +442,25 @@ func (r *typedResource) updateSection(ctx context.Context, values map[string]att
 		}
 	}
 	return r.spec.UpdateSelector(values, stateValues)
+}
+
+func newOwnerToken() (string, error) {
+	buffer := make([]byte, 16)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buffer), nil
+}
+
+func ownerFromValues(values map[string]attr.Value) string {
+	if value, ok := values["owner"].(types.String); ok && !value.IsNull() && !value.IsUnknown() {
+		return value.ValueString()
+	}
+	return ""
+}
+
+func ownerConflict(routerOwner, stateOwner string) bool {
+	return routerOwner != "" && stateOwner != "" && routerOwner != stateOwner
 }
 
 func releasedFromManagement(section router.Section) bool {
@@ -418,6 +489,11 @@ func (r *typedResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 	if !found {
+		return
+	}
+	stateOwner := ownerFromValues(values)
+	if ownerConflict(router.ManagedOwner(actual.Options), stateOwner) {
+		resp.Diagnostics.AddError("Section is owned by another configuration", "The router section "+actual.Name+" is managed by a different Terraform state. Release it from that configuration before destroying it here.")
 		return
 	}
 	if r.spec.NoDelete {
@@ -485,7 +561,7 @@ func (r *typedResource) validate(values map[string]attr.Value) error {
 	return r.spec.Validate(values)
 }
 
-func (r *typedResource) stateObject(planned map[string]attr.Value, actual router.Section) (types.Object, diag.Diagnostics) {
+func (r *typedResource) stateObject(planned map[string]attr.Value, actual router.Section, owner string) (types.Object, diag.Diagnostics) {
 	values := map[string]attr.Value{}
 	for key, value := range planned {
 		values[key] = value
@@ -516,6 +592,11 @@ func (r *typedResource) stateObject(planned map[string]attr.Value, actual router
 		deleteBehavior = types.StringValue("forget")
 	}
 	values["delete_behavior"] = deleteBehavior
+	if owner == "" {
+		values["owner"] = types.StringNull()
+	} else {
+		values["owner"] = types.StringValue(owner)
+	}
 	return types.ObjectValue(r.attrTypes, values)
 }
 

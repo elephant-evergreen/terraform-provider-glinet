@@ -12,15 +12,20 @@ Every section the provider manages carries the `terraform_owner` option. The pro
 | Forget (destroy) | Sets the marker to `0` and keeps the section. |
 | Delete | Removes a named section only while it carries marker `1`. Firmware-owned anonymous sections are never deleted. |
 
+## Owner tokens
+
+Each typed resource also records an owner token in the `terraform_owner_id` option and in the computed `owner` attribute. The token does not appear in configuration.
+
+| Operation | Behavior |
+| --- | --- |
+| Create | Generates a token. A section that already carries another token is refused with "owned by another configuration". |
+| Update | Compares the router token with the state token and stops when they differ. A section without a token (legacy marker `1`) is adopted and receives a token. |
+| Import | Adopts the token already on the router. An unmanaged section has no token until the next write. |
+| Delete | Compares the tokens before removing or releasing the section. |
+| Forget | Clears the marker and the token. |
+
+A provider without owner-token support can rewrite a section without the token. The next write with token support regenerates it.
+
 ## Limitation
 
-The marker is a boolean, so the provider cannot distinguish two Terraform states. Two states that manage the same section overwrite each other, and Create over an unmanaged named section adopts it silently because the stock configuration already exists.
-
-## Planned owner tokens
-
-1. Add a computed `owner` attribute to the typed resources. It holds a random token created on the first write; an import adopts a token from the router or generates one.
-2. Store the token in the marker (`terraform_owner=<token>`). Legacy `1` states are adopted on their first write.
-3. Read, Update, and Delete compare the state token with the router marker and stop with a conflict diagnostic when another state owns the section.
-4. Roll out in a minor release with upgrade notes. The computed attribute does not change existing HCL, but the marker migration needs a documented window.
-
-Until then, keep one Terraform state per router configuration. Use separate states only for disjoint sections and accept that the provider cannot detect a conflicting owner.
+A boolean marker alone cannot distinguish two Terraform states. Owner tokens cover sections created by a state, but importing a section that another state already manages adopts its token, so both states treat each other as the same owner. Importing is an explicit adoption decision. Keep one Terraform state per router configuration and use separate states only for disjoint sections.

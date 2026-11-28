@@ -25,4 +25,5 @@ Manage the stock GL.iNet Samba global settings. Share sections and account passw
 ### Read-Only
 
 - `id` (String) Stable import identifier.
+- `owner` (String) Owner token recorded with the router section. It detects another Terraform state that manages the same section.
 - `uci_section` (String) Resolved UCI section name on the router.

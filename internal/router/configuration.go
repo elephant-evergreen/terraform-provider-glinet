@@ -576,9 +576,11 @@ func sameSectionExceptManagedMarker(a, b Section) bool {
 	right.Options = copyOptions(b.Options)
 	if left.Options != nil {
 		delete(left.Options, ManagedOption)
+		delete(left.Options, OwnerTokenOption)
 	}
 	if right.Options != nil {
 		delete(right.Options, ManagedOption)
+		delete(right.Options, OwnerTokenOption)
 	}
 	return reflect.DeepEqual(left, right)
 }
@@ -677,7 +679,7 @@ var allowedOptions = func() map[string]map[string]bool {
 	}
 	result := map[string]map[string]bool{}
 	for scope, names := range definitions {
-		result[scope] = map[string]bool{ManagedOption: true}
+		result[scope] = map[string]bool{ManagedOption: true, OwnerTokenOption: true}
 		for _, name := range strings.Fields(names) {
 			result[scope][name] = true
 		}

@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+// OwnerTokenOption records which Terraform state manages the section.
+const OwnerTokenOption = "terraform_owner_id"
+
 // ManagedOption marks a UCI section as owned by a typed Terraform resource.
 // It is written in the same atomic transaction as the section itself, so the
 // safety checks can distinguish managed sections from firmware-managed ones
@@ -15,6 +18,15 @@ const ManagedOption = "terraform_owner"
 
 func IsManaged(options map[string]string) bool {
 	return options[ManagedOption] == "1"
+}
+
+func ManagedOwner(options map[string]string) string {
+	return options[OwnerTokenOption]
+}
+
+func SetManagedOwner(options map[string]string, token string) {
+	options[ManagedOption] = "1"
+	options[OwnerTokenOption] = token
 }
 
 func MarkManaged(options map[string]string) {
@@ -148,6 +160,7 @@ func (c *Client) ForgetSection(ctx context.Context, selector Section) error {
 		selector.Options = map[string]string{}
 	}
 	selector.Options[ManagedOption] = "0"
+	delete(selector.Options, OwnerTokenOption)
 	selector.Absent = false
 	return c.ApplySections(ctx, Configuration{selector}, nil)
 }

@@ -22,7 +22,7 @@ func TestWirelessStatePreservesKeyVersion(t *testing.T) {
 		"key_wo":      types.StringNull(),
 		"key_version": types.Int64Value(3),
 	}
-	object, diagnostics := r.stateObject(planned, actual)
+	object, diagnostics := r.stateObject(planned, actual, "")
 	if diagnostics.HasError() {
 		t.Fatal(diagnostics)
 	}

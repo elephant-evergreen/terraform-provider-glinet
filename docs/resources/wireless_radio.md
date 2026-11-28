@@ -62,4 +62,5 @@ resource "glinet_wireless_radio" "wifi_2g" {
 
 - `band` (String) Radio band reported by the router, such as `2g` or `5g`.
 - `id` (String) Stable import identifier.
+- `owner` (String) Owner token recorded with the router section. It detects another Terraform state that manages the same section.
 - `uci_section` (String) Resolved UCI section name on the router.

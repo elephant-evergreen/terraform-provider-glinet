@@ -22,4 +22,5 @@ Manage the stock GL.iNet drop-in gateway switch. The helper DHCP section is left
 ### Read-Only
 
 - `id` (String) Stable import identifier.
+- `owner` (String) Owner token recorded with the router section. It detects another Terraform state that manages the same section.
 - `uci_section` (String) Resolved UCI section name on the router.
