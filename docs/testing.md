@@ -15,7 +15,8 @@
 | Firewall fixtures and mutation controls | All filter and nat entry chains, declared/missing/reordered rules, nested counter-only branches, and rejection of undeclared actions or branch cycles |
 | Native UCI fixture on a dedicated router | Actual libuci behavior in isolated temporary configuration; this does not demonstrate network activation or physical recovery |
 | GoodCloud service fixtures | Stock `cloud.set_config` invocation, stop verification, service snapshot and restore, configuration/runtime mismatch detection, rollback failure retention, and rollback outcomes in a local command world |
-| Transaction log fixtures | Each committed or rolled-back transaction records its phase durations, changed section count, reboot and restart counts, and whether it could cut the network |
+| Transaction log fixtures | Each committed or rolled-back transaction records its phase durations, changed section count, commit count, reboot and restart counts, and whether it could cut the network |
+| Documentation consistency | Every registered resource, data source, and action appears in the coverage matrix, and every type the matrix and the typed-resource guide reference is still registered |
 
 Ordinary `terraform plan` reads the router and checks its generated and active firewall. Each write checks ownership and conflicts, creates a verified encrypted backup, protects the wired management route when needed, and confirms the managed interfaces, bridges, DNS process and firewall before committing the transaction outcome. These are configuration and activation checks, not a traffic acceptance suite.
 
