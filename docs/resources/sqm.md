@@ -35,4 +35,5 @@ Manage one OpenWrt SQM queue section. The UCI section name is the stable identit
 ### Read-Only
 
 - `id` (String) Stable import identifier.
+- `owner` (String) Owner token recorded with the router section. It detects another Terraform state that manages the same section.
 - `uci_section` (String) Resolved UCI section name on the router.

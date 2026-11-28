@@ -59,4 +59,5 @@ resource "glinet_dnsmasq" "router" {
 ### Read-Only
 
 - `id` (String) Stable import identifier.
+- `owner` (String) Owner token recorded with the router section. It detects another Terraform state that manages the same section.
 - `uci_section` (String) Resolved UCI section name on the router.

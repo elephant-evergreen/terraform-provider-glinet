@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -350,4 +351,79 @@ func TestReleasedSectionIsNotWritable(t *testing.T) {
 			t.Fatalf("managed marker %v was treated as released", options)
 		}
 	}
+}
+
+func TestOwnerConflict(t *testing.T) {
+	for _, test := range []struct {
+		routerOwner, stateOwner string
+		conflict                bool
+	}{
+		{"", "", false},
+		{"a", "", false},
+		{"", "a", false},
+		{"a", "a", false},
+		{"a", "b", true},
+	} {
+		if got := ownerConflict(test.routerOwner, test.stateOwner); got != test.conflict {
+			t.Errorf("ownerConflict(%q, %q) = %v, want %v", test.routerOwner, test.stateOwner, got, test.conflict)
+		}
+	}
+}
+
+func TestTypedCreateRecordsOwnerToken(t *testing.T) {
+	remote := &typedFixtureRunner{}
+	client := router.NewClient(remote, fixtureProtection{})
+	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
+	config := `resource "glinet_network_interface" "test" {
+  name            = "guest"
+  device          = "br-guest"
+  address         = "192.168.9.1/24"
+  delete_behavior = "delete"
+}`
+	var token string
+	check := func(*terraform.State) error {
+		for _, section := range remote.actual {
+			if section.Name != "guest" {
+				continue
+			}
+			if !router.IsManaged(section.Options) {
+				return fmt.Errorf("guest is not marked managed")
+			}
+			owner := router.ManagedOwner(section.Options)
+			if owner == "" {
+				return fmt.Errorf("guest has no owner token")
+			}
+			if token == "" {
+				token = owner
+			} else if owner != token {
+				return fmt.Errorf("owner token changed from %q to %q", token, owner)
+			}
+			return nil
+		}
+		return fmt.Errorf("guest section was not recorded")
+	}
+	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{Config: config, Check: check},
+			{Config: config, Check: check},
+		},
+	})
+}
+
+func TestTypedCreateRefusesForeignOwner(t *testing.T) {
+	remote := &typedFixtureRunner{actual: router.Configuration{{
+		Package: "network", Type: "interface", Name: "guest",
+		Options: map[string]string{"device": "br-guest", "proto": "static", "ipaddr": "192.168.9.1", "netmask": "255.255.255.0", router.ManagedOption: "1", router.OwnerTokenOption: "foreign"},
+	}}}
+	client := router.NewClient(remote, fixtureProtection{})
+	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
+	config := `resource "glinet_network_interface" "test" {
+  name            = "guest"
+  device          = "br-guest"
+  address         = "192.168.9.1/24"
+  delete_behavior = "delete"
+}`
+	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{{Config: config, ExpectError: regexp.MustCompile("owned by another configuration")}},
+	})
 }
