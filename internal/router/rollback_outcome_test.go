@@ -93,7 +93,7 @@ func writeTransaction(t *testing.T, root, token string) {
 	writeFile(t, filepath.Join(dir, "token"), token)
 }
 
-func writeOutcome(t *testing.T, root, outcome string) {
+func writeOutcome(t testTB, root, outcome string) {
 	t.Helper()
 	dir := filepath.Join(root, "results")
 	if err := os.MkdirAll(dir, 0700); err != nil {

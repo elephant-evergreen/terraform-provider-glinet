@@ -43,6 +43,17 @@ func (r *typedFixtureRunner) Run(_ context.Context, script string) ([]byte, erro
 		if r.rejectOwnership {
 			return nil, &router.ExitError{Code: 78}
 		}
+		if packageName, sectionName, expected, ok := typedOwnershipGuard(script); ok {
+			current := ""
+			for _, existing := range r.actual {
+				if existing.Package == packageName && existing.Name == sectionName {
+					current = existing.Options[router.OwnerTokenOption]
+				}
+			}
+			if current != expected && !(expected != "" && current == "") {
+				return nil, &router.ExitError{Code: 78}
+			}
+		}
 		change, err := typedChangeConfiguration(script)
 		if err != nil {
 			return nil, err
@@ -123,6 +134,35 @@ func readSection(existing, desired router.Section) router.Section {
 		section.Lists = nil
 	}
 	return section
+}
+
+func typedOwnershipGuard(script string) (string, string, string, bool) {
+	const optionMarker = "current_owner=$(uci -q get '"
+	start := strings.Index(script, optionMarker)
+	if start < 0 {
+		return "", "", "", false
+	}
+	rest := script[start+len(optionMarker):]
+	optionEnd := strings.Index(rest, "'")
+	if optionEnd < 0 {
+		return "", "", "", false
+	}
+	option := rest[:optionEnd]
+	const expectedMarker = "if [ \"$current_owner\" != '"
+	start = strings.Index(script, expectedMarker)
+	if start < 0 {
+		return "", "", "", false
+	}
+	rest = script[start+len(expectedMarker):]
+	expectedEnd := strings.Index(rest, "'")
+	if expectedEnd < 0 {
+		return "", "", "", false
+	}
+	parts := strings.SplitN(option, ".", 3)
+	if len(parts) != 3 {
+		return "", "", "", false
+	}
+	return parts[0], parts[1], rest[:expectedEnd], true
 }
 
 func withoutEmptyOptions(options map[string]string) map[string]string {
@@ -584,4 +624,57 @@ func TestTypedAnonymousCreateClaimsDeterministicName(t *testing.T) {
 		}
 	}
 	t.Fatalf("anonymous create did not claim %s", want)
+}
+
+func TestConcurrentOwnersCannotBothCreate(t *testing.T) {
+	remote := &typedFixtureRunner{}
+	claim := &router.OwnerClaim{Package: "firewall", Section: "concurrent", Token: ""}
+	section := func(token string) router.Section {
+		return router.Section{
+			Package: "firewall", Type: "redirect", Name: "concurrent",
+			Options: map[string]string{
+				"name": "concurrent", "target": "DNAT", "src": "wan", "src_dport": "65530",
+				"dest": "lan", "dest_ip": "192.0.2.10", "dest_port": "65530",
+				"proto": "tcp", "enabled": "1",
+				router.ManagedOption: "1", router.OwnerTokenOption: token,
+			},
+		}
+	}
+	results := make(chan error, 2)
+	var wait sync.WaitGroup
+	for _, token := range []string{"token-a", "token-b"} {
+		wait.Add(1)
+		go func(token string) {
+			defer wait.Done()
+			client := router.NewClient(remote, fixtureProtection{})
+			results <- client.ApplySectionsOwned(context.Background(), router.Configuration{section(token)}, nil, claim)
+		}(token)
+	}
+	wait.Wait()
+	close(results)
+	successes, conflicts := 0, 0
+	for err := range results {
+		switch {
+		case err == nil:
+			successes++
+		case strings.Contains(err.Error(), "owned by another Terraform state"):
+			conflicts++
+		default:
+			t.Fatalf("unexpected concurrent write result: %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent creates = %d successes, %d conflicts; want 1 and 1", successes, conflicts)
+	}
+	remote.mu.Lock()
+	defer remote.mu.Unlock()
+	for _, actual := range remote.actual {
+		if actual.Package == "firewall" && actual.Name == "concurrent" {
+			if owner := actual.Options[router.OwnerTokenOption]; owner != "token-a" && owner != "token-b" {
+				t.Fatalf("concurrent create recorded owner %q", owner)
+			}
+			return
+		}
+	}
+	t.Fatal("concurrent create did not record a section")
 }
