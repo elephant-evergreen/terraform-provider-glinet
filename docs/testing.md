@@ -14,7 +14,7 @@ Ordinary `terraform plan` reads the router and checks its generated and active f
 
 ## Independent hardware acceptance
 
-Run `mise run acceptance` against an explicitly authorized dedicated Flint 2 with stock firmware 4.11.x, an external encrypted recovery backup, and a tested wired recovery connection. The suite is opt-in: it requires `GLINET_ACCEPTANCE=1` and the `GLINET_*` connection variables, and it never runs in ordinary CI. Record the exact build in the private verification notes; the 4.11 line is the verified line.
+Run `mise run acceptance` against an explicitly authorized Flint 2 (dedicated or the operator's) with stock firmware 4.11.x, an external encrypted recovery backup, and a tested wired recovery connection. The suite is opt-in: it requires `GLINET_ACCEPTANCE=1` and the `GLINET_*` connection variables, and it never runs in ordinary CI. Record the exact build in the private verification notes; the 4.11 line is the verified line.
 
 The suite:
 
