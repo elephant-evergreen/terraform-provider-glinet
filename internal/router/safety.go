@@ -104,6 +104,14 @@ func (c *Client) readSafetyState(ctx context.Context) (uciState, error) {
 	if err != nil {
 		return nil, operationError(err)
 	}
+	state, err := parseSafetyState(output)
+	if err != nil {
+		return nil, err
+	}
+	return state, nil
+}
+
+func parseSafetyState(output []byte) (uciState, error) {
 	var raw map[string]json.RawMessage
 	if json.Unmarshal(output, &raw) != nil {
 		return nil, errors.New("The router returned invalid configuration state.")

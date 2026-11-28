@@ -151,3 +151,61 @@ func decodeConfigurationSpec(spec string) (Configuration, Configuration) {
 	}
 	return full, changes
 }
+
+func FuzzParseSafetyState(f *testing.F) {
+	f.Add(`{"network":[],"firewall":[{"name":"rule","type":"rule","options":{"target":"REJECT"}}]}`)
+	f.Add(`{"network":{}}`)
+	f.Add(`not json`)
+	f.Fuzz(func(t *testing.T, input string) {
+		state, err := parseSafetyState([]byte(input))
+		if err != nil {
+			return
+		}
+		for packageName, sections := range state {
+			for index, section := range sections {
+				if section.Options != nil && len(section.Options) == 0 {
+					t.Fatalf("%s[%d] kept an empty options map", packageName, index)
+				}
+				if section.Lists != nil && len(section.Lists) == 0 {
+					t.Fatalf("%s[%d] kept an empty lists map", packageName, index)
+				}
+			}
+		}
+	})
+}
+
+func FuzzParseConfigurationState(f *testing.F) {
+	f.Add(`[{"package":"firewall","name":"rule","type":"rule","options":{"target":"REJECT"}}]`, 1)
+	f.Add(`[]`, 0)
+	f.Add(`{}`, 1)
+	f.Fuzz(func(t *testing.T, input string, expected int) {
+		configuration, err := parseConfigurationState([]byte(input), expected)
+		if err != nil {
+			return
+		}
+		if len(configuration) != expected {
+			t.Fatalf("parsed %d sections, want %d", len(configuration), expected)
+		}
+		for index, section := range configuration {
+			if section.Options != nil && len(section.Options) == 0 {
+				t.Fatalf("[%d] kept an empty options map", index)
+			}
+			if section.Lists != nil && len(section.Lists) == 0 {
+				t.Fatalf("[%d] kept an empty lists map", index)
+			}
+		}
+	})
+}
+
+func FuzzSectionMatches(f *testing.F) {
+	f.Add("rule", "rule", "src", "lan")
+	f.Add("@rule[0]", "rule", "name", "web")
+	f.Add("", "", "", "")
+	f.Fuzz(func(t *testing.T, selectorName, actualName, matchKey, matchValue string) {
+		selector := Section{Package: "firewall", Type: "rule", Name: selectorName, Match: map[string]string{matchKey: matchValue}}
+		actual := Section{Package: "firewall", Type: "rule", Name: actualName, Options: map[string]string{matchKey: matchValue}}
+		if sectionMatches(selector, actual) != sectionMatches(selector, actual) {
+			t.Fatal("sectionMatches is not deterministic")
+		}
+	})
+}

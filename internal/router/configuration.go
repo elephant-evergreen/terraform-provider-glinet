@@ -284,8 +284,21 @@ func (c *Client) ReadConfiguration(ctx context.Context, config Configuration) (C
 	if err != nil {
 		return nil, operationError(err)
 	}
+	actual, err := parseConfigurationState(output, len(config))
+	if err != nil {
+		return nil, err
+	}
+	for i := range actual {
+		if config[i].Absent && actual[i].Absent {
+			actual[i] = config[i]
+		}
+	}
+	return actual, nil
+}
+
+func parseConfigurationState(output []byte, expected int) (Configuration, error) {
 	var actual Configuration
-	if json.Unmarshal(output, &actual) != nil || len(actual) != len(config) {
+	if json.Unmarshal(output, &actual) != nil || len(actual) != expected {
 		return nil, errors.New("The router returned invalid configuration data.")
 	}
 	for i := range actual {
@@ -294,9 +307,6 @@ func (c *Client) ReadConfiguration(ctx context.Context, config Configuration) (C
 		}
 		if len(actual[i].Lists) == 0 {
 			actual[i].Lists = nil
-		}
-		if config[i].Absent && actual[i].Absent {
-			actual[i] = config[i]
 		}
 	}
 	return actual, nil
