@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func configurationFixture() Configuration {
@@ -150,10 +152,12 @@ func TestConfigurationGeneratedScriptsAreShellSafe(t *testing.T) {
 }
 
 type configurationMutationRunner struct {
-	current   Configuration
-	wanted    Configuration
-	apply     string
-	failApply bool
+	current     Configuration
+	wanted      Configuration
+	apply       string
+	failApply   bool
+	failConfirm bool
+	committed   bool
 }
 
 func (r *configurationMutationRunner) Run(_ context.Context, script string) ([]byte, error) {
@@ -169,6 +173,19 @@ func (r *configurationMutationRunner) Run(_ context.Context, script string) ([]b
 			return nil, &ExitError{Code: 75}
 		}
 		r.current = r.wanted
+		return nil, nil
+	}
+	if strings.Contains(script, "ack_state") {
+		if r.failConfirm {
+			return nil, errors.New("The router SSH operation did not complete.")
+		}
+		return nil, nil
+	}
+	if strings.Contains(script, "elif [ -f ") {
+		if r.committed {
+			return []byte("confirm"), nil
+		}
+		return []byte("pending"), nil
 	}
 	return nil, nil
 }
@@ -311,5 +328,88 @@ func TestAnonymousSectionDeletionRequiresMatch(t *testing.T) {
 	namedMatch := Configuration{{Package: "firewall", Type: "forwarding", Name: "cfg000000", Match: map[string]string{"src": "lan"}, Absent: true}}
 	if err := ValidateConfiguration(namedMatch); err == nil {
 		t.Fatal("named deletion with a match was accepted")
+	}
+}
+
+func TestTransactionCommitsOnlyChangedPackages(t *testing.T) {
+	config := Configuration{
+		{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}},
+		{Package: "samba4", Name: "samba", Type: "samba", Options: map[string]string{"workgroup": "WORKGROUP"}},
+	}
+	script := configurationApplyScript(config, "token", reloadPlan{Firewall: true}, nil)
+	commit := "for package in firewall samba4; do uci commit"
+	if !strings.Contains(script, commit) {
+		t.Fatalf("transaction does not commit exactly the changed packages:\n%s", script)
+	}
+	if strings.Contains(script, "for package in "+configurationPackages+"; do uci commit") {
+		t.Fatal("transaction commits every managed package")
+	}
+	if got := configurationCommitPackages(config, reloadPlan{}); got != "firewall samba4" {
+		t.Fatalf("commit packages = %q", got)
+	}
+	if got := configurationCommitPackages(Configuration{{Package: "gl-cloud", Name: "@cloud[0]", Type: "cloud"}}, reloadPlan{ServiceSnapshot: true}); got != "gl-cloud" {
+		t.Fatalf("cloud commit packages = %q", got)
+	}
+}
+
+func TestTransactionCommitCountIsRecorded(t *testing.T) {
+	record := transactionCost(reloadPlan{}, transactionPhases{}, Configuration{{Package: "firewall", Name: "example", Type: "rule"}}, "committed", time.Now())
+	if record.UCICommits != 1 {
+		t.Fatalf("uci_commits = %d", record.UCICommits)
+	}
+	if record.Changed != 1 {
+		t.Fatalf("changed_sections = %d", record.Changed)
+	}
+}
+
+func TestCommittedTransactionSurvivesLostConfirmation(t *testing.T) {
+	before := Configuration{{Package: "samba4", Name: "samba", Type: "samba", Options: map[string]string{"workgroup": "OLD"}}}
+	after := Configuration{{Package: "samba4", Name: "samba", Type: "samba", Options: map[string]string{"workgroup": "NEW"}}}
+	remote := &configurationMutationRunner{current: before, wanted: after, failConfirm: true, committed: true}
+	client := newFixtureClient(remote)
+	client.AllowNetworkDisruption(true)
+	path := filepath.Join(t.TempDir(), "transactions.jsonl")
+	client.SetTransactionLog(path)
+	if err := client.writeConfiguration(context.Background(), after, nil, after, nil, nil); err != nil {
+		t.Fatalf("a committed transaction reported failure: %v", err)
+	}
+	records := readTransactionRecords(t, path)
+	if len(records) != 1 || records[0].Result != "committed" {
+		t.Fatalf("committed transaction was not recorded: %+v", records)
+	}
+}
+
+func TestLostConfirmationWithoutCommitStillFails(t *testing.T) {
+	before := Configuration{{Package: "samba4", Name: "samba", Type: "samba", Options: map[string]string{"workgroup": "OLD"}}}
+	after := Configuration{{Package: "samba4", Name: "samba", Type: "samba", Options: map[string]string{"workgroup": "NEW"}}}
+	remote := &configurationMutationRunner{current: before, wanted: after, failConfirm: true}
+	client := newFixtureClient(remote)
+	client.AllowNetworkDisruption(true)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	if err := client.writeConfiguration(ctx, after, nil, after, nil, nil); err == nil {
+		t.Fatal("an unconfirmed transaction was accepted")
+	}
+}
+
+func TestProbeTransactionOutcome(t *testing.T) {
+	for input, want := range map[string]transactionOutcome{
+		"confirm":        outcomeCommitted,
+		"rollback":       outcomeRestoring,
+		"restored":       outcomeRolledBack,
+		"restore_failed": outcomeRestoreFailed,
+		"superseded":     outcomeSuperseded,
+		"pending":        outcomePending,
+		"missing":        outcomeUnknown,
+	} {
+		runner := &scriptedRunner{outputs: [][]byte{[]byte(input)}}
+		client := NewClient(runner, nil)
+		got, err := client.probeTransaction(context.Background(), "token")
+		if err != nil {
+			t.Fatalf("probe %q: %v", input, err)
+		}
+		if got != want {
+			t.Errorf("probe %q = %v, want %v", input, got, want)
+		}
 	}
 }

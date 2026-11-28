@@ -3,6 +3,7 @@ package router
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -12,9 +13,11 @@ type transactionRecord struct {
 	TotalMS        int64    `json:"total_ms"`
 	BackupMS       int64    `json:"backup_ms"`
 	ApplyMS        int64    `json:"apply_ms"`
+	ReconnectMS    int64    `json:"reconnect_ms"`
 	VerifyMS       int64    `json:"verify_ms"`
 	ConfirmMS      int64    `json:"confirm_ms"`
 	Changed        int      `json:"changed_sections"`
+	UCICommits     int      `json:"uci_commits"`
 	Reboots        int      `json:"reboots"`
 	Restarts       int      `json:"restarts"`
 	RestartNames   []string `json:"restart_names,omitempty"`
@@ -48,15 +51,25 @@ func (c *Client) recordTransaction(record transactionRecord) {
 	_, _ = file.Write(append(data, '\n'))
 }
 
-func transactionCost(plan reloadPlan, elapsed [4]time.Duration, changed int, result string, started time.Time) transactionRecord {
+type transactionPhases struct {
+	Backup    time.Duration
+	Apply     time.Duration
+	Reconnect time.Duration
+	Verify    time.Duration
+	Confirm   time.Duration
+}
+
+func transactionCost(plan reloadPlan, phases transactionPhases, config Configuration, result string, started time.Time) transactionRecord {
 	record := transactionRecord{
 		Result:         result,
 		TotalMS:        time.Since(started).Milliseconds(),
-		BackupMS:       elapsed[0].Milliseconds(),
-		ApplyMS:        elapsed[1].Milliseconds(),
-		VerifyMS:       elapsed[2].Milliseconds(),
-		ConfirmMS:      elapsed[3].Milliseconds(),
-		Changed:        changed,
+		BackupMS:       phases.Backup.Milliseconds(),
+		ApplyMS:        phases.Apply.Milliseconds(),
+		ReconnectMS:    phases.Reconnect.Milliseconds(),
+		VerifyMS:       phases.Verify.Milliseconds(),
+		ConfirmMS:      phases.Confirm.Milliseconds(),
+		Changed:        len(config),
+		UCICommits:     len(strings.Fields(configurationCommitPackages(config, plan))),
 		NetworkCutting: networkDisruptionRequired(plan),
 	}
 	if plan.Reboot {

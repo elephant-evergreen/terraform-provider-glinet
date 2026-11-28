@@ -286,7 +286,7 @@ esac
 `
 
 	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nset -eu\numask 077\nmkdir " + quote(configurationLock) + " 2>/dev/null || test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || return 73\nprintf '%s' " + quote(token) + " > " + quote(configurationLock+"/token") + "\nif [ ! -d " + quote(dir) + " ]; then\nmkdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || return 73\n" + configurationCleanup(token, "") + "return 0\nfi\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
-	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, secrets...) + "fw3 -q print >/dev/null\nfor package in " + configurationPackages + cloudCommitPackages(plan) + "; do uci commit \"$package\"; done\n" + configurationReload(plan) + cloudRequest(plan)
+	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, secrets...) + "fw3 -q print >/dev/null\nfor package in " + configurationCommitPackages(config, plan) + "; do uci commit \"$package\"; done\n" + configurationReload(plan) + cloudRequest(plan)
 	if plan.Reboot {
 		request += "touch awaiting_boot\nsync\nreboot\n"
 	} else {
@@ -329,6 +329,13 @@ touch activate
 `
 
 	return script
+}
+
+// configurationOutcomeProbe reads the durable transaction state without
+// requesting a rollback, so a lost confirmation response is not mistaken for a
+// failed apply.
+func configurationOutcomeProbe(token string) string {
+	return "if [ -f " + quote(resultDir+"/"+token) + " ]; then cat " + quote(resultDir+"/"+token) + "; elif [ -d " + quote(transactionDir) + " ]; then if [ \"$(cat " + quote(transactionDir+"/token") + " 2>/dev/null || true)\" != " + quote(token) + " ]; then printf superseded; elif [ -f " + quote(transactionDir+"/decision") + " ]; then cat " + quote(transactionDir+"/decision") + "; else printf pending; fi; else printf missing; fi"
 }
 
 func configurationRollbackScript(token string) string {
@@ -479,6 +486,25 @@ func planDeferred(plan reloadPlan) bool {
 		}
 	}
 	return false
+}
+
+// configurationCommitPackages returns only the UCI packages the change touches.
+// Committing every managed package on every transaction rewrites flash without
+// changing configuration.
+func configurationCommitPackages(config Configuration, plan reloadPlan) string {
+	seen := map[string]bool{}
+	packages := []string{}
+	for _, section := range config {
+		if seen[section.Package] || !validPackageName(section.Package) {
+			continue
+		}
+		seen[section.Package] = true
+		packages = append(packages, section.Package)
+	}
+	if plan.ServiceSnapshot && !seen["gl-cloud"] {
+		packages = append(packages, "gl-cloud")
+	}
+	return strings.Join(packages, " ")
 }
 
 func configurationDeferredScript(plan reloadPlan, token string) string {

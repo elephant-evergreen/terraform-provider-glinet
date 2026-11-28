@@ -29,14 +29,17 @@ GLINET_TRANSACTION_LOG=/tmp/glinet-apply.jsonl terraform apply
 | Field | Meaning |
 | --- | --- |
 | `result` | `committed`, `rollback:restored`, `rollback:restore_failed`, `unconfirmed`, and similar outcomes |
-| `total_ms`, `backup_ms`, `apply_ms`, `verify_ms`, `confirm_ms` | Wall-clock phases of the transaction on the provider host |
+| `total_ms`, `backup_ms`, `apply_ms`, `reconnect_ms`, `verify_ms`, `confirm_ms` | Wall-clock durations on the provider host: the whole transaction, the encrypted backup, the apply command, the gap from the apply command to the first successful read (a management-path stop proxy, including a reboot), configuration and firewall verification, and the confirmation command |
 | `changed_sections` | Number of changed UCI sections |
+| `uci_commits` | Number of `uci commit` calls, one per touched package. Each commit may write the package file to flash, so this is a write-volume proxy. A transaction now commits only the packages its change touches instead of every managed package. |
 | `reboots`, `restarts`, `restart_names` | Planned reboots, service activations, and which services were activated |
 | `network_disruptive` | Whether the change required the network disruption permission |
 
 The record contains no configuration values, secrets, or host identifiers. It is a local measurement aid and never changes the transaction outcome. The file is opened with mode `0600` and appended one line per transaction.
 
 A plan with one resource stops the router for at most one reboot plus its service activations. A multi-resource apply serializes one transaction per resource, so the total stop time is the sum of the per-resource transactions and the restarts are not merged. Use the log to count both before changing the apply order, and keep the one-resource-per-transaction boundary when the alternative would remove the recovery window.
+
+The transaction writes only the packages named by the change and commits only those; the rollback snapshot still covers every managed package. Compare `uci_commits` with the number of changed packages to confirm that a transaction did not rewrite unrelated configuration.
 
 These numbers were not yet collected on hardware. Fixture runs establish that the fields are recorded and that service and reboot counts match the plan; they do not establish device stop time or flash wear.
 

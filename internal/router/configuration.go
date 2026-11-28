@@ -408,10 +408,9 @@ func networkDisruptionRequired(plan reloadPlan) bool {
 
 func (c *Client) writeConfiguration(ctx context.Context, config Configuration, secrets map[string]string, safetyConfig Configuration, claim *OwnerClaim, service *ServiceChange) error {
 	started := time.Now()
-	var elapsed [4]time.Duration
-	mark := func(index int) { elapsed[index] = time.Since(started) }
+	phases := transactionPhases{}
 	record := func(plan reloadPlan, result string) {
-		c.recordTransaction(transactionCost(plan, elapsed, len(config), result, started))
+		c.recordTransaction(transactionCost(plan, phases, config, result, started))
 	}
 	if !ValidSecretOptions(config, secrets) {
 		return errors.New("Secret options must reference managed sections and supported secret names.")
@@ -470,9 +469,9 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 	if err := c.protection.Protect(ctx, c.runner, disruptive); err != nil {
 		return err
 	}
-	mark(0)
+	phases.Backup = time.Since(started)
 	_, err = c.runner.Run(ctx, configurationApplyScript(config, token, plan, claim, secrets))
-	mark(1)
+	phases.Apply = time.Since(started)
 	var exit *ExitError
 	if err != nil {
 		if errors.As(err, &exit) && (exit.Code == 73 || exit.Code == 74 || exit.Code == 78) {
@@ -491,9 +490,15 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 	}
 	wait, cancel := context.WithTimeout(ctx, 240*time.Second)
 	defer cancel()
+	connected := false
 	for {
 		actual, readErr := c.ReadConfiguration(wait, config)
+		if readErr == nil && !connected {
+			connected = true
+			phases.Reconnect = time.Since(started) - phases.Apply
+		}
 		if readErr == nil && SameConfiguration(actual, config) {
+			verifyStart := time.Now()
 			runtimeErr := c.verifyRuntimeFirewall(wait)
 			for attempt := 0; runtimeErr != nil && attempt < 6; attempt++ {
 				select {
@@ -511,16 +516,22 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 				record(plan, "rollback:"+outcomeName(outcome))
 				return fmt.Errorf("%w %s", runtimeErr, rollbackDiagnostic(outcome))
 			}
-			mark(2)
+			phases.Verify = time.Since(verifyStart)
+			confirmStart := time.Now()
 			_, confirmErr := c.runner.Run(wait, configurationConfirmScriptWithPlan(token, safetyConfig, plan, secrets))
 			if confirmErr == nil {
-				mark(3)
+				phases.Confirm = time.Since(confirmStart)
 				record(plan, "committed")
 				return nil
 			}
 			if errors.As(confirmErr, &exit) && exit.Code == 77 {
 				record(plan, "rollback:decided")
 				return operationError(confirmErr)
+			}
+			if outcome, probeErr := c.probeTransaction(wait, token); probeErr == nil && outcome == outcomeCommitted {
+				phases.Confirm = time.Since(confirmStart)
+				record(plan, "committed")
+				return nil
 			}
 		}
 		select {
@@ -529,6 +540,10 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 			if rollbackErr != nil {
 				record(plan, "unconfirmed")
 				return fmt.Errorf("The operation outcome could not be confirmed and the router-side rollback failed: %v. Inspect the router before retrying: %w", rollbackErr, wait.Err())
+			}
+			if outcome == outcomeCommitted {
+				record(plan, "committed")
+				return nil
 			}
 			record(plan, "unconfirmed")
 			return fmt.Errorf("The operation outcome could not be confirmed. %s Inspect the router before retrying: %w", rollbackDiagnostic(outcome), wait.Err())
@@ -606,6 +621,21 @@ func rollbackDiagnostic(outcome transactionOutcome) string {
 		return "A newer transaction replaced this one, so the outcome could not be confirmed. Inspect the router before retrying."
 	default:
 		return "The transaction outcome could not be confirmed. Inspect the router before retrying."
+	}
+}
+
+func (c *Client) probeTransaction(ctx context.Context, token string) (transactionOutcome, error) {
+	output, err := c.runner.Run(ctx, configurationOutcomeProbe(token))
+	if err != nil {
+		return outcomeUnknown, err
+	}
+	switch strings.TrimSpace(string(output)) {
+	case "confirm":
+		return outcomeCommitted, nil
+	case "rollback":
+		return outcomeRestoring, nil
+	default:
+		return parseTransactionOutcome(output), nil
 	}
 }
 
