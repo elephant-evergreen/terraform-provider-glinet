@@ -39,3 +39,20 @@ func TestForgetSectionClearsOwnerToken(t *testing.T) {
 		t.Fatalf("forget did not clear the owner token on the router:\n%s", write)
 	}
 }
+
+func TestAnonymousSectionNameMatchesCreateName(t *testing.T) {
+	selector := Section{Package: "firewall", Type: "redirect", Name: "@redirect[0]", Match: map[string]string{"name": "Acceptance"}}
+	name := AnonymousSectionName(selector.Package, selector.Type, selector.Match)
+	if !strings.HasPrefix(name, "tf_glinet_") || len(name) != len("tf_glinet_")+16 {
+		t.Fatalf("unexpected anonymous section name %q", name)
+	}
+	if !strings.Contains(configurationLua(Configuration{selector}, true), name) {
+		t.Fatalf("the write script does not create %s", name)
+	}
+	if other := AnonymousSectionName(selector.Package, selector.Type, map[string]string{"name": "Other"}); other == name {
+		t.Fatal("the identity is not part of the create name")
+	}
+	if singleton := AnonymousSectionName("dropbear", "dropbear", nil); singleton == name {
+		t.Fatal("different selectors produced the same create name")
+	}
+}

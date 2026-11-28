@@ -141,7 +141,7 @@ func TestConfigurationAdoptionDoesNotWriteAndCancellationDoesNotArm(t *testing.T
 func TestConfigurationGeneratedScriptsAreShellSafe(t *testing.T) {
 	config := configurationFixture()
 	config[0].Options["ssid"] = "Example ' $(touch /tmp/glinet-should-not-exist)"
-	for _, script := range []string{configurationLua(config, false), configurationApplyScript(config, "example-token", reloadPlan{Reboot: true, DNS: true, DHCP: true, Firewall: true}, nil, map[string]string{"wireless.wifi2g.key": "example'password"}), configurationApplyScript(config, "example-token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, &OwnerClaim{Package: "system", Section: "system", Unowned: true}), configurationConfirmScript("example-token", config)} {
+	for _, script := range []string{configurationLua(config, false), configurationApplyScript(config, "example-token", reloadPlan{Reboot: true, DNS: true, DHCP: true, Firewall: true}, nil, map[string]string{"wireless.wifi2g.key": "example'password"}), configurationApplyScript(config, "example-token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, &OwnerClaim{Package: "system", Section: "system", Token: ""}), configurationConfirmScript("example-token", config)} {
 		cmd := exec.Command("/bin/sh", "-n")
 		cmd.Stdin = strings.NewReader(script)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -181,7 +181,7 @@ func (r *configurationMutationRunner) Run(_ context.Context, script string) ([]b
 		}
 		return nil, nil
 	}
-	if strings.Contains(script, "elif [ -f ") {
+	if strings.Contains(script, "pending=0") {
 		if r.committed {
 			return []byte("confirm"), nil
 		}

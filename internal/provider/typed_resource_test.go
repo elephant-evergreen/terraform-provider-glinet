@@ -22,6 +22,7 @@ type typedFixtureRunner struct {
 	mu              sync.Mutex
 	actual          router.Configuration
 	applyCalls      int
+	applies         []string
 	rejectOwnership bool
 }
 
@@ -38,6 +39,7 @@ func (r *typedFixtureRunner) Run(_ context.Context, script string) ([]byte, erro
 		return nil, nil
 	}
 	if strings.Contains(script, "assert(uci:save") {
+		r.applies = append(r.applies, script)
 		if r.rejectOwnership {
 			return nil, &router.ExitError{Code: 78}
 		}
@@ -499,6 +501,9 @@ func TestTypedForgetClearsOwnerTokenOnRouter(t *testing.T) {
 		CheckDestroy: func(*terraform.State) error {
 			remote.mu.Lock()
 			defer remote.mu.Unlock()
+			if len(remote.applies) == 0 || !strings.Contains(remote.applies[len(remote.applies)-1], "uci -q get 'network.guest.terraform_owner_id'") {
+				return fmt.Errorf("forget did not re-check the owner token inside the transaction")
+			}
 			for _, section := range remote.actual {
 				if section.Package != "network" || section.Name != "guest" {
 					continue
@@ -530,4 +535,53 @@ func TestTypedWriteReportsConcurrentOwnership(t *testing.T) {
 	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
 		Steps: []resource.TestStep{{Config: config, ExpectError: regexp.MustCompile("owned by another Terraform state")}},
 	})
+}
+
+func TestOwnershipClaimUsesObservedOwner(t *testing.T) {
+	claim := ownershipClaim("network", "guest", observedOwner(map[string]string{router.OwnerTokenOption: "router-token"}, true))
+	if claim == nil || claim.Section != "guest" || claim.Token != "router-token" {
+		t.Fatalf("claim = %#v", claim)
+	}
+	if claim := ownershipClaim("network", "guest", observedOwner(nil, false)); claim == nil || claim.Token != "" {
+		t.Fatalf("missing section claim = %#v", claim)
+	}
+	if claim := ownershipClaim("network", "", ""); claim != nil {
+		t.Fatalf("empty section produced a claim: %#v", claim)
+	}
+}
+
+func TestResolvedSectionNameForMissingAnonymousSelector(t *testing.T) {
+	selector := router.Section{Package: "firewall", Type: "redirect", Name: "@redirect[0]", Match: map[string]string{"name": "Example"}}
+	want := router.AnonymousSectionName(selector.Package, selector.Type, selector.Match)
+	if got := resolvedSectionName(selector, router.Section{}, false); got != want {
+		t.Fatalf("missing anonymous selector resolved to %q, want %q", got, want)
+	}
+	if got := resolvedSectionName(selector, router.Section{Name: "cfg123"}, true); got != "cfg123" {
+		t.Fatalf("existing anonymous selector resolved to %q", got)
+	}
+	if got := resolvedSectionName(router.Section{Package: "network", Type: "interface", Name: "guest"}, router.Section{}, false); got != "guest" {
+		t.Fatalf("missing named selector resolved to %q", got)
+	}
+}
+
+func TestTypedAnonymousCreateClaimsDeterministicName(t *testing.T) {
+	remote := &typedFixtureRunner{}
+	client := router.NewClient(remote, fixtureProtection{})
+	client.AllowNetworkDisruption(true)
+	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
+	config := `resource "glinet_system_ssh" "test" {
+  port = 22
+}`
+	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{{Config: config}},
+	})
+	want := "dropbear." + router.AnonymousSectionName("dropbear", "dropbear", nil) + ".terraform_owner_id"
+	remote.mu.Lock()
+	defer remote.mu.Unlock()
+	for _, script := range remote.applies {
+		if strings.Contains(script, want) {
+			return
+		}
+	}
+	t.Fatalf("anonymous create did not claim %s", want)
 }

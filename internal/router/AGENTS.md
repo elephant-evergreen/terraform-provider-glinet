@@ -11,8 +11,9 @@ Read [the design](../../docs/design.md) before changing the transaction, safety,
 - A decided rollback is not a completed one. The restore script records `restoring` before it starts, `restored` only after every snapshotted package and the same service activation as the apply have finished, and nothing else while it retries. The watchdog records `restore_failed` when it gives up. The provider reports a rollback only for `restored`.
 - A rollback must not acknowledge a successful apply, and a confirmed transaction must not be rolled back afterwards. Terminal outcome records never change back.
 - The transaction lock and the boot-id readiness check reject stale or concurrent participants.
-- The ownership claim is checked again inside the transaction lock, before the transaction is prepared, and exits with code 78. Any check that mutates configuration before it can refuse a concurrent owner is wrong.
-- A service activation that can close the provider's own management path (dropbear on a port move or disable) runs after the confirmed transaction from a detached script. Never activate it inside the transaction and never report its result as verified.
+- The ownership claim records the owner token observed before the write, and it is checked again inside the transaction lock, before the transaction is prepared, with exit code 78. Cover every create, update, delete, and forget, including a section without a token and an anonymous section that does not exist yet (use the deterministic create name). Any check that mutates configuration before it can refuse a concurrent owner is wrong.
+- An SSH endpoint change (disable or a port other than the provider's management port) is refused. Never activate a change the provider cannot observe, and never report its result as verified.
+- A confirmed transaction counts as committed only after its cleanup removed the transaction directory, lock, and recovery service. The probe and the confirmation acknowledgement use the same cleanup conditions.
 
 ## Safety invariants
 

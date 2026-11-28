@@ -16,11 +16,11 @@ Manage the stock OpenWrt dropbear SSH service. Destroy releases ownership and pr
 ### Optional
 
 - `delete_behavior` (String) Destroy behavior. `forget` releases Terraform ownership and preserves the UCI section; `delete` removes a Terraform-created named section. Firmware-owned anonymous sections are always preserved.
-- `enabled` (Boolean) Enable the SSH service.
+- `enabled` (Boolean) Enable the SSH service. Disabling it is refused because it removes the provider's management path; use the router console.
 - `idle_timeout` (Number) Idle timeout in seconds; zero leaves it unset.
 - `interface` (String) Restrict SSH to an interface; empty leaves it unrestricted.
 - `password_auth` (Boolean) Allow password authentication.
-- `port` (Number) SSH port.
+- `port` (Number) SSH port. It must match the provider's configured port. Moving the endpoint is refused; change it from the router console and update the provider configuration and known_hosts entry.
 - `root_password_auth` (Boolean) Allow root password authentication.
 
 ### Read-Only

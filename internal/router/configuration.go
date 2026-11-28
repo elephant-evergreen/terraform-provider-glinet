@@ -3,7 +3,6 @@ package router
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -169,9 +168,7 @@ func configurationLua(config Configuration, write bool, secrets ...map[string]st
 	for i, section := range config {
 		wire[i].Section = section
 		if strings.HasPrefix(section.Name, "@") {
-			identity, _ := json.Marshal([]any{section.Package, section.Type, section.Match})
-			sum := sha256.Sum256(identity)
-			wire[i].CreateName = fmt.Sprintf("tf_glinet_%x", sum[:8])
+			wire[i].CreateName = AnonymousSectionName(section.Package, section.Type, section.Match)
 		}
 	}
 	data, _ := json.Marshal(wire)
@@ -450,7 +447,6 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 		}
 	}
 	plan = applyConfigurationPlan(plan, config, actual)
-	plan = resolveDeferred(plan, config, c.managementPort)
 	for key := range secrets {
 		switch {
 		case strings.HasPrefix(key, "wireless."):
@@ -528,7 +524,7 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 				record(plan, "rollback:decided")
 				return operationError(confirmErr)
 			}
-			if outcome, probeErr := c.probeTransaction(wait, token); probeErr == nil && outcome == outcomeCommitted {
+			if outcome := c.awaitCommitted(wait, token); outcome == outcomeCommitted {
 				phases.Confirm = time.Since(confirmStart)
 				record(plan, "committed")
 				return nil
@@ -541,7 +537,7 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 				record(plan, "unconfirmed")
 				return fmt.Errorf("The operation outcome could not be confirmed and the router-side rollback failed: %v. Inspect the router before retrying: %w", rollbackErr, wait.Err())
 			}
-			if outcome == outcomeCommitted {
+			if outcome == outcomeCommitted && c.awaitCommitted(context.Background(), token) == outcomeCommitted {
 				record(plan, "committed")
 				return nil
 			}
@@ -621,6 +617,29 @@ func rollbackDiagnostic(outcome transactionOutcome) string {
 		return "A newer transaction replaced this one, so the outcome could not be confirmed. Inspect the router before retrying."
 	default:
 		return "The transaction outcome could not be confirmed. Inspect the router before retrying."
+	}
+}
+
+// awaitCommitted polls the transaction record for a short time and reports the
+// outcome only after the cleanup conditions are satisfied. It never waits past
+// the caller's deadline and is capped at 30 seconds.
+func (c *Client) awaitCommitted(ctx context.Context, token string) transactionOutcome {
+	deadline := time.Now().Add(30 * time.Second)
+	if callDeadline, ok := ctx.Deadline(); ok && callDeadline.Before(deadline) {
+		deadline = callDeadline
+	}
+	ctx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	for {
+		outcome, err := c.probeTransaction(ctx, token)
+		if err == nil && outcome != outcomePending {
+			return outcome
+		}
+		select {
+		case <-ctx.Done():
+			return outcomeUnknown
+		case <-time.After(time.Second):
+		}
 	}
 }
 
