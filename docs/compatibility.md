@@ -10,6 +10,6 @@
 | SSH | OpenSSH key authentication as root; verified known-hosts entry required; host-key checking cannot be disabled |
 | Backups | age-encrypted full configuration archive; the SSH private key decrypts it |
 
-Firmware 4.11.x is verified as a line. `mise run acceptance` runs the automated hardware acceptance against a dedicated router. Traffic acceptance across each network and power-loss recovery remain separate manual checks. See [verification boundaries](testing.md) and the [Admin Panel coverage matrix](coverage.md).
+Firmware 4.11.x is verified as a line. `mise run acceptance` runs the automated hardware acceptance against an explicitly authorized router. Traffic acceptance across each network and power-loss recovery remain separate manual checks. See [verification boundaries](testing.md) and the [Admin Panel coverage matrix](coverage.md).
 
 WireGuard resources are experimental.

@@ -11,4 +11,4 @@ The check runs formatting, module verification, vet, race-enabled tests, compila
 
 The CI workflow uses the same checks and verifies that generated documentation is committed. The release workflow builds the supported Linux and macOS architectures, produces Terraform-compatible archives and a protocol manifest, signs their checksums, and uploads versioned GitHub release assets. See [releases](releases.md).
 
-Native UCI tests are gated by explicit test-device credentials. Physical recovery and traffic acceptance tests require a dedicated authorized router and independent wired recovery access. See [verification boundaries](testing.md).
+Native UCI tests are gated by explicit test-device credentials. Physical recovery and traffic acceptance tests require an explicitly authorized router and independent wired recovery access. See [verification boundaries](testing.md).

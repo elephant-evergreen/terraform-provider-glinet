@@ -17,7 +17,7 @@ Every row is a terminal state: `Managed` when the stock-exposed declarative sett
 
 A row is complete when its status and the managed resources are accurate and the referenced tests pass. The provider does not claim coverage for a field the stock firmware does not publish; those rows are recorded as out of scope with the concrete reason.
 
-Hardware verification is tracked separately: the 4.11 line is the verified line, and `mise run acceptance` runs the automated hardware acceptance against a dedicated router. Traffic acceptance and power-loss recovery remain separate manual checks.
+Hardware verification is tracked separately: the 4.11 line is the verified line, and `mise run acceptance` runs the automated hardware acceptance against an explicitly authorized router. Traffic acceptance and power-loss recovery remain separate manual checks.
 
 ## Network
 
