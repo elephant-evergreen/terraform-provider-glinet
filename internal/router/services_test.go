@@ -23,6 +23,17 @@ func TestServiceForSections(t *testing.T) {
 		{Section{Package: "system", Name: "ntp", Type: "timeserver"}, "chronyd", true},
 		{Section{Package: "system", Name: "ntp", Type: "system"}, "", false},
 		{Section{Package: "network", Name: "lan"}, "", false},
+		{Section{Package: "kmwan", Name: "global"}, "kmwan", true},
+		{Section{Package: "gl_timer", Name: "global"}, "gl_timer", true},
+		{Section{Package: "gl-black_white_list", Name: "iot"}, "gl-black_white_list", true},
+		{Section{Package: "parental_control_v2", Name: "global"}, "parental_control", true},
+		{Section{Package: "route_policy", Name: "global"}, "edgerouter", true},
+		{Section{Package: "gl_ddns", Name: "global"}, "gl_ddns", true},
+		{Section{Package: "gl_dpi", Name: "gl_dpi"}, "gl_dpi", true},
+		{Section{Package: "gl_dpi_content_protection", Name: "dpi"}, "gl_dpi", true},
+		{Section{Package: "fullconenat", Name: "global"}, "fullconenat", true},
+		{Section{Package: "gl_led", Name: "led"}, "gl_led", true},
+		{Section{Package: "uhttpd", Name: "main"}, "uhttpd", true},
 	}
 	for _, test := range cases {
 		service, ok := serviceFor(test.section)
