@@ -40,6 +40,13 @@ This covers Create, Update, Delete, and Forget, including a legacy state without
 
 States written before owner tokens existed have `terraform_owner = 1` and no token. The next change to such a resource plans `owner` as unknown, writes a token in the same transaction, and records it in the state. A plan with no other change stays empty; the token is adopted on the first real change. After that first change, plans are empty again.
 
+## Marker-only resources
+
+Two resources use the marker without an owner token:
+
+- `glinet_goodcloud` manages the `gl-cloud` singleton and has no `owner` attribute. Importing it adopts the current switch value, and two states that both manage it cannot detect each other. Keep it in one state.
+- `glinet_firewall_rules` owns the complete ordered rule list and writes each rule with the marker only. It has no token, but it refuses a write unless every existing rule is listed as current or removed explicitly, so a rule added by another state stops the write instead of being overwritten silently.
+
 ## Limitation
 
 A boolean marker alone cannot distinguish two Terraform states. Owner tokens cover sections created by a state, but importing a section that another state already manages adopts its token, so both states treat each other as the same owner. Importing is an explicit adoption decision. Keep one Terraform state per router configuration and use separate states only for disjoint sections.
