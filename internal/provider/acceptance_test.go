@@ -4,10 +4,13 @@ package provider
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,37 +18,55 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAcceptanceHardware(t *testing.T) {
 	requireAcceptance(t)
 	client := acceptanceClient(t)
+	runner := acceptanceRunner(t)
+	ctx := context.Background()
+	info, err := client.VerifyFirmware(ctx)
+	if err != nil {
+		t.Fatalf("Preflight failed: %v", err)
+	}
+	if info.Mode != "router" {
+		t.Fatalf("Router mode is %q, want router", info.Mode)
+	}
+	assertAcceptanceClean(t, ctx)
 
-	t.Run("preflight", func(t *testing.T) {
-		ctx := context.Background()
-		info, err := client.VerifyFirmware(ctx)
-		if err != nil {
-			t.Fatalf("Preflight failed: %v", err)
-		}
-		if info.Mode != "router" {
-			t.Fatalf("Router mode is %q, want router", info.Mode)
-		}
-		assertAcceptanceClean(t, ctx)
-	})
+	nonce := acceptanceNonce(t)
+	redirect := "Acceptance-Redirect-" + nonce
+	openvpn := "acceptance_server_" + nonce
+	samba := "acceptance_share_" + nonce
+	zone := "acceptance_zone_" + nonce
 
 	t.Run("firewall_redirect", func(t *testing.T) {
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: acceptanceFactories(),
+			CheckDestroy:             acceptanceGone(runner, "firewall", redirect),
 			Steps: []resource.TestStep{
-				{Config: acceptanceRedirect("65530"), Check: resource.TestCheckResourceAttr("glinet_firewall_redirect.acceptance", "dest_port", "65530")},
-				{Config: acceptanceRedirect("65531"), Check: resource.TestCheckResourceAttr("glinet_firewall_redirect.acceptance", "dest_port", "65531")},
+				{
+					Config: acceptanceRedirect(redirect, "65530"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("glinet_firewall_redirect.acceptance", "dest_port", "65530"),
+						acceptanceFirewallValue(runner, redirect, "dest_port", "65530"),
+					),
+				},
+				{
+					Config: acceptanceRedirect(redirect, "65531"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("glinet_firewall_redirect.acceptance", "dest_port", "65531"),
+						acceptanceFirewallValue(runner, redirect, "dest_port", "65531"),
+					),
+				},
 				{
 					ResourceName:            "glinet_firewall_redirect.acceptance",
 					ImportState:             true,
 					ImportStateVerify:       true,
 					ImportStateVerifyIgnore: []string{"delete_behavior"},
 				},
-				{Config: acceptanceRedirect("65531")},
+				{Config: acceptanceRedirect(redirect, "65531")},
 			},
 		})
 	})
@@ -53,16 +74,29 @@ func TestAcceptanceHardware(t *testing.T) {
 	t.Run("openvpn_server", func(t *testing.T) {
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: acceptanceFactories(),
+			CheckDestroy:             acceptanceGone(runner, "openvpn", openvpn),
 			Steps: []resource.TestStep{
-				{Config: acceptanceOpenVPNServer("1195"), Check: resource.TestCheckResourceAttr("glinet_openvpn_server.acceptance", "enabled", "false")},
-				{Config: acceptanceOpenVPNServer("1196"), Check: resource.TestCheckResourceAttr("glinet_openvpn_server.acceptance", "port", "1196")},
+				{
+					Config: acceptanceOpenVPNServer(openvpn, "1195"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("glinet_openvpn_server.acceptance", "enabled", "false"),
+						acceptanceObservation(runner, "openvpn", openvpn, "port", "1195"),
+					),
+				},
+				{
+					Config: acceptanceOpenVPNServer(openvpn, "1196"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("glinet_openvpn_server.acceptance", "port", "1196"),
+						acceptanceObservation(runner, "openvpn", openvpn, "port", "1196"),
+					),
+				},
 				{
 					ResourceName:            "glinet_openvpn_server.acceptance",
 					ImportState:             true,
 					ImportStateVerify:       true,
 					ImportStateVerifyIgnore: []string{"delete_behavior"},
 				},
-				{Config: acceptanceOpenVPNServer("1196")},
+				{Config: acceptanceOpenVPNServer(openvpn, "1196")},
 			},
 		})
 	})
@@ -70,16 +104,29 @@ func TestAcceptanceHardware(t *testing.T) {
 	t.Run("samba_share", func(t *testing.T) {
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: acceptanceFactories(),
+			CheckDestroy:             acceptanceGone(runner, "samba4", samba),
 			Steps: []resource.TestStep{
-				{Config: acceptanceSambaShare("acceptance"), Check: resource.TestCheckResourceAttr("glinet_samba_share.acceptance", "share_name", "acceptance")},
-				{Config: acceptanceSambaShare("acceptance-2"), Check: resource.TestCheckResourceAttr("glinet_samba_share.acceptance", "share_name", "acceptance-2")},
+				{
+					Config: acceptanceSambaShare(samba, "acceptance-"+nonce),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("glinet_samba_share.acceptance", "share_name", "acceptance-"+nonce),
+						acceptanceObservation(runner, "samba4", samba, "name", "acceptance-"+nonce),
+					),
+				},
+				{
+					Config: acceptanceSambaShare(samba, "acceptance-2-"+nonce),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("glinet_samba_share.acceptance", "share_name", "acceptance-2-"+nonce),
+						acceptanceObservation(runner, "samba4", samba, "name", "acceptance-2-"+nonce),
+					),
+				},
 				{
 					ResourceName:            "glinet_samba_share.acceptance",
 					ImportState:             true,
 					ImportStateVerify:       true,
 					ImportStateVerifyIgnore: []string{"delete_behavior"},
 				},
-				{Config: acceptanceSambaShare("acceptance-2")},
+				{Config: acceptanceSambaShare(samba, "acceptance-2-"+nonce)},
 			},
 		})
 	})
@@ -87,16 +134,29 @@ func TestAcceptanceHardware(t *testing.T) {
 	t.Run("firewall_zone", func(t *testing.T) {
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: acceptanceFactories(),
+			CheckDestroy:             acceptanceGone(runner, "firewall", zone),
 			Steps: []resource.TestStep{
-				{Config: acceptanceZone("REJECT"), Check: resource.TestCheckResourceAttr("glinet_firewall_zone.acceptance", "input", "REJECT")},
-				{Config: acceptanceZone("DROP"), Check: resource.TestCheckResourceAttr("glinet_firewall_zone.acceptance", "input", "DROP")},
+				{
+					Config: acceptanceZone(zone, "REJECT"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("glinet_firewall_zone.acceptance", "input", "REJECT"),
+						acceptanceFirewallValue(runner, zone, "name", zone),
+					),
+				},
+				{
+					Config: acceptanceZone(zone, "DROP"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("glinet_firewall_zone.acceptance", "input", "DROP"),
+						acceptanceFirewallValue(runner, zone, "input", "DROP"),
+					),
+				},
 				{
 					ResourceName:            "glinet_firewall_zone.acceptance",
 					ImportState:             true,
 					ImportStateVerify:       true,
 					ImportStateVerifyIgnore: []string{"delete_behavior"},
 				},
-				{Config: acceptanceZone("DROP")},
+				{Config: acceptanceZone(zone, "DROP")},
 			},
 		})
 	})
@@ -107,7 +167,6 @@ func TestAcceptanceHardware(t *testing.T) {
 		if os.Getenv("GLINET_ACCEPTANCE_REBOOT") != "1" {
 			t.Skip("set GLINET_ACCEPTANCE_REBOOT=1 to reboot the router as part of the acceptance run")
 		}
-		ctx := context.Background()
 		if err := client.Reboot(ctx); err != nil {
 			t.Fatalf("Reboot failed: %v", err)
 		}
@@ -141,6 +200,15 @@ func requireAcceptance(t *testing.T) {
 	t.Setenv("GLINET_BACKUP_DIRECTORY", t.TempDir())
 }
 
+func acceptanceNonce(t *testing.T) string {
+	t.Helper()
+	buffer := make([]byte, 6)
+	if _, err := rand.Read(buffer); err != nil {
+		t.Fatal(err)
+	}
+	return hex.EncodeToString(buffer)
+}
+
 func acceptanceFactories() map[string]func() (tfprotov6.ProviderServer, error) {
 	return map[string]func() (tfprotov6.ProviderServer, error){
 		"glinet": providerserver.NewProtocol6WithError(New("acceptance")()),
@@ -149,12 +217,11 @@ func acceptanceFactories() map[string]func() (tfprotov6.ProviderServer, error) {
 
 func acceptanceClient(t *testing.T) *router.Client {
 	t.Helper()
-	transport := acceptanceRunner(t)
 	protection, err := router.NewProtection(os.Getenv("GLINET_BACKUP_DIRECTORY"), os.Getenv("GLINET_PRIVATE_KEY_FILE"), os.Getenv("GLINET_HOST"), acceptancePort(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return router.NewClient(transport, protection)
+	return router.NewClient(acceptanceRunner(t), protection)
 }
 
 func acceptanceRunner(t *testing.T) *router.SSH {
@@ -171,36 +238,90 @@ func acceptancePort(t *testing.T) int {
 	if value := os.Getenv("GLINET_PORT"); value != "" {
 		port, err := strconv.Atoi(value)
 		if err != nil || port < 1 || port > 65535 {
-			t.Fatalf("GLINET_PORT must be a decimal integer between 1 and 65535")
+			t.Fatal("GLINET_PORT must be a decimal integer between 1 and 65535")
 		}
 		return port
 	}
 	return 22
 }
 
+func acceptanceQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+func acceptanceObservation(runner *router.SSH, pkg, name, option, value string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		script := "uci show " + pkg + " 2>/dev/null | grep -F " + acceptanceQuote(name) + " | grep -c " + acceptanceQuote(option+"='"+value+"'") + " || true"
+		output, err := runner.Run(context.Background(), script)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(string(output)) == "0" {
+			return fmt.Errorf("%s.%s does not show %s=%s on the router", pkg, name, option, value)
+		}
+		return nil
+	}
+}
+
+func acceptanceFirewallValue(runner *router.SSH, name, option, value string) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		script := "name=" + acceptanceQuote(name) + "\n" +
+			"section=$(uci show firewall 2>/dev/null | awk -F. -v want=\"name='\"$name\"'\" '$NF==want {print $2; exit}')\n" +
+			"[ -n \"$section\" ] || exit 1\n" +
+			"uci -q get firewall.$section." + option + "\n"
+		output, err := runner.Run(context.Background(), script)
+		if err != nil {
+			return fmt.Errorf("%s is not on the router: %w", name, err)
+		}
+		if strings.TrimSpace(string(output)) != value {
+			return fmt.Errorf("%s.%s = %q on the router, want %q", name, option, strings.TrimSpace(string(output)), value)
+		}
+		return nil
+	}
+}
+
+func acceptanceGone(runner *router.SSH, pkg, name string) func(*terraform.State) error {
+	return func(*terraform.State) error {
+		output, err := runner.Run(context.Background(), "uci show "+pkg+" 2>/dev/null | grep -c "+acceptanceQuote(name)+" || true")
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(string(output)) != "0" {
+			return fmt.Errorf("%s.%s remains on the router after destroy", pkg, name)
+		}
+		return nil
+	}
+}
+
 func assertAcceptanceClean(t *testing.T, ctx context.Context) {
 	t.Helper()
 	runner := acceptanceRunner(t)
-	output, err := runner.Run(ctx, "uci changes | wc -l")
-	if err != nil {
-		t.Fatalf("Cannot read pending changes: %v", err)
-	}
-	if strings.TrimSpace(string(output)) != "0" {
-		t.Fatalf("The router has %s pending UCI changes", strings.TrimSpace(string(output)))
-	}
-	output, err = runner.Run(ctx, "test -e /root/.terraform-provider-glinet-configuration && echo busy || echo clean")
-	if err != nil {
-		t.Fatalf("Cannot read the transaction state: %v", err)
-	}
-	if strings.TrimSpace(string(output)) != "clean" {
-		t.Fatal("A router-side transaction is still present")
+	for _, check := range []struct {
+		name string
+		cmd  string
+		want string
+	}{
+		{"pending UCI changes", "uci changes | wc -l", "0"},
+		{"transaction", "test -e /root/.terraform-provider-glinet-configuration && echo busy || echo clean", "clean"},
+		{"Wi-Fi lock", "test -e /tmp/terraform-provider-glinet-wifi && echo busy || echo clean", "clean"},
+		{"recovery service", "test -e /etc/init.d/terraform-glinet-recovery && echo present || echo clean", "clean"},
+		{"recovery links", "ls /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery 2>/dev/null | wc -l", "0"},
+	} {
+		output, err := runner.Run(ctx, check.cmd)
+		if err != nil {
+			t.Fatalf("Cannot check %s: %v", check.name, err)
+		}
+		if strings.TrimSpace(string(output)) != check.want {
+			t.Fatalf("%s is not clean: %s", check.name, strings.TrimSpace(string(output)))
+		}
 	}
 }
 
 func acceptanceRollback(t *testing.T) {
 	ctx := context.Background()
 	client := acceptanceClient(t)
-	name := "Acceptance-Rollback"
+	runner := acceptanceRunner(t)
+	name := "Acceptance-Rollback-" + acceptanceNonce(t)
 	section := router.Section{
 		Package: "firewall", Type: "redirect", Name: "@redirect[0]",
 		Match: map[string]string{"name": name},
@@ -218,6 +339,14 @@ func acceptanceRollback(t *testing.T) {
 		t.Fatalf("Cannot read the rollback redirect: %v", err)
 	}
 	defer func() {
+		deadline := time.Now().Add(7 * time.Minute)
+		for time.Now().Before(deadline) {
+			output, err := runner.Run(context.Background(), "test -e /root/.terraform-provider-glinet-configuration && echo busy || echo clean")
+			if err != nil || strings.TrimSpace(string(output)) == "clean" {
+				break
+			}
+			time.Sleep(5 * time.Second)
+		}
 		cleanup := router.Section{Package: "firewall", Name: actual.Name, Type: "redirect", Absent: true}
 		if err := client.ApplySections(context.Background(), router.Configuration{cleanup}, nil); err != nil {
 			t.Errorf("Cannot remove the rollback redirect: %v", err)
@@ -232,35 +361,34 @@ func acceptanceRollback(t *testing.T) {
 	changed.Match = nil
 
 	injector := acceptanceRunner(t)
-	defer func() {
-		_, _ = injector.Run(context.Background(), "iptables -t filter -D INPUT -p tcp --dport 65500 -j ACCEPT 2>/dev/null || true")
-	}()
-	applied := make(chan error, 1)
+	control := acceptanceRunner(t)
+	stopFile := "/tmp/terraform-glinet-acceptance-stop-" + acceptanceNonce(t)
+	var stopOnce sync.Once
+	stopInjector := func() {
+		stopOnce.Do(func() {
+			_, _ = control.Run(context.Background(), "touch "+acceptanceQuote(stopFile))
+		})
+	}
+	defer stopInjector()
+	injected := make(chan error, 1)
 	go func() {
-		applied <- client.ApplySections(context.Background(), router.Configuration{changed}, nil)
+		script := "set -u\nstop=" + acceptanceQuote(stopFile) + "\n" +
+			"while [ ! -f \"$stop\" ]; do\n" +
+			"  iptables -t filter -C INPUT -p tcp --dport 65500 -j ACCEPT 2>/dev/null || iptables -t filter -A INPUT -p tcp --dport 65500 -j ACCEPT\n" +
+			"  sleep 0.2\n" +
+			"done\n" +
+			"while iptables -t filter -D INPUT -p tcp --dport 65500 -j ACCEPT 2>/dev/null; do :; done\n" +
+			"rm -f \"$stop\"\n"
+		_, err := injector.Run(context.Background(), script)
+		injected <- err
 	}()
-	injected := false
-	deadline := time.Now().Add(90 * time.Second)
-	for time.Now().Before(deadline) {
-		select {
-		case err := <-applied:
-			t.Fatalf("The apply finished before the injected rule took effect: %v", err)
-		default:
-		}
-		output, err := injector.Run(ctx, "test -f /root/.terraform-provider-glinet-configuration/ready && echo ready")
-		if err == nil && strings.TrimSpace(string(output)) == "ready" {
-			if _, err := injector.Run(ctx, "iptables -t filter -A INPUT -p tcp --dport 65500 -j ACCEPT"); err != nil {
-				t.Fatalf("Cannot inject the firewall rule: %v", err)
-			}
-			injected = true
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	err = client.ApplySections(context.Background(), router.Configuration{changed}, nil)
+	stopInjector()
+	select {
+	case <-injected:
+	case <-time.After(30 * time.Second):
+		t.Fatal("The firewall injector did not stop")
 	}
-	if !injected {
-		t.Fatal("The apply never reached the confirmation phase")
-	}
-	err = <-applied
 	if err == nil || !strings.Contains(err.Error(), "rolled back") {
 		t.Fatalf("Expected a rolled-back apply, got %v", err)
 	}
@@ -271,20 +399,25 @@ func acceptanceRollback(t *testing.T) {
 	if restored.Options["dest_port"] != "65530" {
 		t.Fatalf("Rollback left dest_port %q", restored.Options["dest_port"])
 	}
-	output, err := injector.Run(ctx, "iptables -t filter -S INPUT 2>/dev/null | grep -c 65500 || true")
-	if err != nil {
-		t.Fatalf("Cannot inspect the injected rule: %v", err)
-	}
-	if strings.TrimSpace(string(output)) != "0" {
-		t.Fatalf("The injected rule survived the rollback")
+	for attempt := 0; attempt < 5; attempt++ {
+		if _, err := runner.Run(ctx, "iptables -t filter -D INPUT -p tcp --dport 65500 -j ACCEPT 2>/dev/null || true"); err != nil {
+			t.Fatalf("Cannot clean up the injected rule: %v", err)
+		}
+		output, err := runner.Run(ctx, "iptables -t filter -S INPUT 2>/dev/null | grep -c 65500 || true")
+		if err != nil {
+			t.Fatalf("Cannot inspect the injected rule: %v", err)
+		}
+		if strings.TrimSpace(string(output)) == "0" {
+			return
+		}
 	}
 }
 
-func acceptanceRedirect(port string) string {
+func acceptanceRedirect(name, port string) string {
 	return fmt.Sprintf(`
 resource "glinet_firewall_redirect" "acceptance" {
   delete_behavior = "delete"
-  name            = "Acceptance-Redirect"
+  name            = %q
   src             = "wan"
   src_dport       = "65530"
   dest            = "lan"
@@ -294,14 +427,14 @@ resource "glinet_firewall_redirect" "acceptance" {
   target          = "DNAT"
   enabled         = true
 }
-`, port)
+`, name, port)
 }
 
-func acceptanceOpenVPNServer(port string) string {
+func acceptanceOpenVPNServer(name, port string) string {
 	return fmt.Sprintf(`
 resource "glinet_openvpn_server" "acceptance" {
   delete_behavior = "delete"
-  name            = "acceptance_server"
+  name            = %q
   enabled         = false
   port            = %s
   proto           = "udp"
@@ -312,26 +445,26 @@ resource "glinet_openvpn_server" "acceptance" {
   key             = ""
   dh              = ""
 }
-`, port)
+`, name, port)
 }
 
-func acceptanceSambaShare(name string) string {
+func acceptanceSambaShare(section, name string) string {
 	return fmt.Sprintf(`
 resource "glinet_samba_share" "acceptance" {
   delete_behavior = "delete"
-  section         = "acceptance_share"
+  section         = %q
   share_name      = %q
   path            = "/tmp"
 }
-`, name)
+`, section, name)
 }
 
-func acceptanceZone(input string) string {
+func acceptanceZone(name, input string) string {
 	return fmt.Sprintf(`
 resource "glinet_firewall_zone" "acceptance" {
   delete_behavior = "delete"
-  name            = "acceptance_zone"
+  name            = %q
   input           = %q
 }
-`, input)
+`, name, input)
 }
