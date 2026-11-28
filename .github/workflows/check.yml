@@ -25,6 +25,10 @@ jobs:
         with:
           version: 2026.11.12
       - run: mise run check
+      - name: Run robustness checks
+        run: mise run fuzz
+        env:
+          FUZZTIME: 15s
       - name: Verify release packages
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de
         with:
