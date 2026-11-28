@@ -19,16 +19,26 @@ func (s serviceAction) script() string {
 }
 
 var (
-	sambaService     = serviceAction{Name: "samba4"}
-	openvpnService   = serviceAction{Name: "openvpn", Process: "openvpn", EnabledCheck: `uci show openvpn 2>/dev/null | grep -q "\.enabled='1'"`}
-	tailscaleService = serviceAction{Name: "tailscale"}
-	sqmService       = serviceAction{Name: "sqm"}
-	adguardService   = serviceAction{Name: "adguardhome", Process: "AdGuardHome", EnabledCheck: `[ "$(uci -q get adguardhome.config.enabled)" = 1 ]`}
-	minidlnaService  = serviceAction{Name: "minidlna", Process: "minidlnad", EnabledCheck: `[ "$(uci -q get minidlna.config.enabled)" = 1 ]`}
-	upnpService      = serviceAction{Name: "miniupnpd", Process: "miniupnpd", EnabledCheck: `[ "$(uci -q get upnpd.config.enabled)" = 1 ]`}
-	zerotierService  = serviceAction{Name: "zerotier", Process: "zerotier-one", EnabledCheck: `[ "$(uci -q get zerotier.gl.enabled)" = 1 ]`}
-	torService       = serviceAction{Name: "tor", Process: "tor", EnabledCheck: `[ "$(uci -q get tor.global.enable)" = 1 ]`}
-	ntpService       = serviceAction{Name: "chronyd", Process: "chronyd", EnabledCheck: `[ "$(uci -q get system.ntp.enabled)" = 1 ]`}
+	sambaService       = serviceAction{Name: "samba4"}
+	openvpnService     = serviceAction{Name: "openvpn", Process: "openvpn", EnabledCheck: `uci show openvpn 2>/dev/null | grep -q "\.enabled='1'"`}
+	tailscaleService   = serviceAction{Name: "tailscale"}
+	sqmService         = serviceAction{Name: "sqm"}
+	adguardService     = serviceAction{Name: "adguardhome", Process: "AdGuardHome", EnabledCheck: `[ "$(uci -q get adguardhome.config.enabled)" = 1 ]`}
+	minidlnaService    = serviceAction{Name: "minidlna", Process: "minidlnad", EnabledCheck: `[ "$(uci -q get minidlna.config.enabled)" = 1 ]`}
+	upnpService        = serviceAction{Name: "miniupnpd", Process: "miniupnpd", EnabledCheck: `[ "$(uci -q get upnpd.config.enabled)" = 1 ]`}
+	zerotierService    = serviceAction{Name: "zerotier", Process: "zerotier-one", EnabledCheck: `[ "$(uci -q get zerotier.gl.enabled)" = 1 ]`}
+	torService         = serviceAction{Name: "tor", Process: "tor", EnabledCheck: `[ "$(uci -q get tor.global.enable)" = 1 ]`}
+	ntpService         = serviceAction{Name: "chronyd", Process: "chronyd", EnabledCheck: `[ "$(uci -q get system.ntp.enabled)" = 1 ]`}
+	kmwanService       = serviceAction{Name: "kmwan"}
+	timerService       = serviceAction{Name: "gl_timer"}
+	filterService      = serviceAction{Name: "gl-black_white_list"}
+	parentalService    = serviceAction{Name: "parental_control"}
+	routePolicyService = serviceAction{Name: "edgerouter"}
+	ddnsService        = serviceAction{Name: "gl_ddns"}
+	dpiService         = serviceAction{Name: "gl_dpi"}
+	fullConeService    = serviceAction{Name: "fullconenat"}
+	ledService         = serviceAction{Name: "gl_led"}
+	uhttpdService      = serviceAction{Name: "uhttpd"}
 )
 
 func serviceFor(section Section) (serviceAction, bool) {
@@ -55,6 +65,26 @@ func serviceFor(section Section) (serviceAction, bool) {
 		if section.Name == "ntp" && section.Type == "timeserver" {
 			return ntpService, true
 		}
+	case "kmwan":
+		return kmwanService, true
+	case "gl_timer":
+		return timerService, true
+	case "gl-black_white_list":
+		return filterService, true
+	case "parental_control_v2":
+		return parentalService, true
+	case "route_policy":
+		return routePolicyService, true
+	case "gl_ddns":
+		return ddnsService, true
+	case "gl_dpi", "gl_dpi_content_protection":
+		return dpiService, true
+	case "fullconenat":
+		return fullConeService, true
+	case "gl_led":
+		return ledService, true
+	case "uhttpd":
+		return uhttpdService, true
 	}
 	return serviceAction{}, false
 }
