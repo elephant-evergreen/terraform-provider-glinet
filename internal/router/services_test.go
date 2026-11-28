@@ -21,7 +21,16 @@ func TestServiceForSections(t *testing.T) {
 		{Section{Package: "zerotier", Name: "gl"}, "zerotier", true},
 		{Section{Package: "tor", Name: "global"}, "tor", true},
 		{Section{Package: "system", Name: "ntp", Type: "timeserver"}, "chronyd", true},
-		{Section{Package: "system", Name: "ntp", Type: "system"}, "", false},
+		{Section{Package: "system", Name: "system", Type: "system"}, "system", true},
+		{Section{Package: "system", Name: "status", Type: "led"}, "led", true},
+		{Section{Package: "system", Name: "ntp", Type: "system"}, "system", true},
+		{Section{Package: "qos", Name: "wan", Type: "wan"}, "qos", true},
+		{Section{Package: "gl-mesh", Name: "base", Type: "base"}, "gl-mesh", true},
+		{Section{Package: "repeater", Name: "main", Type: "main"}, "repeater", true},
+		{Section{Package: "gl_s2s", Name: "global", Type: "global"}, "gl_s2s", true},
+		{Section{Package: "dropbear", Name: "@dropbear[0]", Type: "dropbear"}, "dropbear", true},
+		{Section{Package: "mtkhnat", Name: "global", Type: "global"}, "mtkhnat", true},
+		{Section{Package: "wireguard_server", Name: "servers", Type: "servers"}, "wireguard_server", true},
 		{Section{Package: "network", Name: "lan"}, "", false},
 		{Section{Package: "kmwan", Name: "global"}, "kmwan", true},
 		{Section{Package: "gl_timer", Name: "global"}, "gl_timer", true},
@@ -98,5 +107,57 @@ func TestApplyConfigurationPlanAddsServices(t *testing.T) {
 	}
 	if plan := applyConfigurationPlan(reloadPlan{}, actual, actual); len(plan.Services) != 0 {
 		t.Fatalf("unchanged sections activated services: %#v", plan.Services)
+	}
+}
+
+func TestEveryManagedPackageHasActivationContract(t *testing.T) {
+	cloud := map[string]bool{"gl-cloud": true}
+	configOnly := map[string]string{
+		"wireguard.proxy":  "the stock runtime reads the global proxy flag without an init service",
+		"glconfig.service": "the stock UI reads the service mode without an init service",
+	}
+	for scope := range allowedOptions {
+		packageName, kind, _ := strings.Cut(scope, ".")
+		if cloud[packageName] {
+			continue
+		}
+		if _, ok := configOnly[scope]; ok {
+			continue
+		}
+		config := Configuration{{Package: packageName, Type: kind, Name: "audit", Options: map[string]string{"hostname": "a"}}}
+		actual := Configuration{{Package: packageName, Type: kind, Name: "audit", Options: map[string]string{"hostname": "b"}}}
+		plan := applyConfigurationPlan(reloadPlan{}, config, actual)
+		if plan.Reboot || plan.Wireless || plan.DNS || plan.DHCP || plan.Firewall || plan.Cloud || len(plan.Services) > 0 {
+			continue
+		}
+		if _, ok := serviceFor(Section{Package: packageName, Type: kind}); ok {
+			continue
+		}
+		t.Errorf("%s has no reload path, service activation, or recorded exemption", scope)
+	}
+}
+
+func TestDropbearActivationIsDeferredOnlyForEndpointChanges(t *testing.T) {
+	stable := Configuration{{Package: "dropbear", Type: "dropbear", Name: "@dropbear[0]", Options: map[string]string{"enable": "1", "Port": "22"}}}
+	plan := func() reloadPlan {
+		value := reloadPlan{}
+		addService(&value, dropbearService)
+		return value
+	}
+	if got := resolveDeferred(plan(), stable, 22); got.Services[0].Deferred {
+		t.Fatal("a change that keeps the management endpoint was deferred")
+	}
+	if got := resolveDeferred(plan(), stable, 2222); !got.Services[0].Deferred {
+		t.Fatal("a port change was activated inside the transaction")
+	}
+	disabled := Configuration{{Package: "dropbear", Type: "dropbear", Name: "@dropbear[0]", Options: map[string]string{"enable": "0", "Port": "22"}}}
+	if got := resolveDeferred(plan(), disabled, 22); !got.Services[0].Deferred {
+		t.Fatal("disabling SSH was activated inside the transaction")
+	}
+	if got := resolveDeferred(plan(), stable, 0); !got.Services[0].Deferred {
+		t.Fatal("an unknown management port was activated inside the transaction")
+	}
+	if strings.Contains(configurationReload(reloadPlan{Services: []serviceAction{{Name: "dropbear", Deferred: true}}}), "dropbear") {
+		t.Fatal("a deferred service ran inside the transaction reload")
 	}
 }

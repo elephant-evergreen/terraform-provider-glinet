@@ -384,7 +384,7 @@ func applyConfigurationPlan(plan reloadPlan, config, actual Configuration) reloa
 			plan.DNS = true
 		case "dhcp":
 			plan.DHCP = true
-		case "firewall":
+		case "firewall", "wan-access":
 			plan.Firewall = true
 		}
 		if service, ok := serviceFor(s); ok {
@@ -395,10 +395,24 @@ func applyConfigurationPlan(plan reloadPlan, config, actual Configuration) reloa
 }
 
 func networkDisruptionRequired(plan reloadPlan) bool {
-	return plan.Reboot || plan.Wireless || plan.Cloud
+	if plan.Reboot || plan.Wireless || plan.Cloud {
+		return true
+	}
+	for _, service := range plan.Services {
+		if service.Disruptive {
+			return true
+		}
+	}
+	return false
 }
 
-func (c *Client) writeConfiguration(ctx context.Context, config Configuration, secrets map[string]string, safetyConfig Configuration, service *ServiceChange) error {
+func (c *Client) writeConfiguration(ctx context.Context, config Configuration, secrets map[string]string, safetyConfig Configuration, claim *OwnerClaim, service *ServiceChange) error {
+	started := time.Now()
+	var elapsed [4]time.Duration
+	mark := func(index int) { elapsed[index] = time.Since(started) }
+	record := func(plan reloadPlan, result string) {
+		c.recordTransaction(transactionCost(plan, elapsed, len(config), result, started))
+	}
 	if !ValidSecretOptions(config, secrets) {
 		return errors.New("Secret options must reference managed sections and supported secret names.")
 	}
@@ -437,6 +451,7 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 		}
 	}
 	plan = applyConfigurationPlan(plan, config, actual)
+	plan = resolveDeferred(plan, config, c.managementPort)
 	for key := range secrets {
 		switch {
 		case strings.HasPrefix(key, "wireless."):
@@ -455,16 +470,20 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 	if err := c.protection.Protect(ctx, c.runner, disruptive); err != nil {
 		return err
 	}
-	_, err = c.runner.Run(ctx, configurationApplyScript(config, token, plan, secrets))
+	mark(0)
+	_, err = c.runner.Run(ctx, configurationApplyScript(config, token, plan, claim, secrets))
+	mark(1)
 	var exit *ExitError
 	if err != nil {
-		if errors.As(err, &exit) && (exit.Code == 73 || exit.Code == 74) {
+		if errors.As(err, &exit) && (exit.Code == 73 || exit.Code == 74 || exit.Code == 78) {
 			return operationError(err)
 		}
 		outcome, rollbackErr := c.rollbackTransaction(token)
 		if rollbackErr != nil {
+			record(plan, "unconfirmed")
 			return fmt.Errorf("%w The router-side rollback could not be confirmed: %v. The transaction snapshot and failure record remain for inspection.", operationError(err), rollbackErr)
 		}
+		record(plan, "rollback:"+outcomeName(outcome))
 		if service != nil && service.Cloud != nil {
 			return fmt.Errorf("%w %s The GoodCloud rollback also restores the recorded service states; if a service cannot be restored, the transaction snapshot and failure record remain for inspection.", operationError(err), rollbackDiagnostic(outcome))
 		}
@@ -486,15 +505,21 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 			if runtimeErr != nil {
 				outcome, rollbackErr := c.rollbackTransaction(token)
 				if rollbackErr != nil {
+					record(plan, "unconfirmed")
 					return fmt.Errorf("%w The router-side rollback could not be confirmed: %v. Inspect the router before retrying.", runtimeErr, rollbackErr)
 				}
+				record(plan, "rollback:"+outcomeName(outcome))
 				return fmt.Errorf("%w %s", runtimeErr, rollbackDiagnostic(outcome))
 			}
+			mark(2)
 			_, confirmErr := c.runner.Run(wait, configurationConfirmScriptWithPlan(token, safetyConfig, plan, secrets))
 			if confirmErr == nil {
+				mark(3)
+				record(plan, "committed")
 				return nil
 			}
 			if errors.As(confirmErr, &exit) && exit.Code == 77 {
+				record(plan, "rollback:decided")
 				return operationError(confirmErr)
 			}
 		}
@@ -502,8 +527,10 @@ func (c *Client) writeConfiguration(ctx context.Context, config Configuration, s
 		case <-wait.Done():
 			outcome, rollbackErr := c.rollbackTransaction(token)
 			if rollbackErr != nil {
+				record(plan, "unconfirmed")
 				return fmt.Errorf("The operation outcome could not be confirmed and the router-side rollback failed: %v. Inspect the router before retrying: %w", rollbackErr, wait.Err())
 			}
+			record(plan, "unconfirmed")
 			return fmt.Errorf("The operation outcome could not be confirmed. %s Inspect the router before retrying: %w", rollbackDiagnostic(outcome), wait.Err())
 		case <-time.After(2 * time.Second):
 		}
@@ -514,7 +541,9 @@ type transactionOutcome int
 
 const (
 	outcomeUnknown transactionOutcome = iota
+	outcomeRestoring
 	outcomeRolledBack
+	outcomeRestoreFailed
 	outcomeCommitted
 	outcomeCancelled
 	outcomeSuperseded
@@ -523,8 +552,12 @@ const (
 
 func parseTransactionOutcome(output []byte) transactionOutcome {
 	switch strings.TrimSpace(string(output)) {
-	case "rolled_back":
+	case "restored":
 		return outcomeRolledBack
+	case "restore_failed":
+		return outcomeRestoreFailed
+	case "restoring":
+		return outcomeRestoring
 	case "committed":
 		return outcomeCommitted
 	case "cancelled":
@@ -538,10 +571,33 @@ func parseTransactionOutcome(output []byte) transactionOutcome {
 	}
 }
 
+func outcomeName(outcome transactionOutcome) string {
+	switch outcome {
+	case outcomeRestoring:
+		return "restoring"
+	case outcomeRolledBack:
+		return "restored"
+	case outcomeRestoreFailed:
+		return "restore_failed"
+	case outcomeCommitted:
+		return "committed"
+	case outcomeCancelled:
+		return "cancelled"
+	case outcomeSuperseded:
+		return "superseded"
+	default:
+		return "unknown"
+	}
+}
+
 func rollbackDiagnostic(outcome transactionOutcome) string {
 	switch outcome {
 	case outcomeRolledBack:
 		return "The change was rolled back on the router."
+	case outcomeRestoring:
+		return "The router is still restoring the previous configuration. Inspect the router before retrying."
+	case outcomeRestoreFailed:
+		return "The router could not restore the previous configuration. The transaction snapshot and recovery service remain on the router; restore it before retrying."
 	case outcomeCommitted:
 		return "The router had already committed the change before the rollback request. Re-run the plan to verify the router state."
 	case outcomeCancelled:
@@ -561,7 +617,7 @@ func (c *Client) rollbackTransaction(token string) (transactionOutcome, error) {
 		return outcomeUnknown, err
 	}
 	outcome := parseTransactionOutcome(output)
-	if outcome != outcomePending {
+	if outcome != outcomePending && outcome != outcomeRestoring {
 		return outcome, nil
 	}
 	probe := "if [ -f " + quote(resultDir+"/"+token) + " ]; then cat " + quote(resultDir+"/"+token) + "; elif [ -d " + quote(transactionDir) + " ]; then printf pending; else printf missing; fi"
@@ -576,8 +632,10 @@ func (c *Client) rollbackTransaction(token string) (transactionOutcome, error) {
 			return outcomeUnknown, err
 		}
 		switch strings.TrimSpace(string(output)) {
-		case "rollback":
+		case "restored":
 			return outcomeRolledBack, nil
+		case "restore_failed":
+			return outcomeRestoreFailed, nil
 		case "confirm":
 			return outcomeCommitted, nil
 		case "cancel":
@@ -671,7 +729,7 @@ var allowedOptions = func() map[string]map[string]bool {
 		"wireguard_server.servers":          "address_v4 address_v6 port access client_to_client masq",
 		"gl_s2s.global":                     "enable firewall",
 		"network.rule":                      "lookup priority src dest in out family invert mark suppress_prefixlength",
-		"network.interface":                 "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate sourcefilter ipv6 ip6assign ip6hint ip6ifaceid ip6class ip6prefix macaddr hostname username",
+		"network.interface":                 "device proto disabled ipaddr netmask gateway dns peerdns defaultroute mtu metric addresses fwmark listen_port nohostroute vlan_id display_name terraform_owner force_link delegate sourcefilter ipv6 ip6assign ip6hint ip6ifaceid ip6class ip6prefix macaddr hostname username",
 		"wireless.wifi-device":              "channel htmode txpower country disabled noscan legacy_rates beacon_int",
 		"wireless.wifi-iface":               "disabled ssid encryption hidden isolate ifname device network mode macaddr wds ieee80211w wps_pushbutton wpa_group_rekey",
 		"dhcp.dhcp":                         "interface start limit leasetime dhcpv4 dhcpv6 ra force ignore dynamicdhcp instance tag master ndp",

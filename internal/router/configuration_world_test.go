@@ -1,6 +1,7 @@
 package router
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +17,7 @@ type configurationWorld struct {
 	delay string
 }
 
-func newConfigurationWorld(t *testing.T) *configurationWorld {
+func newConfigurationWorld(t testTB) *configurationWorld {
 	t.Helper()
 	f := newFixture(t)
 	for _, p := range strings.Fields(configurationPackages) {
@@ -37,6 +38,9 @@ func newConfigurationWorld(t *testing.T) *configurationWorld {
 		}
 	}
 	if err := os.WriteFile(filepath.Join(f.root, "bin", "uci"), []byte("#!/bin/sh\ncase \"$*\" in changes) exit 0 ;; *adguardhome*) exit 0 ;; *) exit 0 ;; esac\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.root, "bin", "wifi"), []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	service := filepath.Join(f.root, "service")
@@ -72,9 +76,12 @@ func (f *configurationWorld) run(script string) ([]byte, error) {
 	script = strings.ReplaceAll(script, "/etc/init.d/gl-vlan-port-map", filepath.Join(root, "service"))
 	script = strings.ReplaceAll(script, "/etc/init.d/dnsmasq", filepath.Join(root, "service"))
 	script = strings.ReplaceAll(script, "/etc/init.d/firewall", filepath.Join(root, "service"))
-	for _, name := range []string{"gl-cloud", "rtty", "mptun", "mpifd"} {
+	for _, name := range []string{"gl-cloud", "rtty", "mptun", "mpifd", "dropbear"} {
 		script = strings.ReplaceAll(script, "/etc/init.d/"+name, filepath.Join(root, "service-"+name))
 	}
+	script = strings.ReplaceAll(script, "&& sync", "")
+	script = strings.ReplaceAll(script, "; sync", "")
+	script = strings.ReplaceAll(script, "sync\n", ":\n")
 	script = strings.ReplaceAll(script, filepath.Join(root, "recovery")+" enable", "true")
 	script = strings.ReplaceAll(script, filepath.Join(root, "recovery")+" disable", "true")
 	binary, _ := os.Executable()
@@ -101,7 +108,7 @@ func TestConfigurationWorldConfirmationAndRecovery(t *testing.T) {
 			root := f.base.root
 			_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
 			spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
-			script := configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true})
+			script := configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, nil)
 			script = strings.Replace(script, configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
 			if output, err := f.run(script); err != nil {
 				t.Fatalf("Apply failed: %s %v", output, err)
@@ -152,7 +159,7 @@ func TestConfigurationWorldFailedWatchdogNeverMutates(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
 	_ = os.WriteFile(filepath.Join(root, "fail-watchdog"), nil, 0600)
 	spec := configurationFixture()
-	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, nil), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
 	if _, err := f.run(script); err == nil {
 		t.Fatal("Failed watchdog was accepted")
 	}
@@ -171,7 +178,7 @@ func TestConfigurationWorldUnexpectedRebootRestoresBeforeConfirmation(t *testing
 	root := f.base.root
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
 	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
-	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, nil), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
 	if output, err := f.run(script); err != nil {
 		t.Fatalf("Apply failed: %s %v", output, err)
 	}
@@ -221,7 +228,7 @@ func TestConfigurationWorldRejectsAdoptionWhileRecoveryIsPending(t *testing.T) {
 	root := f.base.root
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
 	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
-	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, nil), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Apply failed: %s %v", out, err)
 	}
@@ -239,7 +246,7 @@ func TestConfigurationWorldInterruptedConfirmationFinishesWithoutCallerCleanup(t
 	root := f.base.root
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
 	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
-	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, nil), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Apply failed: %s %v", out, err)
 	}
@@ -276,7 +283,7 @@ func TestConfigurationWorldInterruptedRestoreResumesAfterReboot(t *testing.T) {
 	helper := "#!/bin/sh\nfor target; do :; done\nif [ -f \"$GLINET_TEST_ROOT/fail-copy\" ] && [ \"$target\" = \"$GLINET_TEST_ROOT/firewall\" ]; then exit 1; fi\nexec /bin/cp \"$@\"\n"
 	_ = os.WriteFile(filepath.Join(root, "bin", "cp"), []byte(helper), 0700)
 	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
-	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, nil), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Apply failed: %s %v", out, err)
 	}
@@ -338,7 +345,7 @@ func TestConfigurationWorldFullRebootBranchConfirmsAndRecovers(t *testing.T) {
 			_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
 			_ = os.WriteFile(filepath.Join(root, "bin", "reboot"), []byte("#!/bin/sh\nprintf reboot >> \"$GLINET_TEST_ROOT/reboots\"\n"), 0700)
 			spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
-			script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{Reboot: true, DNS: true, DHCP: true, Firewall: true}), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+			script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{Reboot: true, DNS: true, DHCP: true, Firewall: true}, nil), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
 			if out, err := f.run(script); err != nil {
 				t.Fatalf("Apply failed: %s %v", out, err)
 			}
@@ -420,7 +427,7 @@ func TestConfigurationWorldWaitsForReloadBeforeRestoring(t *testing.T) {
 	service := "#!/bin/sh\nif [ ! -f \"$GLINET_TEST_ROOT/service-started\" ]; then touch \"$GLINET_TEST_ROOT/service-started\"; sleep 4; touch \"$GLINET_TEST_ROOT/service-finished\"; fi\n"
 	_ = os.WriteFile(filepath.Join(root, "service"), []byte(service), 0700)
 	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
-	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, nil), configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Apply failed: %s %v", out, err)
 	}
@@ -461,7 +468,7 @@ func TestConfigurationWorldCancellationBeforeActivationNeverStartsMutation(t *te
 	_ = os.WriteFile(filepath.Join(root, "bin", "cp"), []byte(helper), 0700)
 	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
 	mutation := "touch " + quote(root+"/request-executed") + "\nprintf changed > " + quote(root+"/firewall") + "\n"
-	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{Reboot: true, DNS: true, DHCP: true, Firewall: true}), configurationLua(spec, true), mutation, 1)
+	script := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{Reboot: true, DNS: true, DHCP: true, Firewall: true}, nil), configurationLua(spec, true), mutation, 1)
 	script = strings.Replace(script, "touch activate", "exit 0", 1)
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Preparation failed: %s %v", out, err)
@@ -494,7 +501,7 @@ func TestConfigurationWorldRetiredCleanupResumesAfterInterruption(t *testing.T) 
 			root := f.base.root
 			_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
 			spec := configurationFixture()
-			prepare := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{}), "touch activate", "exit 0", 1)
+			prepare := strings.Replace(configurationApplyScript(spec, "token", reloadPlan{}, nil), "touch activate", "exit 0", 1)
 			f.delay = "30"
 			if out, err := f.run(prepare); err != nil {
 				t.Fatalf("Preparation failed: %s %v", out, err)
@@ -554,7 +561,7 @@ func TestConfigurationWorldConfirmationWaitsForCompletedCleanup(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "bin", "rm"), []byte(gate), 0700); err != nil {
 		t.Fatal(err)
 	}
-	script := configurationApplyScript(spec, "token", reloadPlan{Firewall: true})
+	script := configurationApplyScript(spec, "token", reloadPlan{Firewall: true}, nil)
 	script = strings.Replace(script, configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Apply failed: %s %v", out, err)
@@ -625,7 +632,7 @@ func TestConfigurationWorldRolledBackKeyRotationNeverAcknowledgesSuccess(t *test
 	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
 	spec := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": "Example"}}}
 	secrets := map[string]string{"wireless.wifi2g.key": "new-fixture-secret"}
-	script := configurationApplyScript(spec, "token", reloadPlan{Wireless: true}, secrets)
+	script := configurationApplyScript(spec, "token", reloadPlan{Wireless: true}, nil, secrets)
 	script = strings.Replace(script, configurationLua(spec, true, secrets), "printf changed-key > "+quote(root+"/wireless")+"\nexit 1\n", 1)
 	if out, err := f.run(script); err != nil {
 		t.Fatalf("Preparation failed: %s %v", out, err)
@@ -644,7 +651,176 @@ func TestConfigurationWorldRolledBackKeyRotationNeverAcknowledgesSuccess(t *test
 	if out, err := f.run(configurationConfirmScript("token", spec, secrets)); err == nil {
 		t.Fatalf("Late confirmation accepted completed rollback: %s", out)
 	}
-	if data, err := os.ReadFile(filepath.Join(root, "results", "token")); err != nil || string(data) != "rollback" {
+	if data, err := os.ReadFile(filepath.Join(root, "results", "token")); err != nil || string(data) != "restored" {
 		t.Fatal("Recovery did not retain its rollback outcome")
+	}
+}
+
+func TestConfigurationWorldRestoreFailureNeverReportsRolledBack(t *testing.T) {
+	f := newConfigurationWorld(t)
+	f.delay = "2"
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	helper := "#!/bin/sh\nfor target; do :; done\nif [ -f \"$GLINET_TEST_ROOT/fail-copy\" ] && [ \"$target\" = \"$GLINET_TEST_ROOT/firewall\" ]; then exit 1; fi\nexec /bin/cp \"$@\"\n"
+	_ = os.WriteFile(filepath.Join(root, "bin", "cp"), []byte(helper), 0700)
+	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
+	script := configurationApplyScript(spec, "token", reloadPlan{DNS: true, DHCP: true, Firewall: true}, nil)
+	script = strings.Replace(script, configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	script = strings.Replace(script, `if [ "$attempts" -ge 60 ]`, `if [ "$attempts" -ge 2 ]`, 1)
+	script = replaceSleep(script, "sleep 5", "sleep 0.01")
+	if out, err := f.run(script); err != nil {
+		t.Fatalf("Apply failed: %s %v", out, err)
+	}
+	_ = os.WriteFile(filepath.Join(root, "fail-copy"), nil, 0600)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(filepath.Join(root, "results", "token"))
+		if err == nil && string(data) == "restore_failed" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "results", "token"))
+	if err != nil || string(data) == "restored" {
+		t.Fatalf("Failed restoration reported success: %q %v", data, err)
+	}
+	if string(data) != "restore_failed" {
+		t.Fatalf("Failed restoration did not record restore_failed: %q", data)
+	}
+	if _, err := os.Stat(filepath.Join(root, "transaction", "firewall")); err != nil {
+		t.Fatal("Failed restoration discarded the recovery snapshot")
+	}
+	if _, err := os.Stat(filepath.Join(root, "recovery")); err != nil {
+		t.Fatal("Failed restoration removed its recovery service")
+	}
+}
+
+func TestConfigurationWorldRestoreReportsSuccessOnlyAfterServicesRestart(t *testing.T) {
+	f := newConfigurationWorld(t)
+	f.delay = "2"
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	gate := filepath.Join(root, "fail-service")
+	service := "#!/bin/sh\nif [ -f " + quote(gate) + " ]; then exit 1; fi\nexit 0\n"
+	_ = os.WriteFile(filepath.Join(root, "service"), []byte(service), 0700)
+	spec := Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}
+	script := configurationApplyScript(spec, "token", reloadPlan{Firewall: true}, nil)
+	script = strings.Replace(script, configurationLua(spec, true), "printf changed > "+quote(root+"/firewall")+"\n", 1)
+	script = strings.Replace(script, `if [ "$attempts" -ge 60 ]`, `if [ "$attempts" -ge 2 ]`, 1)
+	script = replaceSleep(script, "sleep 5", "sleep 0.01")
+	if out, err := f.run(script); err != nil {
+		t.Fatalf("Apply failed: %s %v", out, err)
+	}
+	_ = os.WriteFile(gate, nil, 0600)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(filepath.Join(root, "results", "token"))
+		if err == nil && string(data) == "restore_failed" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "results", "token"))
+	if err != nil || string(data) != "restore_failed" {
+		t.Fatalf("Restore that could not restart the firewall reported %q %v", data, err)
+	}
+	actual, _ := os.ReadFile(filepath.Join(root, "firewall"))
+	if string(actual) != "original-firewall" {
+		t.Fatal("Configured files were not restored before the service activation failed")
+	}
+}
+
+func TestRestoreRecordsSuccessOnlyAfterReload(t *testing.T) {
+	script := configurationRestoreScript("token", reloadPlan{Firewall: true})
+	restoring := strings.Index(script, quote(recordRestoring))
+	reload := strings.Index(script, "/etc/init.d/firewall restart")
+	restored := strings.LastIndex(script, quote(recordRestored))
+	if restoring < 0 || reload < 0 || restored < 0 || !(restoring < reload && reload < restored) {
+		t.Fatalf("restore records success before the configuration and services are restored:\n%s", script)
+	}
+}
+
+func TestConfigurationWorldOwnershipGuardRejectsConcurrentWriter(t *testing.T) {
+	f := newConfigurationWorld(t)
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	uci := "#!/bin/sh\ncase \"$*\" in\n *terraform_owner_id*) printf foreign ;;\nesac\nexit 0\n"
+	_ = os.WriteFile(filepath.Join(root, "bin", "uci"), []byte(uci), 0700)
+	spec := Configuration{{Package: "system", Name: "system", Type: "system", Options: map[string]string{"hostname": "router"}}}
+	script := configurationApplyScript(spec, "token", reloadPlan{}, &OwnerClaim{Package: "system", Section: "system", Unowned: true})
+	_, err := f.run(script)
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 78 {
+		t.Fatalf("Concurrent owner was not rejected with exit 78: %v", err)
+	}
+	for _, name := range []string{"lock", "transaction"} {
+		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+			t.Fatalf("Rejected ownership claim left %s", name)
+		}
+	}
+	actual, _ := os.ReadFile(filepath.Join(root, "system"))
+	if string(actual) != "original-system" {
+		t.Fatal("Rejected ownership claim changed configuration")
+	}
+}
+
+func TestConfigurationWorldOwnershipGuardAcceptsObservedOwner(t *testing.T) {
+	f := newConfigurationWorld(t)
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	uci := "#!/bin/sh\ncase \"$*\" in\n *terraform_owner_id*) printf token ;;\nesac\nexit 0\n"
+	_ = os.WriteFile(filepath.Join(root, "bin", "uci"), []byte(uci), 0700)
+	spec := Configuration{{Package: "system", Name: "system", Type: "system", Options: map[string]string{"hostname": "router"}}}
+	script := configurationApplyScript(spec, "token", reloadPlan{}, &OwnerClaim{Package: "system", Section: "system", Token: "token"})
+	script = strings.Replace(script, configurationLua(spec, true), "exit 0\n", 1)
+	script = strings.Replace(script, "start-stop-daemon -S -b -m -p "+quote(root+"/transaction/pid"), "true", 1)
+	if out, err := f.run(script); err != nil {
+		t.Fatalf("Observed owner was rejected: %s %v", out, err)
+	}
+}
+
+func TestConfigurationWorldDeferredActivationRunsAfterConfirmation(t *testing.T) {
+	f := newConfigurationWorld(t)
+	root := f.base.root
+	_ = os.WriteFile(filepath.Join(root, "boot-id"), []byte("initial\n"), 0600)
+	counter := filepath.Join(root, "dropbear-count")
+	service := "#!/bin/sh\nprintf x >> " + quote(counter) + "\n"
+	_ = os.WriteFile(filepath.Join(root, "service-dropbear"), []byte(service), 0700)
+	spec := Configuration{{Package: "dropbear", Type: "dropbear", Name: "@dropbear[0]", Options: map[string]string{"enable": "1", "Port": "2222"}}}
+	plan := reloadPlan{Services: []serviceAction{{Name: "dropbear", Command: "reload", Deferred: true}}}
+	script := configurationApplyScript(spec, "token", plan, nil)
+	script = strings.Replace(script, configurationLua(spec, true), "printf changed > "+quote(root+"/dropbear")+"\n", 1)
+	script = replaceSleep(script, "sleep 5", "sleep 0")
+	if out, err := f.run(script); err != nil {
+		t.Fatalf("Apply failed: %s %v", out, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "transaction", "ready")); err != nil {
+		t.Fatal("Apply never became ready")
+	}
+	if _, err := os.Stat(counter); !os.IsNotExist(err) {
+		t.Fatal("Deferred activation ran inside the transaction")
+	}
+	if out, err := f.run(configurationConfirmScriptWithPlan("token", spec, plan, nil)); err != nil {
+		t.Fatalf("Confirmation failed: %s %v", out, err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(filepath.Join(root, "results", "token.activation"))
+		if err == nil && string(data) == "0" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "results", "token.activation"))
+	if err != nil || string(data) != "0" {
+		t.Fatalf("Deferred activation did not record success: %q %v", data, err)
+	}
+	if out, err := f.run(configurationConfirmScriptWithPlan("token", spec, plan, nil)); err != nil {
+		t.Fatalf("Repeated confirmation failed: %s %v", out, err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	count, err := os.ReadFile(counter)
+	if err != nil || string(count) != "x" {
+		t.Fatalf("Deferred activation ran %d times: %q %v", len(count), count, err)
 	}
 }

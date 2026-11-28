@@ -10,13 +10,15 @@ import (
 
 func TestParseTransactionOutcome(t *testing.T) {
 	for input, want := range map[string]transactionOutcome{
-		"rolled_back\n": outcomeRolledBack,
-		"committed":     outcomeCommitted,
-		"cancelled":     outcomeCancelled,
-		"superseded":    outcomeSuperseded,
-		"missing":       outcomeUnknown,
-		"timeout":       outcomeUnknown,
-		"":              outcomeUnknown,
+		"restored\n":       outcomeRolledBack,
+		"restore_failed\n": outcomeRestoreFailed,
+		"restoring\n":      outcomeRestoring,
+		"committed":        outcomeCommitted,
+		"cancelled":        outcomeCancelled,
+		"superseded":       outcomeSuperseded,
+		"missing":          outcomeUnknown,
+		"timeout":          outcomeUnknown,
+		"":                 outcomeUnknown,
 	} {
 		if got := parseTransactionOutcome([]byte(input)); got != want {
 			t.Errorf("parseTransactionOutcome(%q) = %v, want %v", input, got, want)
@@ -33,9 +35,15 @@ func TestRollbackScriptReportsOutcome(t *testing.T) {
 		{"committed result", func(t *testing.T, root string) {
 			writeOutcome(t, root, "confirm")
 		}, "committed"},
-		{"rolled back result", func(t *testing.T, root string) {
-			writeOutcome(t, root, "rollback")
-		}, "rolled_back"},
+		{"restored result", func(t *testing.T, root string) {
+			writeOutcome(t, root, "restored")
+		}, "restored"},
+		{"restore failed result", func(t *testing.T, root string) {
+			writeOutcome(t, root, "restore_failed")
+		}, "restore_failed"},
+		{"restore in progress result", func(t *testing.T, root string) {
+			writeOutcome(t, root, "restoring")
+		}, "missing"},
 		{"cancelled result", func(t *testing.T, root string) {
 			writeOutcome(t, root, "cancel")
 		}, "cancelled"},
@@ -94,7 +102,7 @@ func writeOutcome(t *testing.T, root, outcome string) {
 	writeFile(t, filepath.Join(dir, "token"), outcome)
 }
 
-func writeFile(t *testing.T, path, content string) {
+func writeFile(t testTB, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
@@ -127,13 +135,14 @@ func (r *scriptedRunner) Run(context.Context, string) ([]byte, error) {
 
 func TestRollbackTransactionPollsUntilOutcome(t *testing.T) {
 	for name, want := range map[string]transactionOutcome{
-		"rollback": outcomeRolledBack,
-		"confirm":  outcomeCommitted,
-		"cancel":   outcomeCancelled,
-		"missing":  outcomeUnknown,
+		"restored":       outcomeRolledBack,
+		"restore_failed": outcomeRestoreFailed,
+		"confirm":        outcomeCommitted,
+		"cancel":         outcomeCancelled,
+		"missing":        outcomeUnknown,
 	} {
 		t.Run(name, func(t *testing.T) {
-			runner := &scriptedRunner{outputs: [][]byte{[]byte("pending"), []byte(name)}}
+			runner := &scriptedRunner{outputs: [][]byte{[]byte("restoring"), []byte("pending"), []byte(name)}}
 			client := NewClient(runner, nil)
 			got, err := client.rollbackTransaction("token")
 			if err != nil {

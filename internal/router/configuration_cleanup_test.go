@@ -30,7 +30,7 @@ func TestConfigurationCleanupIsIdempotent(t *testing.T) {
 }
 
 func TestConfigurationRollbackRetryIsBounded(t *testing.T) {
-	watchdog := configurationApplyScript(Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}, strings.Repeat("a", 32), reloadPlan{Firewall: true})
+	watchdog := configurationApplyScript(Configuration{{Package: "firewall", Name: "example", Type: "rule", Options: map[string]string{"target": "REJECT"}}}, strings.Repeat("a", 32), reloadPlan{Firewall: true}, nil)
 	if !strings.Contains(watchdog, "attempts=$((attempts+1))") || !strings.Contains(watchdog, "exit 75") {
 		t.Fatal("watchdog rollback retry has no ceiling")
 	}

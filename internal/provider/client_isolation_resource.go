@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -18,7 +19,7 @@ func NewClientFilterListResource() resource.Resource {
 		TypeName:    "client_filter_list",
 		Description: "Manage the stock GL.iNet MAC filter address list. The stock init script stores entries as `mac` list values in the `black` or `white` section.",
 		Attributes: map[string]schema.Attribute{
-			"name": schema.StringAttribute{Required: true, MarkdownDescription: "List to manage: `black` or `white`.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"name": schema.StringAttribute{Required: true, MarkdownDescription: "List to manage: `black` or `white`.", Validators: []validator.String{oneOfStringValidator{allowed: []string{"black", "white"}}}, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"macs": schema.SetAttribute{Required: true, ElementType: types.StringType, MarkdownDescription: "MAC addresses in this list."},
 		},
 		Selector: func(values map[string]attr.Value) (router.Section, error) {

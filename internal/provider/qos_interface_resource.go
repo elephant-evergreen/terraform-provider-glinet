@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func NewQoSInterfaceResource() resource.Resource {
@@ -20,7 +21,7 @@ func NewQoSInterfaceResource() resource.Resource {
 		Description: "Manage one per-WAN QoS section. The stock section type is selected by `kind`.",
 		Attributes: map[string]schema.Attribute{
 			"name":     schema.StringAttribute{Required: true, MarkdownDescription: "UCI QoS section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
-			"kind":     schema.StringAttribute{Required: true, MarkdownDescription: "Section type: `wan`, `wwan`, `tethering`, or `modem`.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"kind":     schema.StringAttribute{Required: true, MarkdownDescription: "Section type: `wan`, `wwan`, `tethering`, or `modem`.", Validators: []validator.String{oneOfStringValidator{allowed: []string{"wan", "wwan", "tethering", "modem"}}}, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"enabled":  schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), MarkdownDescription: "Enable this QoS section."},
 			"upload":   schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1000), MarkdownDescription: "Upload limit in kbit/s."},
 			"download": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1000), MarkdownDescription: "Download limit in kbit/s."},

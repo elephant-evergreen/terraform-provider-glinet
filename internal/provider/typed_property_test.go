@@ -4,16 +4,25 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/elephant-evergreen/terraform-provider-glinet/internal/router"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	frameworkresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"pgregory.net/rapid"
 )
+
+var propertyPool = []string{
+	"0", "1", "lan", "wan", "guest", "ap", "none", "REJECT", "ACCEPT", "DROP",
+	"ipv4", "ipv6", "any", "sae", "psk2", "auto", "6", "11", "HE40", "*",
+	"example", "192.168.9.1", "02:00:00:00:00:01", "ethernet", "static",
+}
 
 func TestTypedSelectorLoadIsStable(t *testing.T) {
 	ctx := context.Background()
@@ -31,13 +40,27 @@ func TestTypedSelectorLoadIsStable(t *testing.T) {
 				for name, attribute := range attributes {
 					values[name] = generateAttributeValue(t, name, attribute)
 				}
+				if resource.spec.Validate != nil {
+					if err := resource.spec.Validate(values); err != nil {
+						return
+					}
+				}
+				if resource.spec.ValidateConfig != nil {
+					if err := resource.spec.ValidateConfig(values); err != nil {
+						return
+					}
+				}
 				section, err := resource.spec.Selector(values)
 				if err != nil {
-					return
+					t.Fatalf("%s cannot select an accepted configuration: %v", resource.spec.TypeName, err)
 				}
-				if !router.OptionAllowed(section.Package, section.Type, "") && section.Package != "" {
-					normalized := router.Section{Package: section.Package, Type: section.Type}
-					_ = normalized
+				loaded := resource.spec.Load(section)
+				second, err := resource.spec.Selector(loaded)
+				if err != nil {
+					t.Fatalf("%s cannot select the values it loaded: %v", resource.spec.TypeName, err)
+				}
+				if !preservesMeaning(section, second) {
+					t.Fatalf("%s lost or changed a managed setting in a selector/load round trip:\nfirst:  %#v\nsecond: %#v", resource.spec.TypeName, section, second)
 				}
 				for key := range section.Options {
 					if key == router.ManagedOption {
@@ -52,11 +75,6 @@ func TestTypedSelectorLoadIsStable(t *testing.T) {
 						t.Fatalf("%s writes unregistered list %s.%s.%s", resource.spec.TypeName, section.Package, section.Type, key)
 					}
 				}
-				loaded := resource.spec.Load(section)
-				second, err := resource.spec.Selector(loaded)
-				if err != nil {
-					return
-				}
 				third, err := resource.spec.Selector(resource.spec.Load(second))
 				if err != nil {
 					return
@@ -69,21 +87,81 @@ func TestTypedSelectorLoadIsStable(t *testing.T) {
 	}
 }
 
+// preservesMeaning keeps every explicit setting through a selector/load round
+// trip. Empty values may resolve to a firmware default on read, and lists are
+// compared as multisets because set attributes do not preserve order.
+func preservesMeaning(first, second router.Section) bool {
+	if first.Package != second.Package || first.Name != second.Name || first.Type != second.Type || first.Absent != second.Absent || first.Missing != second.Missing {
+		return false
+	}
+	for key, value := range first.Options {
+		if value == "" {
+			continue
+		}
+		if second.Options[key] != value {
+			return false
+		}
+	}
+	for key, values := range first.Lists {
+		if len(values) == 0 {
+			continue
+		}
+		other, ok := second.Lists[key]
+		if !ok || !sameStrings(values, other) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	left := append([]string{}, a...)
+	right := append([]string{}, b...)
+	sort.Strings(left)
+	sort.Strings(right)
+	return reflect.DeepEqual(left, right)
+}
+
 func generateAttributeValue(t *rapid.T, name string, attribute schema.Attribute) attr.Value {
-	if value, ok := schemaDefaultValue(attribute); ok {
-		return value
+	if rapid.Bool().Draw(t, name+"-default") {
+		if value, ok := schemaDefaultValue(attribute); ok {
+			return value
+		}
 	}
 	switch attribute := attribute.(type) {
 	case schema.StringAttribute:
 		if attribute.Optional && rapid.Bool().Draw(t, name+"-null") {
 			return types.StringNull()
 		}
-		return types.StringValue(rapid.StringMatching(`^[A-Za-z0-9 ._:/'"$-]{0,16}$`).Draw(t, name))
+		for attempt := 0; attempt < 8; attempt++ {
+			var candidate types.String
+			if rapid.Bool().Draw(t, fmt.Sprintf("%s-%d-pool", name, attempt)) {
+				candidate = types.StringValue(rapid.SampledFrom(propertyPool).Draw(t, fmt.Sprintf("%s-%d", name, attempt)))
+			} else {
+				candidate = types.StringValue(rapid.StringMatching(`^[A-Za-z0-9 ._:/'"$-]{0,16}$`).Draw(t, fmt.Sprintf("%s-%d", name, attempt)))
+			}
+			if attribute.Required && candidate.ValueString() == "" {
+				continue
+			}
+			if stringValid(attribute.Validators, candidate) {
+				return candidate
+			}
+		}
+		return defaultOrNullString(attribute)
 	case schema.Int64Attribute:
 		if attribute.Optional && rapid.Bool().Draw(t, name+"-null") {
 			return types.Int64Null()
 		}
-		return types.Int64Value(rapid.Int64Range(-5, 1000).Draw(t, name))
+		for attempt := 0; attempt < 8; attempt++ {
+			candidate := types.Int64Value(rapid.Int64Range(-5, 1000).Draw(t, fmt.Sprintf("%s-%d", name, attempt)))
+			if int64Valid(attribute.Validators, candidate) {
+				return candidate
+			}
+		}
+		return defaultOrNullInt64(attribute)
 	case schema.BoolAttribute:
 		if attribute.Optional && rapid.Bool().Draw(t, name+"-null") {
 			return types.BoolNull()
@@ -96,12 +174,72 @@ func generateAttributeValue(t *rapid.T, name string, attribute schema.Attribute)
 		count := rapid.IntRange(0, 3).Draw(t, name+"-count")
 		elements := make([]attr.Value, 0, count)
 		for index := 0; index < count; index++ {
-			elements = append(elements, types.StringValue(rapid.StringMatching(`^[A-Za-z0-9._:/-]{0,8}$`).Draw(t, fmt.Sprintf("%s-%d", name, index))))
+			value := rapid.SampledFrom(propertyPool).Draw(t, fmt.Sprintf("%s-%d", name, index))
+			elements = append(elements, types.StringValue(value))
 		}
-		return types.SetValueMust(attribute.ElementType, elements)
+		candidate := types.SetValueMust(attribute.ElementType, elements)
+		for _, check := range attribute.Validators {
+			var response validator.SetResponse
+			check.ValidateSet(context.Background(), validator.SetRequest{ConfigValue: candidate, Path: path.Root(name)}, &response)
+			if response.Diagnostics.HasError() {
+				return defaultOrNullSet(attribute)
+			}
+		}
+		return candidate
 	default:
 		return types.StringNull()
 	}
+}
+
+func stringValid(validators []validator.String, value types.String) bool {
+	for _, check := range validators {
+		var response validator.StringResponse
+		check.ValidateString(context.Background(), validator.StringRequest{ConfigValue: value, Path: path.Root("value")}, &response)
+		if response.Diagnostics.HasError() {
+			return false
+		}
+	}
+	return true
+}
+
+func int64Valid(validators []validator.Int64, value types.Int64) bool {
+	for _, check := range validators {
+		var response validator.Int64Response
+		check.ValidateInt64(context.Background(), validator.Int64Request{ConfigValue: value, Path: path.Root("value")}, &response)
+		if response.Diagnostics.HasError() {
+			return false
+		}
+	}
+	return true
+}
+
+func defaultOrNullString(attribute schema.StringAttribute) attr.Value {
+	value, ok := schemaDefaultValue(attribute)
+	if ok && value != nil {
+		return value
+	}
+	for _, check := range attribute.Validators {
+		if allowed, ok := check.(oneOfStringValidator); ok && len(allowed.allowed) > 0 {
+			return types.StringValue(allowed.allowed[0])
+		}
+	}
+	return types.StringNull()
+}
+
+func defaultOrNullInt64(attribute schema.Int64Attribute) attr.Value {
+	value, ok := schemaDefaultValue(attribute)
+	if !ok || value == nil {
+		return types.Int64Null()
+	}
+	return value
+}
+
+func defaultOrNullSet(attribute schema.SetAttribute) attr.Value {
+	value, ok := schemaDefaultValue(attribute)
+	if !ok || value == nil {
+		return types.SetNull(attribute.ElementType)
+	}
+	return value
 }
 
 func schemaDefaultValue(attribute schema.Attribute) (attr.Value, bool) {

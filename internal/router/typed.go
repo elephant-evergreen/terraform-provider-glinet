@@ -126,10 +126,42 @@ func (c *Client) readRefreshState(ctx context.Context) (uciState, error) {
 	return nil, ctx.Err()
 }
 
+// OwnerClaim is the ownership the caller observed before a write. The router
+// re-checks it inside the transaction lock, so a section claimed by another
+// state between the read and the write is refused instead of overwritten.
+type OwnerClaim struct {
+	Package string
+	Section string
+	Token   string
+	Unowned bool
+}
+
+func validateOwnerClaim(claim *OwnerClaim) error {
+	if claim == nil {
+		return nil
+	}
+	if !validPackageName(claim.Package) || !validPackageName(claim.Section) {
+		return errors.New("The ownership claim must name a valid UCI package and section.")
+	}
+	if claim.Unowned == (claim.Token != "") {
+		return errors.New("The ownership claim must require an unowned section or an expected token.")
+	}
+	return nil
+}
+
 // ApplySections writes the given sections as one recovery-protected UCI
 // transaction. The full managed configuration (all sections carrying
 // ManagedOption, plus the change set) is validated before mutation.
 func (c *Client) ApplySections(ctx context.Context, changes Configuration, secrets map[string]string) error {
+	return c.ApplySectionsOwned(ctx, changes, secrets, nil)
+}
+
+// ApplySectionsOwned is ApplySections with an ownership claim that is verified
+// again after the router-side lock is acquired.
+func (c *Client) ApplySectionsOwned(ctx context.Context, changes Configuration, secrets map[string]string, claim *OwnerClaim) error {
+	if err := validateOwnerClaim(claim); err != nil {
+		return err
+	}
 	if err := ValidateConfiguration(changes); err != nil {
 		return err
 	}
@@ -149,20 +181,21 @@ func (c *Client) ApplySections(ctx context.Context, changes Configuration, secre
 	}
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, changes)
-	return c.writeConfiguration(ctx, changes, secrets, full, nil)
+	return c.writeConfiguration(ctx, changes, secrets, full, claim, nil)
 }
 
 // ForgetSection releases Terraform ownership while preserving the section.
 // This is used for firmware-owned anonymous sections, which cannot be deleted
-// without breaking the stock configuration.
-func (c *Client) ForgetSection(ctx context.Context, selector Section) error {
+// without breaking the stock configuration. The owner token is cleared on the
+// router so a later Create does not see a stale owner.
+func (c *Client) ForgetSection(ctx context.Context, selector Section, claim *OwnerClaim) error {
 	if selector.Options == nil {
 		selector.Options = map[string]string{}
 	}
 	selector.Options[ManagedOption] = "0"
-	delete(selector.Options, OwnerTokenOption)
+	selector.Options[OwnerTokenOption] = ""
 	selector.Absent = false
-	return c.ApplySections(ctx, Configuration{selector}, nil)
+	return c.ApplySectionsOwned(ctx, Configuration{selector}, nil, claim)
 }
 
 // FirewallRules returns every firewall rule in UCI package order. Position is
@@ -294,7 +327,7 @@ func (c *Client) ApplyFirewallRules(ctx context.Context, desired, removed Config
 	}
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, changes)
-	return c.writeConfiguration(ctx, changes, nil, full, nil)
+	return c.writeConfiguration(ctx, changes, nil, full, nil, nil)
 }
 
 func firewallRuleIdentity(section Section) string {

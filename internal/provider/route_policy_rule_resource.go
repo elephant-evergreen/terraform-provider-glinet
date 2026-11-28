@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -24,7 +25,7 @@ func NewRoutePolicyRuleResource() resource.Resource {
 		Description: "Manage one stock GL.iNet policy routing rule. `kind` selects the UCI section type written by the firmware.",
 		Attributes: map[string]schema.Attribute{
 			"name":      schema.StringAttribute{Required: true, MarkdownDescription: "UCI rule section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
-			"kind":      schema.StringAttribute{Required: true, MarkdownDescription: "Rule type: `default` or `rule_process`.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"kind":      schema.StringAttribute{Required: true, MarkdownDescription: "Rule type: `default` or `rule_process`.", Validators: []validator.String{oneOfStringValidator{allowed: []string{"default", "rule_process"}}}, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"enabled":   schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable this rule."},
 			"via":       schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Tunnel or route the rule selects."},
 			"from_type": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Match source, such as `device` or `process_gid`."},

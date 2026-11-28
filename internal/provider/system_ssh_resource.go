@@ -63,5 +63,20 @@ func NewSystemSSHResource() resource.Resource {
 			}
 			return nil
 		},
+		Advisory: sshManagementAdvisory,
 	})
+}
+
+// sshManagementAdvisory warns when a planned SSH change may remove the
+// management path before the provider can verify the new endpoint.
+func sshManagementAdvisory(plan, state map[string]attr.Value, creating bool, managementPort int) string {
+	if !boolOf(plan, "enabled", true) {
+		return "This change disables SSH, so it removes the provider's management path. The provider applies it after the transaction commits and cannot verify or reverse it. Re-enable SSH from the router console, and apply this change on its own."
+	}
+	port := int64Of(plan, "port")
+	changed := creating || int64Of(state, "port") != port
+	if !changed || (managementPort != 0 && port == int64(managementPort)) {
+		return ""
+	}
+	return fmt.Sprintf("SSH will listen on port %d after the transaction commits. The provider cannot verify or revert the new endpoint, so update the provider's port and known_hosts entry (or use the router console) before the next operation. Apply this change on its own; the remaining resources in the same apply may fail once the port changes.", port)
 }

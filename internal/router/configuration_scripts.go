@@ -46,6 +46,9 @@ func configurationReload(plan reloadPlan) string {
 		script += "/etc/init.d/firewall restart\n"
 	}
 	for _, service := range plan.Services {
+		if service.Deferred {
+			continue
+		}
 		script += service.script()
 	}
 	return script
@@ -143,12 +146,33 @@ func cloudRequest(plan reloadPlan) string {
 	return ""
 }
 
+const (
+	recordConfirm       = "confirm"
+	recordCancel        = "cancel"
+	recordRestoring     = "restoring"
+	recordRestored      = "restored"
+	recordRestoreFailed = "restore_failed"
+)
+
+// configurationOutcome records a terminal outcome. A restore attempt moves the
+// record from restoring/restore_failed to restored or restore_failed, so every
+// observer can tell a decided rollback from a completed one.
 func configurationOutcome(token, outcome string) string {
-	result := resultDir + "/" + token
+	result := quote(resultDir + "/" + token)
 	if outcome == "" {
-		return "test -f " + quote(result) + " || exit 75\n"
+		return "test -f " + result + " || exit 75\n"
 	}
-	return "mkdir -p " + quote(resultDir) + "\nif [ ! -f " + quote(result) + " ]; then printf '%s' " + quote(outcome) + " > " + quote(result+".tmp") + "; mv " + quote(result+".tmp") + " " + quote(result) + "; sync; fi\ntest \"$(cat " + quote(result) + ")\" = " + quote(outcome) + " || exit 75\n"
+	transition := " *) exit 75 ;;\n"
+	if outcome == recordRestoring || outcome == recordRestored || outcome == recordRestoreFailed {
+		transition = " " + recordRestoring + "|" + recordRestoreFailed + ") : ;;\n *) exit 75 ;;\n"
+	}
+	return "mkdir -p " + quote(resultDir) + "\n" +
+		"current=$(if [ -f " + result + " ]; then cat " + result + "; fi)\n" +
+		"if [ -n \"$current\" ] && [ \"$current\" != " + quote(outcome) + " ]; then\n" +
+		"case \"$current\" in\n" + transition + "esac\n" +
+		"fi\n" +
+		"if [ \"$current\" != " + quote(outcome) + " ]; then printf '%s' " + quote(outcome) + " > " + quote(resultDir+"/"+token+".tmp") + " && mv " + quote(resultDir+"/"+token+".tmp") + " " + result + " && sync; fi\n" +
+		"test \"$(cat " + result + ")\" = " + quote(outcome) + " || exit 75\n"
 }
 
 func configurationCleanup(token, outcome string) string {
@@ -169,22 +193,16 @@ func configurationStableReadScript(config Configuration, secrets ...map[string]s
 		configurationDNSOwnership(config) + "mkdir " + quote(configurationLock) + " 2>/dev/null || exit 73\ntrap 'rmdir " + quote(configurationLock) + "' EXIT\npending=$(uci changes)\ntest -z \"$pending\" || exit 74\n" + read
 }
 
-func configurationApplyScript(config Configuration, token string, plan reloadPlan, secrets ...map[string]string) string {
+func configurationRestoreScript(token string, plan reloadPlan) string {
 	dir := transactionDir
-	serviceSnapshot := ""
-	servicePackages := ""
-	if plan.Cloud {
-		serviceSnapshot = "{ " + cloudSnapshotScript() + "} > service-before\n"
-	}
-	if plan.ServiceSnapshot {
-		servicePackages = "cp /etc/config/gl-cloud " + quote(dir) + "/gl-cloud\nprintf '%s\\n' gl-cloud > " + quote(dir) + "/packages.extra\n"
-		if plan.Cloud {
-			servicePackages += "if [ -f /etc/config/mptun ] && [ \"$(uci -q get mptun.global.enable)\" = 1 ]; then cp /etc/config/mptun " + quote(dir) + "/mptun\nprintf '%s\\n' mptun >> " + quote(dir) + "/packages.extra\nfi\n"
-		}
-	}
-	restore := "#!/bin/sh\nset -eu\nexec >> " + quote(dir+"/rollback.log") + " 2>&1\n" + configurationOutcome(token, "rollback")
+	result := quote(resultDir + "/" + token)
+	restore := "#!/bin/sh\nset -eu\n" +
+		"if [ -f " + result + " ] && [ \"$(cat " + result + ")\" = " + quote(recordRestored) + " ]; then\n" + configurationCleanup(token, recordRestored) + "exit 0\nfi\n" +
+		"test -d " + quote(dir) + " || exit 75\n" +
+		"exec >> " + quote(dir+"/rollback.log") + " 2>&1\n" +
+		configurationOutcome(token, recordRestoring)
 	if plan.Reboot {
-		restore += "if [ -f " + quote(dir+"/restored_boot") + " ] && [ \"$(cat /proc/sys/kernel/random/boot_id)\" != \"$(cat " + quote(dir+"/restored_boot") + ")\" ]; then\n" + configurationCleanup(token, "rollback") + "exit 0\nfi\n"
+		restore += "if [ -f " + quote(dir+"/restored_boot") + " ] && [ \"$(cat /proc/sys/kernel/random/boot_id)\" != \"$(cat " + quote(dir+"/restored_boot") + ")\" ]; then\n" + configurationOutcome(token, recordRestored) + configurationCleanup(token, recordRestored) + "exit 0\nfi\n"
 	}
 	restore += "for package in " + configurationPackages + "; do\ncp " + quote(dir) + "/\"$package\" /etc/config/\"$package\"\nuci -q revert \"$package\"\ndone\n"
 	if plan.ServiceSnapshot {
@@ -197,8 +215,30 @@ func configurationApplyScript(config Configuration, token string, plan reloadPla
 	if plan.Reboot {
 		restore += "cat /proc/sys/kernel/random/boot_id > " + quote(dir+"/restored_boot") + "\nsync\nreboot\n"
 	} else {
-		restore += configurationCleanup(token, "rollback")
+		restore += configurationOutcome(token, recordRestored) + configurationCleanup(token, recordRestored)
 	}
+	return restore
+}
+
+func configurationApplyScript(config Configuration, token string, plan reloadPlan, claim *OwnerClaim, secrets ...map[string]string) string {
+	dir := transactionDir
+	guard := configurationOwnershipGuard(claim)
+	deferredPrepare := ""
+	if activation := configurationDeferredScript(plan, token); activation != "" {
+		deferredPrepare = "mkdir -p " + quote(resultDir) + "\nprintf '%s' " + quote(activation) + " > " + quote(resultDir+"/"+token+".activate") + "\nchmod 700 " + quote(resultDir+"/"+token+".activate") + "\n"
+	}
+	serviceSnapshot := ""
+	servicePackages := ""
+	if plan.Cloud {
+		serviceSnapshot = "{ " + cloudSnapshotScript() + "} > service-before\n"
+	}
+	if plan.ServiceSnapshot {
+		servicePackages = "cp /etc/config/gl-cloud " + quote(dir) + "/gl-cloud\nprintf '%s\\n' gl-cloud > " + quote(dir) + "/packages.extra\n"
+		if plan.Cloud {
+			servicePackages += "if [ -f /etc/config/mptun ] && [ \"$(uci -q get mptun.global.enable)\" = 1 ]; then cp /etc/config/mptun " + quote(dir) + "/mptun\nprintf '%s\\n' mptun >> " + quote(dir) + "/packages.extra\nfi\n"
+		}
+	}
+	restore := configurationRestoreScript(token, plan)
 	watchdog := `#!/bin/sh
 trap '' HUP
 set -eu
@@ -237,7 +277,7 @@ case "$(cat decision)" in
  attempts=0
  while ! /bin/sh restore; do
   attempts=$((attempts+1))
-  if [ "$attempts" -ge 60 ]; then printf '%s' "$attempts" > stuck; sync; exit 75; fi
+  if [ "$attempts" -ge 60 ]; then ` + configurationOutcome(token, recordRestoreFailed) + `printf '%s' "$attempts" > stuck; sync; exit 75; fi
   sleep 5
  done
  ;;
@@ -265,7 +305,7 @@ printf '%s' ` + quote(token) + ` > ` + quote(configurationLock+"/token") + `
 transferred=0
 prepared=0
 trap 'if [ "$transferred" = 0 ]; then if [ "$prepared" = 1 ]; then ` + recoveryService + ` disable 2>/dev/null || true; rm -f ` + quote(recoveryService) + `; rm -rf ` + quote(dir) + `; fi; rm -f ` + quote(configurationLock+"/token") + `; rmdir ` + quote(configurationLock) + `; fi' EXIT
-mkdir ` + quote(dir) + ` 2>/dev/null || exit 73
+` + guard + `mkdir ` + quote(dir) + ` 2>/dev/null || exit 73
 prepared=1
 cd ` + quote(dir) + `
 ` + serviceSnapshot + `printf '%s' ` + quote(token) + ` > ` + quote(dir+"/token") + `
@@ -280,7 +320,7 @@ cat > ` + quote(dir+"/request") + ` <<'GLINET_REQUEST'
 printf '%s' ` + quote(service) + ` > ` + quote(recoveryService) + `
 chmod 700 ` + quote(recoveryService) + `
 ` + recoveryService + ` enable
-sync
+` + deferredPrepare + `sync
 transferred=1
 start-stop-daemon -S -b -m -p ` + quote(dir+"/pid") + ` -x /bin/sh -- ` + quote(dir+"/rollback") + `
 for attempt in 1 2 3 4 5; do test ! -f armed || break; sleep 1; done
@@ -300,7 +340,8 @@ func configurationRollbackScript(token string) string {
 		"  if [ -f " + result + " ]; then\n" +
 		"    case \"$(cat " + result + ")\" in\n" +
 		"      confirm) printf committed; exit 0 ;;\n" +
-		"      rollback) printf rolled_back; exit 0 ;;\n" +
+		"      " + recordRestored + ") printf restored; exit 0 ;;\n" +
+		"      " + recordRestoreFailed + ") printf restore_failed; exit 0 ;;\n" +
 		"      cancel) printf cancelled; exit 0 ;;\n" +
 		"    esac\n" +
 		"  fi\n" +
@@ -326,8 +367,18 @@ func configurationConfirmScript(token string, config Configuration, secrets ...m
 
 func configurationConfirmScriptWithPlan(token string, config Configuration, plan reloadPlan, secrets ...map[string]string) string {
 	result := resultDir + "/" + token
-	ack := "if [ -f " + quote(result) + " ]; then\ncase \"$(cat " + quote(result) + ")\" in\nconfirm)\nif [ ! -d " + quote(configurationLock+"-actor-"+token) + " ] && [ ! -d " + quote(transactionDir+"-retired-"+token) + " ] && [ \"$(cat " + quote(transactionDir+"/token") + " 2>/dev/null || true)\" != " + quote(token) + " ] && ! grep -F " + quote(token) + " " + quote(recoveryService) + " >/dev/null 2>&1; then exit 0; fi\n;;\nrollback|cancel) exit 77 ;;\n*) exit 75 ;;\nesac\nfi\n"
-	script := preflight + ack + "cd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest \"$(cat ready)\" = \"$(cat /proc/sys/kernel/random/boot_id)\" || exit 75\ntest \"$(cat token)\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
+	ack := "ack_state() {\nack=pending\nif [ ! -f " + quote(result) + " ]; then return 0; fi\ncase \"$(cat " + quote(result) + ")\" in\n" +
+		recordConfirm + ")\nif [ ! -d " + quote(configurationLock+"-actor-"+token) + " ] && [ ! -d " + quote(transactionDir+"-retired-"+token) + " ] && [ \"$(cat " + quote(transactionDir+"/token") + " 2>/dev/null || true)\" != " + quote(token) + " ] && ! grep -F " + quote(token) + " " + quote(recoveryService) + " >/dev/null 2>&1; then ack=done; fi\n;;\n" +
+		recordRestoring + "|" + recordRestored + "|" + recordRestoreFailed + "|rollback|cancel) ack=decided ;;\n" +
+		"*) ack=invalid ;;\n" +
+		"esac\nreturn 0\n}\n"
+	spawn := ""
+	if planDeferred(plan) {
+		scriptPath := quote(resultDir + "/" + token + ".activate")
+		issued := quote(resultDir + "/" + token + ".activate-issued")
+		spawn = "if [ ! -f " + issued + " ]; then\n: > " + issued + "\nstart-stop-daemon -S -b -m -p " + quote(resultDir+"/"+token+".activate.pid") + " -x /bin/sh -- " + scriptPath + " >/dev/null 2>&1 || { rm -f " + issued + "; exit 75; }\nfi\n"
+	}
+	script := preflight + ack + "ack_state\nif [ \"$ack\" = done ]; then\n" + spawn + "exit 0\nfi\nif [ \"$ack\" = decided ]; then exit 77; fi\nif [ \"$ack\" = invalid ]; then exit 75; fi\n" + "cd " + quote(transactionDir) + "\n" + "test -d " + quote(configurationLock) + " || exit 75\ntest \"$(cat ready)\" = \"$(cat /proc/sys/kernel/random/boot_id)\" || exit 75\ntest \"$(cat token)\" = " + quote(token) + " || exit 75\nfw3 -q print >/dev/null\n"
 	for _, s := range config {
 		if s.Absent {
 			continue
@@ -360,7 +411,7 @@ func configurationConfirmScriptWithPlan(token string, config Configuration, plan
 	if plan.Cloud {
 		script += cloudVerifyScript(plan.CloudEnabled)
 	}
-	return script + "ln confirm decision 2>/dev/null || test \"$(cat decision)\" = confirm || exit 75\nsync\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n" + ack + "sleep 1\ndone\nexit 75\n"
+	return script + "ln confirm decision 2>/dev/null || test \"$(cat decision)\" = confirm || exit 75\nsync\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\nack_state\nif [ \"$ack\" = done ]; then\n" + spawn + "exit 0\nfi\nif [ \"$ack\" = invalid ]; then exit 75; fi\nsleep 1\ndone\nexit 75\n"
 }
 
 func configurationJSON(config Configuration) string {
@@ -404,4 +455,41 @@ func configurationDNSOwnership(config Configuration) string {
 		}
 	}
 	return ""
+}
+
+// configurationOwnershipGuard runs inside the transaction lock and re-checks
+// the owner token the caller observed before the write, so two states cannot
+// both claim the same section. Exit 78 aborts before any configuration changes.
+func configurationOwnershipGuard(claim *OwnerClaim) string {
+	if claim == nil || claim.Section == "" {
+		return ""
+	}
+	option := claim.Package + "." + claim.Section + "." + OwnerTokenOption
+	current := "current_owner=$(uci -q get " + quote(option) + " || true)\n"
+	if claim.Unowned {
+		return current + "test -z \"$current_owner\" || exit 78\n"
+	}
+	return current + "test -z \"$current_owner\" || test \"$current_owner\" = " + quote(claim.Token) + " || exit 78\n"
+}
+
+func planDeferred(plan reloadPlan) bool {
+	for _, service := range plan.Services {
+		if service.Deferred {
+			return true
+		}
+	}
+	return false
+}
+
+func configurationDeferredScript(plan reloadPlan, token string) string {
+	body := ""
+	for _, service := range plan.Services {
+		if service.Deferred {
+			body += service.deferredScript(resultDir + "/" + token + ".activation")
+		}
+	}
+	if body == "" {
+		return ""
+	}
+	return "#!/bin/sh\ntrap '' HUP\nsleep 5\n" + body
 }
