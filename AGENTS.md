@@ -7,6 +7,7 @@
 - Support existing Wi-Fi AP settings, coordinated UCI configuration for network, wireless, DHCP, firewall, stock DNS, Ethernet port mapping, and the stock GoodCloud operation on Flint 2 stock firmware 4.11.x in router mode. Firmware 4.11.x in router mode is the hardware-verified line; other minors are rejected. Do not broaden hardware or firmware support without evidence.
 - Use Go and the official Terraform Plugin Framework. Use the Go and Terraform versions in mise.toml, and run mise run check for required checks.
 - Keep examples synthetic. Ordinary tests must use local test fixtures and must not change a real router. Hardware acceptance testing requires an explicitly authorized dedicated device.
+- Ask the operator for explicit permission before any operation that can interrupt the network: network, Wi-Fi, VLAN, port, bridge, or route changes; router reboot; restarts of services that carry connectivity; and firewall, NAT, forwarding, or redirect changes that can cut traffic. Ask every time. A previous approval, a provider setting such as `allow_network_disruption`, or an environment variable is not consent.
 - Record unverified hardware behavior in the issue or pull request. Do not equate fixture tests with hardware compatibility.
 - When changing an attribute's type or meaning, bump `SchemaVersion` and register a state upgrader on the typed spec. Do not rename or retype an attribute without one.
 - Follow the [compatibility checks](CONTRIBUTING.md#changes) before designing or merging changes that affect existing installations.
