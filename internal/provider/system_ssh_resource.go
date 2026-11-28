@@ -20,7 +20,7 @@ func NewSystemSSHResource() resource.Resource {
 		Description: "Manage the stock OpenWrt dropbear SSH service. Destroy releases ownership and preserves the firmware section.",
 		NoDelete:    true,
 		Attributes: map[string]schema.Attribute{
-			"enabled":            schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable the SSH service. Disabling it is refused because it removes the provider's management path; use the router console."},
+			"enabled":            schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Enable the SSH service. Disabling it is refused because it removes the provider's management path; use the router console.", Validators: []validator.Bool{sshEnabledValidator{}}},
 			"port":               schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(22), MarkdownDescription: "SSH port. It must match the provider's configured port. Moving the endpoint is refused; change it from the router console and update the provider configuration and known_hosts entry."},
 			"password_auth":      schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Allow password authentication."},
 			"root_password_auth": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), MarkdownDescription: "Allow root password authentication."},

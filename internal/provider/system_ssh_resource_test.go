@@ -82,7 +82,10 @@ func TestTypedSystemSSHRefusesEndpointChange(t *testing.T) {
 }`, ExpectError: regexp.MustCompile("does not match the provider's management port")},
 			{Config: `resource "glinet_system_ssh" "test" {
   enabled = false
-}`, ExpectError: regexp.MustCompile("disabling SSH would remove the provider's management path")},
+}`, PlanOnly: true, ExpectError: regexp.MustCompile("disabling SSH would remove the provider's management path")},
+			{Config: `resource "glinet_system_ssh" "test" {
+  port = 22
+}`},
 		},
 	})
 }

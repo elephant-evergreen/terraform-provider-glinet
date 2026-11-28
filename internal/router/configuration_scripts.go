@@ -170,6 +170,20 @@ func configurationCleanup(token, outcome string) string {
 	return "if [ -e " + quote(configurationLock+"/token") + " ]; then test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || exit 75; fi\n" + configurationOutcome(token, outcome) + "if [ -d " + quote(transactionDir) + " ]; then test \"$(cat " + quote(transactionDir+"/token") + ")\" = " + quote(token) + " || exit 75; mv " + quote(transactionDir) + " " + quote(retired) + "; fi\nsync\nrm -rf " + quote(retired) + "\nsync\nrm -f " + quote(recoveryService) + "\nsync\nrm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\nrm -f " + quote(configurationLock+"/token") + "\nrmdir " + quote(configurationLock) + " 2>/dev/null || true\nrmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\n"
 }
 
+// configurationDiscard removes the runtime of a transaction that never
+// recorded an outcome, such as an interrupted preparation. It is used when the
+// transaction directory is absent, so there is nothing to restore.
+func configurationDiscard(token string) string {
+	retired := transactionDir + "-retired-" + token
+	return "rm -rf " + quote(transactionDir+"-preparing-") + "*\n" +
+		"rm -rf " + quote(retired) + "\n" +
+		"rm -f " + quote(recoveryService) + "\n" +
+		"rm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery\n" +
+		"rm -f " + quote(configurationLock+"/token") + "\n" +
+		"rmdir " + quote(configurationLock) + " 2>/dev/null || true\n" +
+		"rmdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || true\n"
+}
+
 func configurationStableReadScript(config Configuration, secrets ...map[string]string) string {
 	secretData := "{}"
 	if len(secrets) > 0 {
@@ -212,6 +226,7 @@ func configurationRestoreScript(token string, plan reloadPlan) string {
 
 func configurationApplyScript(config Configuration, token string, plan reloadPlan, claim *OwnerClaim, secrets ...map[string]string) string {
 	dir := transactionDir
+	stage := transactionDir + "-preparing-" + token
 	guard := configurationOwnershipGuard(claim)
 	serviceSnapshot := ""
 	servicePackages := ""
@@ -219,9 +234,9 @@ func configurationApplyScript(config Configuration, token string, plan reloadPla
 		serviceSnapshot = "{ " + cloudSnapshotScript() + "} > service-before\n"
 	}
 	if plan.ServiceSnapshot {
-		servicePackages = "cp /etc/config/gl-cloud " + quote(dir) + "/gl-cloud\nprintf '%s\\n' gl-cloud > " + quote(dir) + "/packages.extra\n"
+		servicePackages = "cp /etc/config/gl-cloud " + quote(stage) + "/gl-cloud\nprintf '%s\\n' gl-cloud > " + quote(stage) + "/packages.extra\n"
 		if plan.Cloud {
-			servicePackages += "if [ -f /etc/config/mptun ] && [ \"$(uci -q get mptun.global.enable)\" = 1 ]; then cp /etc/config/mptun " + quote(dir) + "/mptun\nprintf '%s\\n' mptun >> " + quote(dir) + "/packages.extra\nfi\n"
+			servicePackages += "if [ -f /etc/config/mptun ] && [ \"$(uci -q get mptun.global.enable)\" = 1 ]; then cp /etc/config/mptun " + quote(stage) + "/mptun\nprintf '%s\\n' mptun >> " + quote(stage) + "/packages.extra\nfi\n"
 		}
 	}
 	restore := configurationRestoreScript(token, plan)
@@ -271,7 +286,7 @@ case "$(cat decision)" in
 esac
 `
 
-	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nset -eu\numask 077\nmkdir " + quote(configurationLock) + " 2>/dev/null || test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || return 73\nprintf '%s' " + quote(token) + " > " + quote(configurationLock+"/token") + "\nif [ ! -d " + quote(dir) + " ]; then\nmkdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || return 73\n" + configurationCleanup(token, "") + "return 0\nfi\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
+	service := "#!/bin/sh /etc/rc.common\nSTART=99\nstart() {\nset -eu\numask 077\nmkdir " + quote(configurationLock) + " 2>/dev/null || test \"$(cat " + quote(configurationLock+"/token") + ")\" = " + quote(token) + " || return 73\nprintf '%s' " + quote(token) + " > " + quote(configurationLock+"/token") + "\nif [ ! -d " + quote(dir) + " ]; then\nmkdir " + quote(configurationLock+"-actor-"+token) + " 2>/dev/null || return 73\n" + configurationDiscard(token) + "return 0\nfi\nrm -f " + quote(dir+"/pid") + "\nstart-stop-daemon -S -b -m -p " + quote(dir+"/pid") + " -x /bin/sh -- " + quote(dir+"/rollback") + "\n}\n"
 	request := "#!/bin/sh\ntrap '' HUP\nset -eu\ncd " + quote(dir) + "\nexec > apply.log 2>&1\n" + configurationLua(config, true, secrets...) + "fw3 -q print >/dev/null\nfor package in " + configurationCommitPackages(config, plan) + "; do uci commit \"$package\"; done\n" + configurationReload(plan) + cloudRequest(plan)
 	if plan.Reboot {
 		request += "touch awaiting_boot\nsync\nreboot\n"
@@ -284,28 +299,38 @@ test -z "$pending" || exit 74
 command -v lua >/dev/null
 command -v start-stop-daemon >/dev/null
 command -v fw3 >/dev/null
-` + configurationDNSOwnership(config) + `test ! -e ` + quote(recoveryService) + ` && test ! -L ` + quote(recoveryService) + ` || exit 73
-umask 077
+` + configurationDNSOwnership(config) + `umask 077
 mkdir ` + quote(configurationLock) + ` 2>/dev/null || exit 73
 printf '%s' ` + quote(token) + ` > ` + quote(configurationLock+"/token") + `
 transferred=0
 prepared=0
-trap 'if [ "$transferred" = 0 ]; then if [ "$prepared" = 1 ]; then ` + recoveryService + ` disable 2>/dev/null || true; rm -f ` + quote(recoveryService) + `; rm -rf ` + quote(dir) + `; fi; rm -f ` + quote(configurationLock+"/token") + `; rmdir ` + quote(configurationLock) + `; fi' EXIT
-` + guard + `mkdir ` + quote(dir) + ` 2>/dev/null || exit 73
+published=0
+trap 'if [ "$transferred" = 0 ]; then if [ "$prepared" = 1 ]; then ` + recoveryService + ` disable 2>/dev/null || true; rm -f ` + quote(recoveryService) + `; rm -rf ` + quote(stage) + `; if [ "$published" = 1 ]; then rm -rf ` + quote(dir) + `; fi; fi; rm -f ` + quote(configurationLock+"/token") + `; rmdir ` + quote(configurationLock) + `; fi' EXIT
+if [ -e ` + quote(recoveryService) + ` ] || [ -L ` + quote(recoveryService) + ` ]; then
+test -d ` + quote(dir) + ` && exit 73
+rm -f ` + quote(recoveryService) + `
+rm -f /etc/rc.d/S??terraform-glinet-recovery /etc/rc.d/K??terraform-glinet-recovery
+fi
+test ! -d ` + quote(dir) + ` || exit 73
+rm -rf ` + quote(dir+"-preparing-") + `*
+` + guard + `mkdir ` + quote(stage) + ` 2>/dev/null || exit 73
 prepared=1
-cd ` + quote(dir) + `
-` + serviceSnapshot + `printf '%s' ` + quote(token) + ` > ` + quote(dir+"/token") + `
-printf confirm > ` + quote(dir+"/confirm") + `
-printf rollback > ` + quote(dir+"/recover") + `
-cat /proc/sys/kernel/random/boot_id > ` + quote(dir+"/boot") + `
-for package in ` + configurationPackages + `; do cp /etc/config/"$package" ` + quote(dir) + `/"$package"; done
-` + servicePackages + `printf '%s' ` + quote(restore) + ` > ` + quote(dir+"/restore") + `
-printf '%s' ` + quote(watchdog) + ` > ` + quote(dir+"/rollback") + `
-cat > ` + quote(dir+"/request") + ` <<'GLINET_REQUEST'
+cd ` + quote(stage) + `
+` + serviceSnapshot + `printf '%s' ` + quote(token) + ` > ` + quote(stage+"/token") + `
+printf confirm > ` + quote(stage+"/confirm") + `
+printf rollback > ` + quote(stage+"/recover") + `
+cat /proc/sys/kernel/random/boot_id > ` + quote(stage+"/boot") + `
+for package in ` + configurationPackages + `; do cp /etc/config/"$package" ` + quote(stage) + `/"$package"; done
+` + servicePackages + `printf '%s' ` + quote(restore) + ` > ` + quote(stage+"/restore") + `
+printf '%s' ` + quote(watchdog) + ` > ` + quote(stage+"/rollback") + `
+cat > ` + quote(stage+"/request") + ` <<'GLINET_REQUEST'
 ` + request + `GLINET_REQUEST
 printf '%s' ` + quote(service) + ` > ` + quote(recoveryService) + `
 chmod 700 ` + quote(recoveryService) + `
 ` + recoveryService + ` enable
+sync
+mv ` + quote(stage) + ` ` + quote(dir) + ` || exit 73
+published=1
 sync
 transferred=1
 start-stop-daemon -S -b -m -p ` + quote(dir+"/pid") + ` -x /bin/sh -- ` + quote(dir+"/rollback") + `
@@ -494,8 +519,12 @@ func configurationOwnershipGuard(claim *OwnerClaim) string {
 		return ""
 	}
 	option := claim.Package + "." + claim.Section + "." + OwnerTokenOption
+	marker := claim.Package + "." + claim.Section + "." + ManagedOption
 	return "current_owner=$(uci -q get " + quote(option) + " || true)\n" +
 		"if [ \"$current_owner\" != " + quote(claim.Token) + " ]; then\n" +
-		"if [ -n " + quote(claim.Token) + " ] && [ -z \"$current_owner\" ]; then :; else exit 78; fi\n" +
+		"if [ -n " + quote(claim.Token) + " ] && [ -z \"$current_owner\" ]; then\n" +
+		"current_marker=$(uci -q get " + quote(marker) + " || true)\n" +
+		"test \"$current_marker\" = 1 || exit 78\n" +
+		"else exit 78; fi\n" +
 		"fi\n"
 }
