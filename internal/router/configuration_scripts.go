@@ -326,12 +326,14 @@ func configurationOutcomeProbe(token string) string {
 	actor := quote(configurationLock + "-actor-" + token)
 	retired := quote(transactionDir + "-retired-" + token)
 	dir := quote(transactionDir)
+	lock := quote(configurationLock)
 	recovery := quote(recoveryService)
 	quoted := quote(token)
 	return "if [ -f " + result + " ]; then\n" +
 		"outcome=$(cat " + result + ")\n" +
 		"if [ \"$outcome\" = " + quote(recordConfirm) + " ]; then\n" +
 		"pending=0\n" +
+		"[ -d " + lock + " ] && pending=1\n" +
 		"[ -d " + actor + " ] && pending=1\n" +
 		"[ -d " + retired + " ] && pending=1\n" +
 		"[ \"$(cat " + dir + "/token 2>/dev/null || true)\" = " + quoted + " ] && pending=1\n" +
@@ -380,7 +382,7 @@ func configurationConfirmScript(token string, config Configuration, secrets ...m
 func configurationConfirmScriptWithPlan(token string, config Configuration, plan reloadPlan, secrets ...map[string]string) string {
 	result := resultDir + "/" + token
 	ack := "ack_state() {\nack=pending\nif [ ! -f " + quote(result) + " ]; then return 0; fi\ncase \"$(cat " + quote(result) + ")\" in\n" +
-		recordConfirm + ")\nif [ ! -d " + quote(configurationLock+"-actor-"+token) + " ] && [ ! -d " + quote(transactionDir+"-retired-"+token) + " ] && [ \"$(cat " + quote(transactionDir+"/token") + " 2>/dev/null || true)\" != " + quote(token) + " ] && ! grep -F " + quote(token) + " " + quote(recoveryService) + " >/dev/null 2>&1; then ack=done; fi\n;;\n" +
+		recordConfirm + ")\nif [ ! -d " + quote(configurationLock) + " ] && [ ! -d " + quote(configurationLock+"-actor-"+token) + " ] && [ ! -d " + quote(transactionDir+"-retired-"+token) + " ] && [ \"$(cat " + quote(transactionDir+"/token") + " 2>/dev/null || true)\" != " + quote(token) + " ] && ! grep -F " + quote(token) + " " + quote(recoveryService) + " >/dev/null 2>&1; then ack=done; fi\n;;\n" +
 		recordRestoring + "|" + recordRestored + "|" + recordRestoreFailed + "|rollback|cancel) ack=decided ;;\n" +
 		"*) ack=invalid ;;\n" +
 		"esac\nreturn 0\n}\n"

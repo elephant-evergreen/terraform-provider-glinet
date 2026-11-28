@@ -157,6 +157,7 @@ func TestTransactionOutcomeModel(t *testing.T) {
 		dirToken := rapid.SampledFrom([]string{"", "token", "other"}).Draw(rt, "dir-token")
 		decision := rapid.SampledFrom([]string{"", "confirm", "rollback"}).Draw(rt, "decision")
 		actor := rapid.Bool().Draw(rt, "actor")
+		lock := rapid.Bool().Draw(rt, "lock")
 		retired := rapid.Bool().Draw(rt, "retired")
 		recovery := rapid.SampledFrom([]string{"", "token", "other"}).Draw(rt, "recovery")
 		if result != "" {
@@ -177,6 +178,11 @@ func TestTransactionOutcomeModel(t *testing.T) {
 				rt.Fatal(err)
 			}
 		}
+		if lock {
+			if err := os.MkdirAll(filepath.Join(root, "lock"), 0700); err != nil {
+				rt.Fatal(err)
+			}
+		}
 		if retired {
 			if err := os.MkdirAll(filepath.Join(root, "transaction-retired-token"), 0700); err != nil {
 				rt.Fatal(err)
@@ -185,23 +191,23 @@ func TestTransactionOutcomeModel(t *testing.T) {
 		if recovery != "" {
 			writeFile(tb, filepath.Join(root, "recovery"), recovery)
 		}
-		want := transactionOutcomeModel(result, dirToken, actor, retired, recovery)
+		want := transactionOutcomeModel(result, dirToken, actor, lock, retired, recovery)
 		output, err := f.run(configurationOutcomeProbe("token"))
 		if err != nil {
 			rt.Fatalf("Probe failed: %s %v", output, err)
 		}
 		if got := strings.TrimSpace(string(output)); got != want {
-			rt.Fatalf("probe = %q, want %q (result=%q dir=%q decision=%q actor=%v retired=%v recovery=%q)", got, want, result, dirToken, decision, actor, retired, recovery)
+			rt.Fatalf("probe = %q, want %q (result=%q dir=%q decision=%q actor=%v lock=%v retired=%v recovery=%q)", got, want, result, dirToken, decision, actor, lock, retired, recovery)
 		}
 	})
 }
 
-func transactionOutcomeModel(result, dirToken string, actor, retired bool, recovery string) string {
+func transactionOutcomeModel(result, dirToken string, actor, lock, retired bool, recovery string) string {
 	if result != "" {
 		if result != "confirm" {
 			return result
 		}
-		if actor || retired || dirToken == "token" || recovery == "token" {
+		if actor || lock || retired || dirToken == "token" || recovery == "token" {
 			return "pending"
 		}
 		return "confirm"
