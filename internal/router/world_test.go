@@ -9,9 +9,19 @@ import (
 	"testing"
 )
 
+// testTB is the part of testing.T that the local fixtures need. Property
+// tests pass a rapid.T adapter instead.
+type testTB interface {
+	Helper()
+	Fatal(...any)
+	Fatalf(string, ...any)
+	Cleanup(func())
+	TempDir() string
+}
+
 type fixtureRunner struct{ root string }
 
-func newFixture(t *testing.T) *fixtureRunner {
+func newFixture(t testTB) *fixtureRunner {
 	t.Helper()
 	root := t.TempDir()
 	bin := filepath.Join(root, "bin")

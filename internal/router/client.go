@@ -14,6 +14,7 @@ import (
 )
 
 var sectionName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+var packageName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 type Client struct {
 	runner     Runner
@@ -22,6 +23,8 @@ type Client struct {
 	protection ChangeProtection
 
 	allowNetworkDisruption bool
+	managementPort         int
+	transactionLog         string
 }
 
 type ChangeProtection interface {
@@ -30,6 +33,17 @@ type ChangeProtection interface {
 
 func NewClient(runner Runner, protection ChangeProtection) *Client {
 	return &Client{runner: runner, protection: protection}
+}
+
+// SetManagementPort records the SSH port used to reach the router. The SSH
+// resource uses it to decide whether activating a change would close the
+// management path the provider is connected through.
+func (c *Client) SetManagementPort(port int) {
+	c.managementPort = port
+}
+
+func (c *Client) ManagementPort() int {
+	return c.managementPort
 }
 
 // AllowNetworkDisruption permits changes that can interrupt the network
@@ -69,6 +83,10 @@ func ValidSection(section string) bool {
 	return len(section) <= 64 && sectionName.MatchString(section)
 }
 
+func validPackageName(name string) bool {
+	return len(name) <= 64 && packageName.MatchString(name)
+}
+
 func ValidSSID(ssid string) bool {
 	return len(ssid) >= 1 && len(ssid) <= 32 && utf8.ValidString(ssid) && !strings.ContainsFunc(ssid, unicode.IsControl)
 }
@@ -103,6 +121,8 @@ func operationError(err error) error {
 			return errors.New("The router selected rollback or canceled the transaction. Inspect recovery and connectivity before retrying.")
 		case 76:
 			return errors.New("Cannot arm automatic recovery. No configuration was changed. Inspect pending recovery before retrying.")
+		case 78:
+			return errors.New("The router section is owned by another Terraform state. No configuration was changed; re-run the plan after checking which state manages the section.")
 		}
 	}
 	return err

@@ -8,7 +8,7 @@ Every row is a terminal state: `Managed` when the stock-exposed declarative sett
 
 | Status | Meaning |
 | --- | --- |
-| Managed | The stock-exposed declarative settings are represented by a resource or attribute and covered by provider tests and docs. Service activation is part of the transaction for the services with an activation contract; runtime network acceptance is tracked separately from this matrix. |
+| Managed | The stock-exposed declarative settings are represented by a resource or attribute and covered by provider tests and docs. The provider's [activation audit](../internal/router/services_test.go) requires a reload path, service activation, cloud call, or recorded exemption for every writable UCI package. `Managed` is a fixture-level claim; hardware verification is a separate level below. |
 | Action | One-shot operation exposed as a Terraform action. |
 | Read-only | Observation only; exposed or intended as a data source. |
 | Out of scope | No Terraform-ownable surface: unpublished field schema, account-bound activation, file-based configuration, or runtime state. The reason is recorded in the row. |
@@ -17,7 +17,15 @@ Every row is a terminal state: `Managed` when the stock-exposed declarative sett
 
 A row is complete when its status and the managed resources are accurate and the referenced tests pass. The provider does not claim coverage for a field the stock firmware does not publish; those rows are recorded as out of scope with the concrete reason.
 
-Hardware verification is tracked separately: the 4.11 line is the verified line, and `mise run acceptance` runs the automated hardware acceptance against an explicitly authorized router. Traffic acceptance and power-loss recovery remain separate manual checks.
+## Verification levels
+
+| Level | Meaning | Where it is recorded |
+| --- | --- | --- |
+| Fixture | Schema, identity, plan/apply consistency, recovery scripts, and activation rules pass in local tests. Every `Managed` row is at least fixture-verified. | `mise run check` |
+| Hardware-exercised | An explicitly authorized router ran the automated acceptance suite for the listed operations, including create, update, import, destroy, empty plan, an injected-rule rollback, the NTP restart, and an optional reboot. | private verification notes; not published |
+| Hardware-unverified | Everything else, including physical power-loss recovery, an SSH disconnect during a rollback, a restore failure, multi-resource apply timing, and traffic acceptance. | this document and [testing](testing.md) |
+
+Firmware 4.11.x is the verified line. `mise run acceptance` runs the hardware suite against an explicitly authorized router. Do not promote a row to hardware-exercised from fixture results, and do not infer traffic acceptance or power-loss recovery from the suite's configuration checks.
 
 ## Network
 

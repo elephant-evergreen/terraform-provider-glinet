@@ -98,7 +98,7 @@ func TestCloudConfigurationWorld(t *testing.T) {
 	}
 	spec := Configuration{{Package: "gl-cloud", Name: "@cloud[0]", Type: "cloud", Options: map[string]string{ManagedOption: "1"}}}
 	plan := reloadPlan{Cloud: true, CloudEnabled: false, ServiceSnapshot: true}
-	if output, err := f.run(configurationApplyScript(spec, "token", plan)); err != nil {
+	if output, err := f.run(configurationApplyScript(spec, "token", plan, nil)); err != nil {
 		t.Fatalf("Apply failed: %s %v", output, err)
 	}
 	deadline := time.Now().Add(3 * time.Second)
@@ -139,7 +139,7 @@ func TestCloudConfigurationRollbackRestoresServices(t *testing.T) {
 	}
 	spec := Configuration{{Package: "gl-cloud", Name: "@cloud[0]", Type: "cloud", Options: map[string]string{ManagedOption: "1"}}}
 	plan := reloadPlan{Cloud: true, CloudEnabled: false, ServiceSnapshot: true}
-	if output, err := f.run(configurationApplyScript(spec, "token", plan)); err != nil {
+	if output, err := f.run(configurationApplyScript(spec, "token", plan, nil)); err != nil {
 		t.Fatalf("Apply failed: %s %v", output, err)
 	}
 	deadline := time.Now().Add(8 * time.Second)

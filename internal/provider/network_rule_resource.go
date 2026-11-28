@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 func NewNetworkRuleResource() resource.Resource {
@@ -20,7 +21,7 @@ func NewNetworkRuleResource() resource.Resource {
 		TypeName:    "network_rule",
 		Description: "Manage one OpenWrt `network` policy routing rule. The UCI section name is the stable identity.",
 		Attributes: map[string]schema.Attribute{
-			"name":     schema.StringAttribute{Required: true, MarkdownDescription: "UCI rule section name.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"name":     schema.StringAttribute{Required: true, MarkdownDescription: "UCI rule section name.", Validators: []validator.String{nonEmptyStringValidator{}}, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"lookup":   schema.StringAttribute{Required: true, MarkdownDescription: "Routing table to consult."},
 			"priority": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(0), MarkdownDescription: "Rule priority; zero leaves it unset."},
 			"src":      schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), MarkdownDescription: "Source address or CIDR."},

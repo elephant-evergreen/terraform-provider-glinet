@@ -116,6 +116,8 @@ func (p *glinetProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		return
 	}
 	client := router.NewClient(transport, protection)
+	client.SetManagementPort(int(port))
+	client.SetTransactionLog(os.Getenv("GLINET_TRANSACTION_LOG"))
 	client.AllowNetworkDisruption(allowDisruption)
 	if _, err := client.VerifyFirmware(ctx); err != nil {
 		resp.Diagnostics.AddError("Cannot verify router", err.Error())

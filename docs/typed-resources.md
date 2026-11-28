@@ -95,10 +95,10 @@ Every typed write:
 2. Builds the full managed configuration and runs the existing preflight checks (bridge port ownership, unmanaged Wi-Fi/zone/forwarding/ACCEPT conflicts, DHCP conflicts, private LAN, IPv6, UPnP, include hashes, DNS provider metadata).
 3. Requires a direct active wired management route for disruptive changes and creates a verified external encrypted backup.
 4. Acquires the router transaction lock and rechecks pending UCI changes and section identities.
-5. Snapshots the managed UCI packages, stages the change, commits, reloads the affected service or reboots, and confirms managed activation and the generated firewall. GoodCloud changes use the stock `cloud.set_config` operation after the ownership marker is written; the enable switch is not written before the RPC. Their snapshot also records the `gl-cloud`, `rtty`, `mptun`, and `mpifd` runtime states, and the rollback restores configuration files and the recorded service states separately. A service that was stopped but still registered is re-registered through procd without starting a process.
+5. Snapshots the managed UCI packages, stages the change, commits, reloads the affected service or reboots, and confirms managed activation and the generated firewall. A service activation that ends the provider's own management path is committed first and activated from a detached job after cleanup; the plan warns about the connection change. GoodCloud changes use the stock `cloud.set_config` operation after the ownership marker is written; the enable switch is not written before the RPC. Their snapshot also records the `gl-cloud`, `rtty`, `mptun`, and `mpifd` runtime states, and the rollback restores configuration files and the recorded service states separately. A service that was stopped but still registered is re-registered through procd without starting a process.
 6. On failure, the router-side watchdog restores the previous packages.
 
-A provider ownership marker is written in the same transaction. It is how the provider distinguishes its own sections from firmware sections without a separate registry. Marker-only changes do not trigger a service reload or reboot.
+A provider ownership marker and owner token are written in the same transaction. They are how the provider distinguishes its own sections from firmware sections and from another Terraform state without a separate registry. Marker-only changes do not trigger a service reload or reboot. The token the provider observed before the write is checked again inside the router-side lock, so a section adopted by another state in between is refused before any configuration changes.
 
 Terraform has no cross-resource commit barrier. The provider therefore guarantees **per-resource atomicity**, **no partially written UCI package**, and **recovery on every mutation**. A multi-resource apply can stop after some resources have committed; each committed resource is valid, and a subsequent apply completes the rest. Use `depends_on` or attribute references for required ordering.
 
@@ -128,6 +128,10 @@ Terraform applies independent resources concurrently and resolves explicit refer
 - Apply topology changes in stages when the intermediate state must be valid, for example interfaces and bridges first, then the firewall policy.
 - Avoid changing a managed network and the firewall or routing policy that references it in the same parallel group.
 - The per-change safety checks stop on conflicting unmanaged policy, but they are not a whole-configuration validator.
+
+## Rollback outcomes
+
+A rollback moves through `restoring`, `restored`, and `restore_failed`. The provider reports a rollback as complete only for `restored`, which the router records after every snapshotted package is back and the same service activation has finished. `restoring` means the router is still retrying with the snapshot retained; `restore_failed` means it gave up and the transaction record needs inspection. A Terraform error never reports a decided rollback as a completed one.
 
 ## State upgrades
 

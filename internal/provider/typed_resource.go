@@ -31,6 +31,7 @@ type typedSpec struct {
 	Validate                  func(map[string]attr.Value) error
 	ValidateConfig            func(map[string]attr.Value) error
 	ModifyPlan                func(plan, config, state map[string]attr.Value, creating bool) (map[string]attr.Value, error)
+	Advisory                  func(plan, state map[string]attr.Value, creating bool, managementPort int) string
 	PreserveUnset             []string
 	UpdateSelector            func(plan, state map[string]attr.Value) (router.Section, error)
 	Secrets                   func(map[string]attr.Value) map[string]string
@@ -188,6 +189,15 @@ func (r *typedResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	preserveUnsetAttributes(values, config.Attributes(), stateValues, r.spec.PreserveUnset)
 	r.preserveIdentity(values, stateValues)
 	preserveOwner(values, stateValues)
+	if r.spec.Advisory != nil {
+		managementPort := 0
+		if r.client != nil {
+			managementPort = r.client.ManagementPort()
+		}
+		if message := r.spec.Advisory(values, stateValues, req.State.Raw.IsNull(), managementPort); message != "" {
+			resp.Diagnostics.AddWarning("Management path change", message)
+		}
+	}
 	if r.spec.ModifyPlan != nil {
 		updated, err := r.spec.ModifyPlan(values, config.Attributes(), stateValues, req.State.Raw.IsNull())
 		if err != nil {
@@ -204,9 +214,11 @@ func (r *typedResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 }
 
 func preserveOwner(values, stateValues map[string]attr.Value) {
-	if owner, ok := stateValues["owner"]; ok {
-		values["owner"] = owner
+	owner, ok := stateValues["owner"].(types.String)
+	if !ok || owner.IsNull() || owner.IsUnknown() || owner.ValueString() == "" {
+		return
 	}
+	values["owner"] = owner
 }
 
 func (r *typedResource) preserveIdentity(plan, state map[string]attr.Value) {
@@ -304,7 +316,8 @@ func (r *typedResource) Create(ctx context.Context, req resource.CreateRequest, 
 		section.Options = map[string]string{}
 	}
 	router.SetManagedOwner(section.Options, token)
-	if err := r.client.ApplySections(ctx, router.Configuration{section}, r.secrets(values)); err != nil {
+	claim := ownershipClaim(section.Package, resolvedSectionName(section, existing, found), "", true)
+	if err := r.client.ApplySectionsOwned(ctx, router.Configuration{section}, r.secrets(values), claim); err != nil {
 		resp.Diagnostics.AddError("Cannot apply section", err.Error())
 		return
 	}
@@ -413,7 +426,14 @@ func (r *typedResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		section.Options = map[string]string{}
 	}
 	router.SetManagedOwner(section.Options, token)
-	if err := r.client.ApplySections(ctx, router.Configuration{section}, r.secrets(values)); err != nil {
+	var claim *router.OwnerClaim
+	switch {
+	case stateOwner != "":
+		claim = ownershipClaim(section.Package, resolvedSectionName(section, existing, found), stateOwner, false)
+	case !found:
+		claim = ownershipClaim(section.Package, resolvedSectionName(section, existing, found), "", true)
+	}
+	if err := r.client.ApplySectionsOwned(ctx, router.Configuration{section}, r.secrets(values), claim); err != nil {
 		resp.Diagnostics.AddError("Cannot apply section", err.Error())
 		return
 	}
@@ -500,8 +520,12 @@ func (r *typedResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		resp.Diagnostics.AddError("Section is owned by another configuration", "The router section "+actual.Name+" is managed by a different Terraform state. Release it from that configuration before destroying it here.")
 		return
 	}
+	var claim *router.OwnerClaim
+	if stateOwner != "" {
+		claim = ownershipClaim(actual.Package, actual.Name, stateOwner, false)
+	}
 	if r.spec.NoDelete {
-		if err := r.client.ForgetSection(ctx, section); err != nil {
+		if err := r.client.ForgetSection(ctx, section, claim); err != nil {
 			resp.Diagnostics.AddError("Cannot release section ownership", err.Error())
 		}
 		return
@@ -516,12 +540,12 @@ func (r *typedResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 			return
 		}
 		absent := router.Section{Package: actual.Package, Name: actual.Name, Type: actual.Type, Absent: true}
-		if err := r.client.ApplySections(ctx, router.Configuration{absent}, nil); err != nil {
+		if err := r.client.ApplySectionsOwned(ctx, router.Configuration{absent}, nil, claim); err != nil {
 			resp.Diagnostics.AddError("Cannot delete section", err.Error())
 		}
 		return
 	}
-	if err := r.client.ForgetSection(ctx, section); err != nil {
+	if err := r.client.ForgetSection(ctx, section, claim); err != nil {
 		resp.Diagnostics.AddError("Cannot release section ownership", err.Error())
 	}
 }
@@ -638,6 +662,65 @@ func (r *typedResource) secrets(values map[string]attr.Value) map[string]string 
 
 func isAnonymousSection(name string) bool {
 	return len(name) > 1 && name[0] == '@'
+}
+
+func resolvedSectionName(selector, actual router.Section, found bool) string {
+	if found {
+		return actual.Name
+	}
+	if isAnonymousSection(selector.Name) {
+		return ""
+	}
+	return selector.Name
+}
+
+func ownershipClaim(packageName, sectionName, token string, unowned bool) *router.OwnerClaim {
+	if sectionName == "" || isAnonymousSection(sectionName) {
+		return nil
+	}
+	return &router.OwnerClaim{Package: packageName, Section: sectionName, Token: token, Unowned: unowned}
+}
+
+type nonEmptyStringValidator struct{}
+
+func (nonEmptyStringValidator) Description(context.Context) string {
+	return "value must not be empty"
+}
+
+func (nonEmptyStringValidator) MarkdownDescription(context.Context) string {
+	return "value must not be empty"
+}
+
+func (nonEmptyStringValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if req.ConfigValue.ValueString() == "" {
+		resp.Diagnostics.AddAttributeError(req.Path, "Empty value", "value must not be empty.")
+	}
+}
+
+type oneOfStringValidator struct{ allowed []string }
+
+func (v oneOfStringValidator) Description(context.Context) string {
+	return "value must be one of " + strings.Join(v.allowed, ", ")
+}
+
+func (v oneOfStringValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v oneOfStringValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	value := req.ConfigValue.ValueString()
+	for _, allowed := range v.allowed {
+		if value == allowed {
+			return
+		}
+	}
+	resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", "value must be one of: "+strings.Join(v.allowed, ", ")+".")
 }
 
 type deleteBehaviorValidator struct{}

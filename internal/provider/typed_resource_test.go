@@ -19,9 +19,10 @@ import (
 )
 
 type typedFixtureRunner struct {
-	mu         sync.Mutex
-	actual     router.Configuration
-	applyCalls int
+	mu              sync.Mutex
+	actual          router.Configuration
+	applyCalls      int
+	rejectOwnership bool
 }
 
 func (r *typedFixtureRunner) Run(_ context.Context, script string) ([]byte, error) {
@@ -37,6 +38,9 @@ func (r *typedFixtureRunner) Run(_ context.Context, script string) ([]byte, erro
 		return nil, nil
 	}
 	if strings.Contains(script, "assert(uci:save") {
+		if r.rejectOwnership {
+			return nil, &router.ExitError{Code: 78}
+		}
 		change, err := typedChangeConfiguration(script)
 		if err != nil {
 			return nil, err
@@ -50,6 +54,7 @@ func (r *typedFixtureRunner) Run(_ context.Context, script string) ([]byte, erro
 			}
 			r.actual = updated
 			if !desired.Absent {
+				desired.Options = withoutEmptyOptions(desired.Options)
 				r.actual = append(r.actual, desired)
 			}
 		}
@@ -70,7 +75,7 @@ func (r *typedFixtureRunner) Run(_ context.Context, script string) ([]byte, erro
 						desired.Absent = false
 						observed = append(observed, desired)
 					} else {
-						observed = append(observed, existing)
+						observed = append(observed, readSection(existing, desired))
 					}
 					found = true
 					break
@@ -95,6 +100,40 @@ func (r *typedFixtureRunner) Run(_ context.Context, script string) ([]byte, erro
 		return json.Marshal(observed)
 	}
 	return nil, nil
+}
+
+func readSection(existing, desired router.Section) router.Section {
+	section := existing
+	section.Options = map[string]string{}
+	for key, value := range existing.Options {
+		section.Options[key] = value
+	}
+	section.Lists = map[string][]string{}
+	for key := range desired.Options {
+		if _, ok := section.Options[key]; !ok {
+			section.Options[key] = ""
+		}
+	}
+	for key := range desired.Lists {
+		section.Lists[key] = existing.Lists[key]
+	}
+	if len(section.Lists) == 0 {
+		section.Lists = nil
+	}
+	return section
+}
+
+func withoutEmptyOptions(options map[string]string) map[string]string {
+	result := make(map[string]string, len(options))
+	for key, value := range options {
+		if value != "" {
+			result[key] = value
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func typedSameIdentity(a, b router.Section) bool {
@@ -430,5 +469,65 @@ func TestTypedCreateRefusesForeignOwner(t *testing.T) {
 }`
 	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
 		Steps: []resource.TestStep{{Config: config, ExpectError: regexp.MustCompile("owned by another configuration")}},
+	})
+}
+
+func TestTypedForgetClearsOwnerTokenOnRouter(t *testing.T) {
+	remote := &typedFixtureRunner{}
+	client := router.NewClient(remote, fixtureProtection{})
+	client.AllowNetworkDisruption(true)
+	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
+	config := `resource "glinet_network_interface" "test" {
+  name            = "guest"
+  device          = "br-guest"
+  address         = "192.168.9.1/24"
+  delete_behavior = "forget"
+}`
+	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{{Config: config, Check: func(*terraform.State) error {
+			remote.mu.Lock()
+			defer remote.mu.Unlock()
+			for _, section := range remote.actual {
+				if section.Package == "network" && section.Name == "guest" {
+					if router.ManagedOwner(section.Options) == "" {
+						return fmt.Errorf("created section has no owner token")
+					}
+				}
+			}
+			return nil
+		}}},
+		CheckDestroy: func(*terraform.State) error {
+			remote.mu.Lock()
+			defer remote.mu.Unlock()
+			for _, section := range remote.actual {
+				if section.Package != "network" || section.Name != "guest" {
+					continue
+				}
+				if router.IsManaged(section.Options) {
+					return fmt.Errorf("forget kept the managed marker")
+				}
+				if token, ok := section.Options[router.OwnerTokenOption]; ok && token != "" {
+					return fmt.Errorf("forget kept the owner token %q", token)
+				}
+				return nil
+			}
+			return fmt.Errorf("forget removed the section")
+		},
+	})
+}
+
+func TestTypedWriteReportsConcurrentOwnership(t *testing.T) {
+	remote := &typedFixtureRunner{rejectOwnership: true}
+	client := router.NewClient(remote, fixtureProtection{})
+	client.AllowNetworkDisruption(true)
+	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
+	config := `resource "glinet_network_interface" "test" {
+  name            = "guest"
+  device          = "br-guest"
+  address         = "192.168.9.1/24"
+  delete_behavior = "delete"
+}`
+	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{{Config: config, ExpectError: regexp.MustCompile("owned by another Terraform state")}},
 	})
 }

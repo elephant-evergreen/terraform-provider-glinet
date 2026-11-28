@@ -29,7 +29,7 @@ func TestValidationAndShellQuoting(t *testing.T) {
 		t.Fatalf("Shell interpolation changed the value: %q, %v", actual, err)
 	}
 	config := Configuration{{Package: "wireless", Name: "wifi2g", Type: "wifi-iface", Options: map[string]string{"ssid": value, "mode": "ap"}}}
-	script := configurationApplyScript(config, strings.Repeat("a", 32), reloadPlan{Wireless: true}, map[string]string{"wireless.wifi2g.key": "example'password"})
+	script := configurationApplyScript(config, strings.Repeat("a", 32), reloadPlan{Wireless: true}, nil, map[string]string{"wireless.wifi2g.key": "example'password"})
 	cmd = exec.Command("/bin/sh", "-n")
 	cmd.Stdin = strings.NewReader(script)
 	if output, err := cmd.CombinedOutput(); err != nil {

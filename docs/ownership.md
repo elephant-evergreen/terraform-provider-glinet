@@ -9,7 +9,7 @@ Every section the provider manages carries the `terraform_owner` option. The pro
 | Create | Writes the section and sets the marker. A stock singleton that already exists is adopted with its current settings, which is the normal way to bring the stock configuration under Terraform. |
 | Import | Reads the section. The router keeps the marker it already has. |
 | Update | Refuses a section whose marker is `0`. Otherwise writes the section and sets the marker to `1`. |
-| Forget (destroy) | Sets the marker to `0` and keeps the section. |
+| Forget (destroy) | Sets the marker to `0`, clears the owner token, and keeps the section. |
 | Delete | Removes a named section only while it carries marker `1`. Firmware-owned anonymous sections are never deleted. |
 
 ## Owner tokens
@@ -22,9 +22,22 @@ Each typed resource also records an owner token in the `terraform_owner_id` opti
 | Update | Compares the router token with the state token and stops when they differ. A section without a token (legacy marker `1`) is adopted and receives a token. |
 | Import | Adopts the token already on the router. An unmanaged section has no token until the next write. |
 | Delete | Compares the tokens before removing or releasing the section. |
-| Forget | Clears the marker and the token. |
+| Forget | Clears the marker and the token on the router. Releasing a section and creating it again does not see a stale owner. |
 
 A provider without owner-token support can rewrite a section without the token. The next write with token support regenerates it.
+
+## Concurrent writers
+
+Reading the owner and writing the section are not one step, so two Terraform states could both observe an unowned section and then write it in turn. The provider therefore re-checks the ownership it observed after the router-side transaction lock is acquired and before it prepares the transaction:
+
+- Create requires that the section still has no owner token.
+- Update, Delete, and Forget require that the section still has no token or the token recorded in the state.
+
+A section claimed by another state in between is refused with "owned by another Terraform state", before any configuration changes, so the plan can be re-run without inspecting a partially applied transaction.
+
+## Legacy states
+
+States written before owner tokens existed have `terraform_owner = 1` and no token. The next change to such a resource plans `owner` as unknown, writes a token in the same transaction, and records it in the state. A plan with no other change stays empty; the token is adopted on the first real change. After that first change, plans are empty again.
 
 ## Limitation
 

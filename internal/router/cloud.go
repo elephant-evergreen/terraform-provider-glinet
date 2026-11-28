@@ -96,7 +96,7 @@ func (c *Client) ApplyCloud(ctx context.Context, enabled bool) error {
 	marker := CloudMarker()
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, Configuration{marker})
-	return c.writeConfiguration(ctx, Configuration{marker}, nil, full, &ServiceChange{Cloud: &enabled, Snapshot: true})
+	return c.writeConfiguration(ctx, Configuration{marker}, nil, full, nil, &ServiceChange{Cloud: &enabled, Snapshot: true})
 }
 
 func (c *Client) ForgetCloud(ctx context.Context) error {
@@ -117,7 +117,7 @@ func (c *Client) ForgetCloud(ctx context.Context) error {
 	marker.Options = map[string]string{ManagedOption: "0"}
 	full := configurationFromManagedState(state)
 	full = mergeManagedConfiguration(full, Configuration{marker})
-	return c.writeConfiguration(ctx, Configuration{marker}, nil, full, &ServiceChange{Snapshot: true})
+	return c.writeConfiguration(ctx, Configuration{marker}, nil, full, nil, &ServiceChange{Snapshot: true})
 }
 
 func cloudSectionPresent(state uciState) bool {

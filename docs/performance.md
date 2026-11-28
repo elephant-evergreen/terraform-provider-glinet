@@ -18,6 +18,28 @@ On a wired LAN with a configuration of about sixty resources, a read-only plan c
 
 Treat these as relative costs, not service levels.
 
+## Measuring an apply
+
+Set `GLINET_TRANSACTION_LOG` to a local path to append one JSON line per configuration transaction:
+
+```sh
+GLINET_TRANSACTION_LOG=/tmp/glinet-apply.jsonl terraform apply
+```
+
+| Field | Meaning |
+| --- | --- |
+| `result` | `committed`, `rollback:restored`, `rollback:restore_failed`, `unconfirmed`, and similar outcomes |
+| `total_ms`, `backup_ms`, `apply_ms`, `verify_ms`, `confirm_ms` | Wall-clock phases of the transaction on the provider host |
+| `changed_sections` | Number of changed UCI sections |
+| `reboots`, `restarts`, `restart_names` | Planned reboots, service activations, and which services were activated |
+| `network_disruptive` | Whether the change required the network disruption permission |
+
+The record contains no configuration values, secrets, or host identifiers. It is a local measurement aid and never changes the transaction outcome. The file is opened with mode `0600` and appended one line per transaction.
+
+A plan with one resource stops the router for at most one reboot plus its service activations. A multi-resource apply serializes one transaction per resource, so the total stop time is the sum of the per-resource transactions and the restarts are not merged. Use the log to count both before changing the apply order, and keep the one-resource-per-transaction boundary when the alternative would remove the recovery window.
+
+These numbers were not yet collected on hardware. Fixture runs establish that the fields are recorded and that service and reboot counts match the plan; they do not establish device stop time or flash wear.
+
 ## SSH reuse evaluation
 
 Reusing one SSH connection would reduce handshakes for management over a high-latency link. It is not implemented because a pooled connection changes failure semantics: a stale connection fails differently from a fresh one, and retrying a mutation after an ambiguous transport error is unsafe. The current model opens a fresh connection for every command, so a transport failure surfaces before the mutation starts.
