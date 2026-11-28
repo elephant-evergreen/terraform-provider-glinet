@@ -16,10 +16,10 @@ import (
 // output. Wi-Fi secrets are removed before the state leaves the router.
 const safetyStateLua = `local uci=require('uci').cursor()
 local packages={'network','wireless','dhcp','firewall','gl-dns-v2','eth_ports_config_map','gl-cloud','system','dropbear','upnpd','sqm','adguardhome','tailscale','zerotier','tor','openvpn','wireguard','qos','minidlna','uhttpd','kmwan','route_policy','gl_ddns','samba4','gl-mesh','repeater','gl_timer','gl-black_white_list','wan-access','parental_control_v2','wireguard_server','gl_s2s','gl_dpi','gl_dpi_content_protection','fullconenat','mtkhnat','gl_led','glconfig','edgerouter'}
+local secretKeys={password=true,passwd=true,psk=true,wpa_psk=true,secret=true,token=true,private_key=true,preshared_key=true,auth_user_pass=true,auth_key=true,api_key=true}
 local function secret(pkg,key)
- if pkg=='wireless' and (key=='key' or key:match('^key%d$') or key=='wpa_psk' or key=='password' or key=='psk') then return true end
- if pkg=='network' and (key=='private_key' or key=='preshared_key') then return true end
- if pkg=='openvpn' and (key=='auth_user_pass' or key=='key' or key=='password') then return true end
+ if secretKeys[key] or key:match('^key%d$') or key:match('pass') or key:match('secret') or key:match('token') then return true end
+ if (pkg=='wireless' or pkg=='openvpn') and key=='key' then return true end
  return false
 end
 local managed={['gl-cloud']={enable=true, home_iac_owner=true}}
