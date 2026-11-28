@@ -8,7 +8,7 @@ All resources use one persistent router worker. It snapshots the managed configu
 
 See [typed resources](typed-resources.md) for the recovery boundary and limitations.
 
-Before mutation, the provider checks bridge port ownership, unmanaged Wi-Fi/zones/forwardings/redirects/ACCEPT rules, DHCP reservations, the private LAN address, IPv6, UPnP, stock include hashes, and stock DNS provider metadata. It also compares the generated IPv4 firewall with the running `iptables-save` during refresh and before confirmation. These checks stop on conflicts instead of overwriting policy that Terraform does not own.
+A change that can interrupt the network requires explicit permission (`allow_network_disruption`), an active wired management path, and an encrypted backup before it starts. Before mutation, the provider checks bridge port ownership, unmanaged Wi-Fi/zones/forwardings/redirects/ACCEPT rules, DHCP reservations, the private LAN address, IPv6, UPnP, stock include hashes, and stock DNS provider metadata. It also compares the generated IPv4 firewall with the running `iptables-save` during refresh and before confirmation. These checks stop on conflicts instead of overwriting policy that Terraform does not own.
 
 Wi-Fi keys enter the wireless resource only through sensitive write-only arguments and an explicit generation. Refresh does not read keys or complete exports into Terraform. Private snapshots and requests remain on the router until cleanup. Diagnostics discard remote stderr and rejected-command output. Host-key verification cannot be disabled, and SSH credentials are read from files rather than Terraform state.
 

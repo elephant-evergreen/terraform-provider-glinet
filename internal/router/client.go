@@ -20,6 +20,8 @@ type Client struct {
 	mu         sync.RWMutex
 	refresh    singleflight.Group
 	protection ChangeProtection
+
+	allowNetworkDisruption bool
 }
 
 type ChangeProtection interface {
@@ -28,6 +30,12 @@ type ChangeProtection interface {
 
 func NewClient(runner Runner, protection ChangeProtection) *Client {
 	return &Client{runner: runner, protection: protection}
+}
+
+// AllowNetworkDisruption permits changes that can interrupt the network
+// connection, such as a network, port, Wi-Fi, or GoodCloud change.
+func (c *Client) AllowNetworkDisruption(allow bool) {
+	c.allowNetworkDisruption = allow
 }
 
 func (c *Client) Verify(ctx context.Context) error {

@@ -10,7 +10,7 @@ Follow [Check the router in Terraform Registry](https://registry.terraform.io/pr
 
 Open **Import existing configuration** on the Registry page for the resource you want to adopt: add the import block, match the configuration to the router's current values, and apply a plan that contains only the import.
 
-The provider verifies an age-encrypted full configuration backup before the first change in an apply. Network, port, Wi-Fi, and GoodCloud changes also require an active wired management path. The provider rolls a transaction back when it cannot verify the result, and router-side recovery restores unconfirmed changes after 300 seconds, including after an SSH disconnection or router reboot. See [compatibility](docs/compatibility.md), [typed resources and import IDs](docs/typed-resources.md), the [Admin Panel coverage matrix](docs/coverage.md), and the [scope of hardware testing](docs/testing.md). WireGuard remains experimental.
+The provider verifies an age-encrypted full configuration backup before the first change in an apply. Network, port, Wi-Fi, and GoodCloud changes also require an active wired management path and explicit permission through `allow_network_disruption = true` or `GLINET_ALLOW_NETWORK_DISRUPTION=true`. The provider rolls a transaction back when it cannot verify the result, and router-side recovery restores unconfirmed changes after 300 seconds, including after an SSH disconnection or router reboot. See [compatibility](docs/compatibility.md), [typed resources and import IDs](docs/typed-resources.md), the [Admin Panel coverage matrix](docs/coverage.md), and the [scope of hardware testing](docs/testing.md). WireGuard remains experimental.
 
 ## GoodCloud
 

@@ -140,6 +140,7 @@ func safetyStateJSON(config router.Configuration) []byte {
 func TestTypedNetworkInterfaceProtocol(t *testing.T) {
 	remote := &typedFixtureRunner{}
 	client := router.NewClient(remote, fixtureProtection{})
+	client.AllowNetworkDisruption(true)
 	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
 	config := func(address string) string {
 		return `resource "glinet_network_interface" "test" {
@@ -225,6 +226,7 @@ func (fixtureProtection) Protect(context.Context, router.Runner, bool) error { r
 func TestTypedWirelessInterfaceProtocol(t *testing.T) {
 	remote := &typedFixtureRunner{}
 	client := router.NewClient(remote, fixtureProtection{})
+	client.AllowNetworkDisruption(true)
 	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
 	config := func(encryption string) string {
 		return `resource "glinet_wireless_interface" "test" {
@@ -272,6 +274,7 @@ func TestTypedWirelessInterfaceProtocol(t *testing.T) {
 func TestTypedWirelessRadioProtocol(t *testing.T) {
 	remote := &typedFixtureRunner{actual: router.Configuration{{Package: "wireless", Name: "mt798611", Type: "wifi-device", Options: map[string]string{"band": "2g", "channel": "6", "htmode": "HE40", "txpower": "80", "country": "JP", "disabled": "0"}}}}
 	client := router.NewClient(remote, fixtureProtection{})
+	client.AllowNetworkDisruption(true)
 	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
 	config := `resource "glinet_wireless_radio" "test" {
   device = "mt798611"
@@ -313,6 +316,7 @@ func TestTypedWirelessRadioProtocol(t *testing.T) {
 func TestTypedWirelessRadioRequiresExisting(t *testing.T) {
 	remote := &typedFixtureRunner{}
 	client := router.NewClient(remote, fixtureProtection{})
+	client.AllowNetworkDisruption(true)
 	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
 	resource.Test(t, resource.TestCase{IsUnitTest: true, ProtoV6ProviderFactories: factories,
 		Steps: []resource.TestStep{

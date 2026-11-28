@@ -38,6 +38,7 @@ func TestPreservedAttributesAreOptionalAndComputed(t *testing.T) {
 func TestTypedInterfaceKeepsUndeclaredOptions(t *testing.T) {
 	remote := &typedFixtureRunner{}
 	client := router.NewClient(remote, fixtureProtection{})
+	client.AllowNetworkDisruption(true)
 	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
 	config := func(address, ip6assign string) string {
 		line := ""
@@ -90,6 +91,7 @@ func TestDHCPReservationLoadReadsAdoptedOptions(t *testing.T) {
 func TestTypedBridgeWritesMacaddr(t *testing.T) {
 	remote := &typedFixtureRunner{}
 	client := router.NewClient(remote, fixtureProtection{})
+	client.AllowNetworkDisruption(true)
 	factories := map[string]func() (tfprotov6.ProviderServer, error){"glinet": providerserver.NewProtocol6WithError(&fixtureProvider{Provider: New("test")(), client: client})}
 	config := `resource "glinet_network_bridge" "test" {
   name = "br-test"

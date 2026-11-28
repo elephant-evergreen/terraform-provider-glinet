@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
 
@@ -22,6 +23,7 @@ type providerModel struct {
 	PrivateKey      types.String `tfsdk:"private_key_file"`
 	KnownHosts      types.String `tfsdk:"known_hosts_file"`
 	BackupDirectory types.String `tfsdk:"backup_directory"`
+	AllowDisruption types.Bool   `tfsdk:"allow_network_disruption"`
 }
 
 var (
@@ -41,11 +43,12 @@ func (p *glinetProvider) Schema(_ context.Context, _ provider.SchemaRequest, res
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manage network interfaces, Wi-Fi, DHCP, DNS, firewall, and system settings on GL.iNet Flint 2 (GL-MT6000) running stock firmware 4.11.x in router mode. The provider connects over verified SSH; other firmware minors are rejected.",
 		Attributes: map[string]schema.Attribute{
-			"host":             schema.StringAttribute{Optional: true, MarkdownDescription: "Router hostname or IP address. Falls back to `GLINET_HOST`."},
-			"port":             schema.Int64Attribute{Optional: true, MarkdownDescription: "SSH port. Falls back to `GLINET_PORT`, then `22`."},
-			"private_key_file": schema.StringAttribute{Optional: true, MarkdownDescription: "Path to an unencrypted OpenSSH private key for root. Falls back to `GLINET_PRIVATE_KEY_FILE`. Key contents are not part of the provider schema."},
-			"known_hosts_file": schema.StringAttribute{Optional: true, MarkdownDescription: "Path to a known_hosts file containing the verified router host key. Falls back to `GLINET_KNOWN_HOSTS_FILE`. Host-key verification is always required."},
-			"backup_directory": schema.StringAttribute{Optional: true, MarkdownDescription: "Directory for verified age-encrypted full router configuration backups. Falls back to `GLINET_BACKUP_DIRECTORY`, then the operating system user configuration directory under `glinet/backups`. The SSH private key decrypts these backups. A backup is required before the first mutation of each apply; backup failure prevents all changes."},
+			"host":                     schema.StringAttribute{Optional: true, MarkdownDescription: "Router hostname or IP address. Falls back to `GLINET_HOST`."},
+			"port":                     schema.Int64Attribute{Optional: true, MarkdownDescription: "SSH port. Falls back to `GLINET_PORT`, then `22`."},
+			"private_key_file":         schema.StringAttribute{Optional: true, MarkdownDescription: "Path to an unencrypted OpenSSH private key for root. Falls back to `GLINET_PRIVATE_KEY_FILE`. Key contents are not part of the provider schema."},
+			"known_hosts_file":         schema.StringAttribute{Optional: true, MarkdownDescription: "Path to a known_hosts file containing the verified router host key. Falls back to `GLINET_KNOWN_HOSTS_FILE`. Host-key verification is always required."},
+			"backup_directory":         schema.StringAttribute{Optional: true, MarkdownDescription: "Directory for verified age-encrypted full router configuration backups. Falls back to `GLINET_BACKUP_DIRECTORY`, then the operating system user configuration directory under `glinet/backups`. The SSH private key decrypts these backups. A backup is required before the first mutation of each apply; backup failure prevents all changes."},
+			"allow_network_disruption": schema.BoolAttribute{Optional: true, MarkdownDescription: "Allow changes that can interrupt the network connection, such as a network, port, Wi-Fi, or GoodCloud change. Falls back to `GLINET_ALLOW_NETWORK_DISRUPTION`. Defaults to false; confirm a wired recovery path before enabling it."},
 		},
 	}
 }
@@ -107,7 +110,13 @@ func (p *glinetProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		resp.Diagnostics.AddError("Cannot configure recovery backups", err.Error())
 		return
 	}
+	allowDisruption, err := resolveAllowNetworkDisruption(config.AllowDisruption)
+	if err != nil {
+		resp.Diagnostics.AddAttributeError(path.Root("allow_network_disruption"), "Invalid network disruption setting", err.Error())
+		return
+	}
 	client := router.NewClient(transport, protection)
+	client.AllowNetworkDisruption(allowDisruption)
 	if _, err := client.VerifyFirmware(ctx); err != nil {
 		resp.Diagnostics.AddError("Cannot verify router", err.Error())
 		return
@@ -194,4 +203,22 @@ func (p *glinetProvider) Actions(context.Context) []func() action.Action {
 
 func (p *glinetProvider) DataSources(context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{NewSystemDataSource, NewClientsDataSource}
+}
+
+func resolveAllowNetworkDisruption(value types.Bool) (bool, error) {
+	if value.IsUnknown() {
+		return false, fmt.Errorf("allow_network_disruption must be known before apply. Set a static value or GLINET_ALLOW_NETWORK_DISRUPTION.")
+	}
+	if !value.IsNull() {
+		return value.ValueBool(), nil
+	}
+	raw := os.Getenv("GLINET_ALLOW_NETWORK_DISRUPTION")
+	if raw == "" {
+		return false, nil
+	}
+	parsed, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("GLINET_ALLOW_NETWORK_DISRUPTION must be true or false.")
+	}
+	return parsed, nil
 }
