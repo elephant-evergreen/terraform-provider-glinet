@@ -9,6 +9,7 @@ run = [
   "go mod verify",
   "go vet ./...",
   'TF_ACC_TERRAFORM_PATH="$(command -v terraform)" go test -race -p 2 ./...',
+  "go test -tags acceptance -run '^$' ./...",
   "go build -o /dev/null .",
   "terraform fmt -check -recursive examples",
   "go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...",
@@ -26,4 +27,11 @@ go test ./internal/router -run '^FuzzSectionValidation$' -fuzz '^FuzzSectionVali
 go test ./internal/router -run '^FuzzValidOption$' -fuzz '^FuzzValidOption$' -fuzztime "$fuzztime"
 go test ./internal/provider -run '^FuzzFirewallRuleRoundTrip$' -fuzz '^FuzzFirewallRuleRoundTrip$' -fuzztime "$fuzztime"
 go test ./internal/provider -run '^FuzzReconcileFirewallRules$' -fuzz '^FuzzReconcileFirewallRules$' -fuzztime "$fuzztime"
+'''
+
+[tasks.acceptance]
+description = "Run the hardware acceptance suite against a dedicated router"
+run = '''
+test "${GLINET_ACCEPTANCE:-}" = 1 || { echo "Set GLINET_ACCEPTANCE=1 and the GLINET_* connection variables. See docs/testing.md." >&2; exit 2; }
+TF_ACC=1 go test -tags acceptance -run '^TestAcceptanceHardware$' -count=1 -v -timeout 30m ./internal/provider
 '''
