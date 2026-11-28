@@ -838,6 +838,13 @@ func TestConfigurationWorldProbeRequiresCompletedCleanup(t *testing.T) {
 		t.Fatalf("A transaction with a live worker reported %q", got)
 	}
 	_ = os.RemoveAll(filepath.Join(root, "lock-actor-token"))
+	if err := os.MkdirAll(filepath.Join(root, "lock"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if got := probe(); got != "pending" {
+		t.Fatalf("A confirmed transaction with its router lock still present reported %q", got)
+	}
+	_ = os.RemoveAll(filepath.Join(root, "lock"))
 	_ = os.RemoveAll(filepath.Join(root, "transaction"))
 	if got := probe(); got != "confirm" {
 		t.Fatalf("A cleaned-up confirmed transaction reported %q", got)
